@@ -43,6 +43,7 @@
 | Fibonacci Blueprint    | `fib_blueprint`   | Drop structure templates keyed to Fibonacci      |
 | Chord Progression      | `chord_progression` | Music theory + phi voicing + 11 EDM presets    |
 | Ableton Live Engine    | `ableton_live`    | Full LOM integration, session/arrangement gen    |
+| Serum 2 Engine         | `serum2`          | Full synth architecture, patches, mod matrix     |
 
 ---
 
@@ -85,6 +86,23 @@
 
 ---
 
+## Serum 2 Engine Rules
+
+1. **5 Oscillator Types** modelled: Wavetable, Multisample, Sample, Granular, Spectral.
+2. **Dual Warp** system: each oscillator has 2 warp slots (30+ modes incl. FM, RM, AM, Fold, Wrap).
+3. Filter routing: Serial / Parallel / Split A+B — phi-spaced cutoff ladder (55×φ^n Hz).
+4. **Phi envelope timing**: Attack:Decay:Release = 1 : φ : φ² — sustain at 1/φ ≈ 0.618.
+5. **Phi unison detune**: symmetric cents offsets at φ^k × 3.0 cents per voice.
+6. **FM ratio**: carrier:modulator = 1:φ for inharmonic dubstep growl timbres.
+7. **Effect mix**: golden ratio wet/dry (1/φ ≈ 0.618 wet by default).
+8. **Modulation matrix**: drag-and-drop, aux source for depth modulation, full destination map.
+9. **Macro curve**: value^(1/φ) response — emphasizes 0.618 sweet spot.
+10. **8 DUBFORGE patches**: Fractal Sub, Phi Growl, Fibonacci FM Screech, Golden Reese, Spectral Tear, Granular Atmosphere, Weapon, Phi Pad.
+11. **Arpeggiator + Clip Sequencer**: Fibonacci LFO rates (1/1, 1/2, 1/3, 1/5, 1/8, 1/13, 3/1, 5/1, 8/1).
+12. Init template pre-loaded with PHI_CORE wavetable, phi envelope, 432 Hz tuning, doctrine macros.
+
+---
+
 ## Frequency Ladder (Planck x phi^n reference)
 
 ```
@@ -123,7 +141,7 @@ n=47  ~580.68 Hz         upper-mid
 
 ---
 
-**Version:** 1.1
+**Version:** 1.2
 **Author:** DUBFORGE
 **Date:** 2026-03-06
-**Modules:** 10 (8 engines + chord progression + Ableton Live)
+**Modules:** 11 (8 engines + chord progression + Ableton Live + Serum 2)

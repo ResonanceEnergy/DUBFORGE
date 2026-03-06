@@ -61,13 +61,20 @@ def main():
     print()
 
     # 7. Ableton Live Engine
-    print("[7/7] Ableton Live Engine")
+    print("[7/8] Ableton Live Engine")
     print("-" * 40)
     from engine.ableton_live import main as ableton_main
     ableton_main()
     print()
 
-    # 8. Growl Resampler (optional — takes longer)
+    # 8. Serum 2 Engine
+    print("[8/8] Serum 2 Engine")
+    print("-" * 40)
+    from engine.serum2 import main as serum2_main
+    serum2_main()
+    print()
+
+    # 9. Growl Resampler (optional — takes longer)
     print("[BONUS] Mid-Bass Growl Resampler")
     print("-" * 40)
     from engine.growl_resampler import main as growl_main
@@ -81,6 +88,7 @@ def main():
     print("Outputs:")
     print("  output/wavetables/   — Serum-ready .wav files")
     print("  output/analysis/     — JSON data + PNG charts")
+    print("  output/serum2/       — Serum 2 architecture + patches")
     print("  configs/             — YAML module packs + blueprints")
     print()
 

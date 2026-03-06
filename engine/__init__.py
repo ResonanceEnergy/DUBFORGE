@@ -27,6 +27,16 @@ from engine.ableton_live import (
     SESSION_PRESETS as ABLETON_PRESETS,
     LOM_REFERENCE,
 )
+from engine.serum2 import (
+    Serum2Patch,
+    build_dubstep_patches as serum2_dubstep_patches,
+    build_init_template as serum2_init_template,
+    SERUM2_ARCHITECTURE,
+    phi_unison_detune,
+    phi_envelope,
+    phi_filter_cutoff,
+    phi_fm_ratio,
+)
 
 __all__ = [
     "PHI",

@@ -35,6 +35,7 @@
 | Growl Resampler     | growl_resampler.py     | DONE    | Resample+mangle pipeline for mid-bass growls     |
 | Chord Progression   | chord_progression.py   | DONE    | 11 presets, 17 chord quals, phi voicing, 835 lines |
 | Ableton Live        | ableton_live.py        | DONE    | Full LOM, session/arrangement gen, M4L scripts    |
+| Serum 2 Engine      | serum2.py              | DONE    | Full synth architecture, 8 patches, mod matrix     |
 
 ### YAML Configs (configs/)
 | Config                          | Status | Description                                      |
@@ -62,6 +63,11 @@
 | arp_fibonacci_rise.json            | Analysis   |
 | arp_phi_spiral.json                | Analysis   |
 | arp_golden_gate.json               | Analysis   |
+| serum2_architecture.json           | Analysis   |
+| serum2_wavetable_map.json          | Analysis   |
+| serum2_init_template.json          | Analysis   |
+| serum2_dubstep_patches.json        | Analysis   |
+| serum2_presets.json                | Analysis   |
 
 ## REFERENCE LIBRARY — REAL FILES (Apple Music, .m4p DRM)
 
@@ -126,6 +132,7 @@ Audio: DRM-locked .m4p — NO spectral analysis yet. Metadata-only engine.
 - [ ] SoundCloud / YouTube audio fetch for spectral math
 - [ ] 432 Hz full tuning mode implementation
 - [x] Ableton Live integration (ALS template generation) ← DONE
+- [x] Serum 2 engine (full architecture model + 8 patches) ← DONE
 - [ ] ALS file writer (gzipped XML export for native .als import)
 - [ ] Real-time MIDI arp output from trance_arp module
 - [ ] A/B DJ acceptance testing protocol
@@ -184,6 +191,74 @@ Return B: DELAY (Fibonacci L=3/16, R=5/16, feedback=1/phi²)
 - Arp: Fibonacci sequence indices mapped to scale degrees
 - Chord stabs: Fibonacci rhythmic spacing
 
+## SERUM 2 ENGINE DETAILS
+
+### Architecture Knowledge (learned inside-out)
+- Product: Serum 2 — Advanced Hybrid Synthesizer by Xfer Records (Steve Duda)
+- Version: 2.0.x ($249, lifetime free updates, free upgrade from Serum 1)
+- Formats: VST3, AU, AAX (64-bit only)
+- Factory content: 626 presets, 288 wavetables
+
+### 5 Oscillator Types (per slot A/B)
+1. **Wavetable**: 2048 samples/frame, 256 max frames, smooth interpolation, dual warp
+2. **Multisample**: SFZ format, real instrument library (orchestra/choir/piano/guitar)
+3. **Sample**: Loop modulation, rate control (tape stop), slicing, score extraction
+4. **Granular**: Position/size/rate/spray, freeze, reverse, pitch-independent time stretch
+5. **Spectral**: FFT harmonic resynthesis, transient detection, spectral filtering
+
+### Dual Warp System (30+ modes)
+- Classic: Sync, Bend+/-, PWM, Asym, Flip, Mirror, Remap 1-4, Quantize
+- FM/Mod: FM from A/B, RM from A/B, AM from A/B, Phase Distortion
+- Serum 2: Fold, Wrap, Drive, Filter
+
+### Filters (38+ types)
+- Families: MG (Moog), Standard LP/HP/BP/Notch, German LP, Acid (303),
+  Comb, Phaser, Flanger, Formant, S&H, Ring Mod, EQ Shelf, Reverb, Ladder, SVF
+- Routing: Serial / Parallel / Split A+B
+- Features: Drive, Fat mode, Key tracking, Type morph
+
+### Modulation System
+- 3 ADSR envelopes with curvature control per segment
+- 4 LFOs with custom shape drawing, BPM sync, one-shot/envelope mode
+- Drag-and-drop mod assignments with aux source for depth modulation
+- Full matrix view
+
+### Effects Rack (up to 10 slots, drag-reorder)
+- Core: Distortion, Delay, Compressor, Chorus, Flanger, Phaser, EQ, Filter, Reverb
+- Extended: Hyper/Dimension, OTT, Multiband Comp, Pitch Shift, Freq Shift, Bitcrusher, Wavefolder, Tape
+- 13 distortion sub-modes (Tube, Soft/Hard Clip, Diode, Lin/Sin Fold, etc.)
+
+### Unison (up to 16 voices)
+- 11 modes: Classic, Super, Linear, Chord, Major, Minor, Stack, Spread, Inv Saw, Random
+
+### DUBFORGE Phi Integration
+- Unison detune: φ^k × 3.0 cents (symmetric around center)
+- Envelope: A:D:R = 1 : φ : φ², sustain = 1/φ ≈ 0.618
+- Filter cutoff ladder: 55 × φ^n Hz (55, 89, 144, 233, 377, 610, 987, 1597)
+- FM ratio: carrier:modulator = 1:φ (inharmonic growl timbres)
+- Effect mix: 1/φ ≈ 0.618 wet
+- Macro curve: value^(1/φ) golden response
+- LFO rates: Fibonacci divisions (1/1, 1/2, 1/3, 1/5, 1/8, 1/13, 3/1, 5/1, 8/1)
+
+### 8 DUBFORGE Patches
+1. Fractal Sub — clean sub with PHI_CORE wavetable, LP 144Hz, mono legato
+2. Phi Growl — dual osc FM + formant filter, Acid LP, 5-voice unison
+3. Fibonacci FM Screech — FM from B + sync warp, BP 610Hz, sin fold + wavefolder
+4. Golden Reese — 8-voice unison both oscs, Moog LP, chorus, detuned beating
+5. Spectral Tear — spectral+granular, comb filter, XOR distortion, bitcrusher
+6. Granular Atmosphere — granular osc, pad envelope, reverb-heavy, 5-bar LFO
+7. Weapon — drop lead, sync+FM warp, acid LP, sub direct out, full FX rack
+8. Phi Pad — wavetable+multisample, lush pad, 8-voice spread unison
+
+### Generated Outputs (output/serum2/)
+| Output                         | Type              |
+|--------------------------------|-------------------|
+| serum2_architecture.json       | Architecture DB   |
+| serum2_wavetable_map.json      | Wavetable Map     |
+| serum2_init_template.json      | Init Template     |
+| serum2_dubstep_patches.json    | 8 Patch Presets   |
+| serum2_presets.json            | Preset Summary    |
+
 ## CHORD PROGRESSION ENGINE DETAILS
 
 ### Key Design Decisions
@@ -230,6 +305,20 @@ Session 4 (2026-03-06 continued):
 - Master chain: EQ8 → Glue Comp → OTT (phi crossovers) → Limiter
 - Return tracks: Reverb (phi decay) + Delay (Fibonacci timing)
 - Updated DOCTRINE.md (v1.1), .dubforge_memory, run_all.py, __init__.py
+
+Session 5 (2026-03-06 continued):
+- Researched Serum 2 architecture inside-out (official site, support docs, training knowledge)
+- Serum 2 = "Advanced Hybrid Synthesizer" by Xfer Records (Steve Duda), $249, v2.0.x
+- 5 oscillator types: Wavetable, Multisample, Sample, Granular, Spectral
+- Dual warp system (30+ modes), 38+ filter types, 17+ effect types, 13 distortion modes
+- Built engine/serum2.py — comprehensive Serum 2 synthesizer engine
+- Full data model: OscillatorConfig, FilterConfig, EnvelopeConfig, LFOConfig, ModulationRoute, etc.
+- 8 DUBFORGE dubstep patches: Fractal Sub, Phi Growl, Fibonacci FM Screech, Golden Reese,
+  Spectral Tear, Granular Atmosphere, Weapon, Phi Pad
+- Phi integration: unison detune (φ^k cents), envelope (1:φ:φ²), filter cutoff (55×φ^n),
+  FM ratio (1:φ), effect mix (1/φ), macro curve (value^(1/φ)), Fibonacci LFO rates
+- Init template pre-loaded with PHI_CORE wavetable, phi envelope, 432 Hz, doctrine macros
+- Updated DOCTRINE.md (v1.2), .dubforge_memory, run_all.py, __init__.py
 
 ## HOW TO RESTORE
 
