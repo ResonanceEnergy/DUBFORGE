@@ -47,13 +47,20 @@ def main():
     print()
 
     # 5. Trance Arp Engine
-    print("[5/5] Trance Arp Engine")
+    print("[5/6] Trance Arp Engine")
     print("-" * 40)
     from engine.trance_arp import main as arp_main
     arp_main()
     print()
 
-    # 6. Growl Resampler (optional — takes longer)
+    # 6. Chord Progression Engine
+    print("[6/6] Chord Progression Engine")
+    print("-" * 40)
+    from engine.chord_progression import main as chord_main
+    chord_main()
+    print()
+
+    # 7. Growl Resampler (optional — takes longer)
     print("[BONUS] Mid-Bass Growl Resampler")
     print("-" * 40)
     from engine.growl_resampler import main as growl_main

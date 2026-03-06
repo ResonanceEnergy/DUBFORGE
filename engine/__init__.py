@@ -13,6 +13,12 @@ from engine.phi_core import (
     fibonacci_harmonic_series,
     write_wav,
 )
+from engine.chord_progression import (
+    build_progression,
+    build_chord,
+    midi_to_freq,
+    ALL_PRESETS as CHORD_PRESETS,
+)
 
 __all__ = [
     "PHI",
@@ -22,4 +28,8 @@ __all__ = [
     "phi_harmonic_series",
     "fibonacci_harmonic_series",
     "write_wav",
+    "build_progression",
+    "build_chord",
+    "midi_to_freq",
+    "CHORD_PRESETS",
 ]
