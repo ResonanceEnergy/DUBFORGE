@@ -1,0 +1,283 @@
+# -------------------------------------------------------------------
+# DUBFORGE — RCO + PSBS + VIP Delta YAML Configs v1.1
+# Includes PACK_WEAPON mode from Fibonacci analysis
+# -------------------------------------------------------------------
+
+version: "1.1"
+author: DUBFORGE
+date: "2026-03-05"
+doctrine: Planck x phi Fractal Basscraft v1.0
+
+# ===================================================================
+# RCO — Rollercoaster Optimizer Configs
+# ===================================================================
+
+rco_profiles:
+
+  WEAPON_16_32:
+    description: "16-bar drops, 32-bar total drop zone. Weapon-class."
+    bpm: 150
+    time_signature: "4/4"
+    sections:
+      - { name: intro,   bars: 8,  energy: [0.0, 0.2],  curve: linear }
+      - { name: build_1, bars: 8,  energy: [0.2, 0.85], curve: phi }
+      - { name: drop_1,  bars: 16, energy: [1.0, 0.9],  curve: fibonacci_step }
+      - { name: break_1, bars: 8,  energy: [0.3, 0.15], curve: phi }
+      - { name: build_2, bars: 8,  energy: [0.15, 0.95], curve: exponential }
+      - { name: drop_2,  bars: 16, energy: [1.0, 0.85], curve: fibonacci_step }
+      - { name: break_2, bars: 8,  energy: [0.25, 0.1], curve: phi }
+      - { name: build_3, bars: 8,  energy: [0.1, 1.0],  curve: phi }
+      - { name: drop_3,  bars: 16, energy: [1.0, 0.8],  curve: fibonacci_step }
+      - { name: outro,   bars: 8,  energy: [0.3, 0.0],  curve: linear }
+
+  EMOTIVE_LONG:
+    description: "Extended builds, melodic breaks. Emotive-class."
+    bpm: 150
+    sections:
+      - { name: intro,     bars: 16, energy: [0.0, 0.3], curve: phi }
+      - { name: verse_1,   bars: 16, energy: [0.3, 0.4], curve: linear }
+      - { name: build_1,   bars: 8,  energy: [0.4, 0.85], curve: phi }
+      - { name: drop_1,    bars: 16, energy: [0.9, 0.75], curve: fibonacci_step }
+      - { name: break_1,   bars: 16, energy: [0.35, 0.2], curve: phi }
+      - { name: build_2,   bars: 8,  energy: [0.2, 0.95], curve: phi }
+      - { name: drop_2,    bars: 16, energy: [1.0, 0.8],  curve: fibonacci_step }
+      - { name: outro,     bars: 16, energy: [0.3, 0.0],  curve: phi }
+
+  PACK_WEAPON:
+    description: >
+      Fibonacci-derived weapon mode. Unlocked from Fibonacci Pt 1+2 analysis.
+      Uses Fibonacci bar counts for all sections. Maximum fractal alignment.
+    bpm: 150
+    sections:
+      - { name: intro,    bars: 8,   energy: [0.0, 0.2],  curve: phi }
+      - { name: build_1,  bars: 5,   energy: [0.2, 0.9],  curve: phi }
+      - { name: drop_1,   bars: 13,  energy: [1.0, 0.88], curve: fibonacci_step }
+      - { name: break_1,  bars: 5,   energy: [0.3, 0.12], curve: phi }
+      - { name: build_2,  bars: 8,   energy: [0.12, 1.0], curve: exponential }
+      - { name: drop_2,   bars: 21,  energy: [1.0, 0.85], curve: fibonacci_step }
+      - { name: break_2,  bars: 3,   energy: [0.2, 0.08], curve: phi }
+      - { name: build_3,  bars: 5,   energy: [0.08, 1.0], curve: phi }
+      - { name: drop_3,   bars: 13,  energy: [1.0, 0.75], curve: fibonacci_step }
+      - { name: outro,    bars: 8,   energy: [0.25, 0.0], curve: linear }
+
+# ===================================================================
+# PSBS — Phase-Separated Bass System Configs
+# ===================================================================
+
+psbs_presets:
+
+  DEFAULT:
+    root_hz: 55.0
+    tuning_a4: 432
+    crossover_mode: phi
+    layers:
+      SUB:
+        freq_range: [20, 89]
+        waveform: sine
+        gain_db: 0
+        phase_deg: 0
+        distortion: 0.0
+        stereo_width: 0.0
+      LOW:
+        freq_range: [89, 144]
+        waveform: saw
+        gain_db: -3
+        phase_deg: 0
+        distortion: 0.15
+        stereo_width: 0.0
+      MID:
+        freq_range: [144, 233]
+        waveform: wavetable
+        gain_db: -2
+        phase_deg: 90
+        distortion: 0.4
+        stereo_width: 0.3
+      HIGH:
+        freq_range: [233, 377]
+        waveform: noise
+        gain_db: -6
+        phase_deg: 180
+        distortion: 0.6
+        stereo_width: 0.7
+      CLICK:
+        freq_range: [377, 610]
+        waveform: fm
+        gain_db: -8
+        phase_deg: 0
+        distortion: 0.3
+        stereo_width: 0.5
+
+  WEAPON:
+    root_hz: 55.0
+    tuning_a4: 432
+    crossover_mode: phi
+    layers:
+      SUB:
+        freq_range: [20, 89]
+        waveform: sine
+        gain_db: 0
+        phase_deg: 0
+        distortion: 0.05
+        stereo_width: 0.0
+      LOW:
+        freq_range: [89, 144]
+        waveform: saw
+        gain_db: -1.5
+        phase_deg: 0
+        distortion: 0.35
+        stereo_width: 0.0
+      MID:
+        freq_range: [144, 233]
+        waveform: wavetable
+        gain_db: -2
+        phase_deg: 90
+        distortion: 0.65
+        stereo_width: 0.5
+      HIGH:
+        freq_range: [233, 377]
+        waveform: noise
+        gain_db: -6
+        phase_deg: 180
+        distortion: 0.8
+        stereo_width: 0.9
+      CLICK:
+        freq_range: [377, 610]
+        waveform: fm
+        gain_db: -5
+        phase_deg: 0
+        distortion: 0.5
+        stereo_width: 0.5
+
+  WOOK:
+    root_hz: 55.0
+    tuning_a4: 432
+    crossover_mode: phi
+    layers:
+      SUB_FOLD:
+        freq_range: [20, 40]
+        waveform: sine
+        gain_db: 2
+        phase_deg: 0
+        distortion: 0.0
+        stereo_width: 0.0
+        note: "Octave-down sub-harmonic fold"
+      SUB:
+        freq_range: [40, 89]
+        waveform: sine
+        gain_db: 0
+        phase_deg: 0
+        distortion: 0.0
+        stereo_width: 0.0
+      LOW:
+        freq_range: [89, 144]
+        waveform: saw
+        gain_db: -3
+        phase_deg: 0
+        distortion: 0.15
+        stereo_width: 0.0
+      MID:
+        freq_range: [144, 233]
+        waveform: wavetable
+        gain_db: -2
+        phase_deg: 90
+        distortion: 0.7
+        stereo_width: 0.3
+        note: "PHI CORE v2 WOOK wavetable"
+      HIGH:
+        freq_range: [233, 377]
+        waveform: noise
+        gain_db: -6
+        phase_deg: 180
+        distortion: 0.75
+        stereo_width: 0.7
+        note: "Dark and crunchy"
+      CLICK:
+        freq_range: [377, 610]
+        waveform: fm
+        gain_db: -8
+        phase_deg: 0
+        distortion: 0.3
+        stereo_width: 0.5
+
+# ===================================================================
+# VIP DELTA — Version Comparison Tracking
+# ===================================================================
+
+vip_delta:
+  description: >
+    Track evolution between original, VIP, and remix versions.
+    Compares structural changes across album chunks.
+
+  corpus:
+    - album: FRACTALS
+      year: 2022
+      tracks: 16
+      avg_duration_s: 194.4
+      total_duration_s: 3109.9
+      shortest: "Cyclops Rocks (130.4s)"
+      longest: "Take Flight VIP (290.6s)"
+      notes: "Original album — all originals + 1 VIP"
+
+    - album: Antifractals
+      year: 2022
+      tracks: 24
+      remixes: 14
+      vips: 10
+      avg_duration_s: 192.8
+      total_duration_s: 4627.3
+      shortest: "Cyclops Rocks (LEVEL UP Remix) (120.8s)"
+      longest: "Bunker Buster VIP (291.3s)"
+      delta_from: FRACTALS
+      delta_notes:
+        - "14 remixes by external artists + 10 VIPs"
+        - "VIPs tend shorter than originals"
+        - "Genre-flip present: Take Flight Tech House VIP"
+        - "Remixers: Virtual Riot, PEEKABOO, MUST DIE!, Mr. Bill, Of The Trees, etc."
+
+    - album: Tesseract
+      year: 2023
+      tracks: 16
+      avg_duration_s: 219.7
+      total_duration_s: 3517.2
+      shortest: "Amnesia (155.6s)"
+      longest: "Alien Communication (303.4s)"
+      delta_from: Antifractals
+      delta_notes:
+        - "Significantly longer tracks on average (+25s vs FRACTALS)"
+        - "More narrative arc — Alien Communication over 5 min"
+        - "Coffee series continues: Afternoon Coffee (Slide)"
+        - "More vocal features: Caitlyn Scarlett, Ronzo, Kwengface, Crooked Bangs, Jem Cooke"
+
+    - album: "Fibonacci Pt 1: Oblivion"
+      year: 2025
+      tracks: 8
+      avg_duration_s: 194.2
+      total_duration_s: 1553.3
+      shortest: "Fibonacci (Part 1) (164.8s)"
+      longest: "Final Breath (229.0s)"
+      delta_from: Tesseract
+      delta_notes:
+        - "Compact 8-track EP format"
+        - "Return to shorter, tighter tracks"
+        - "Title track references Fibonacci sequence explicitly"
+
+    - album: "Fibonacci Pt 2: Infinity"
+      year: 2025
+      tracks: 10
+      avg_duration_s: 195.6
+      total_duration_s: 1955.6
+      shortest: "Fuck Up (156.0s)"
+      longest: "Nothing Between (246.4s)"
+      delta_from: "Fibonacci Pt 1: Oblivion"
+      delta_notes:
+        - "10-track companion EP"
+        - "Coffee series continues: Antidote (Midnight Coffee)"
+        - "Fibonacci Pt 1 + Pt 2 combined = 18 tracks (Fibonacci-adjacent)"
+        - "Strongest fractal alignment in catalog"
+
+  invariants:
+    - "Sub always clean mono sine"
+    - "Drop energy never below 0.75 at peak"
+    - "Build-up curves are non-linear (phi or exponential)"
+    - "Break energy always drops below 0.35"
+    - "FM modulation index increases with album progression"

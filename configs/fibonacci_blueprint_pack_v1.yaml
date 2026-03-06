@@ -1,0 +1,137 @@
+# -------------------------------------------------------------------
+# DUBFORGE — Fibonacci Blueprint Pack v1.0
+# Three blueprints: WEAPON / EMOTIVE / HYBRID
+# Derived from Fibonacci Pt 1 + Pt 2 Infinity analysis
+# -------------------------------------------------------------------
+
+version: "1.0"
+pack: FIBONACCI_BLUEPRINT_PACK
+author: DUBFORGE
+date: "2026-03-05"
+doctrine: Planck x phi Fractal Basscraft v1.0
+
+# ===================================================================
+# BLUEPRINT 1: FIBONACCI WEAPON
+# ===================================================================
+FIBONACCI_WEAPON:
+  description: >
+    Maximum energy density. Fibonacci bar counts throughout.
+    Tight builds, long drops, no filler. Every section functional.
+  bpm: 150
+  key: F
+  tuning_a4: 432
+
+  arrangement:
+    - { name: intro,    bars: 8,   notes: "Atmospheric pad + sub rumble" }
+    - { name: build_1,  bars: 5,   notes: "Fibonacci-short tension ramp" }
+    - { name: drop_1,   bars: 13,  notes: "Primary weapon. PSBS WEAPON preset." }
+    - { name: fill_1,   bars: 3,   notes: "Fibonacci micro-break. Drum fill only." }
+    - { name: drop_1b,  bars: 8,   notes: "Second half. New sound design variant." }
+    - { name: break_1,  bars: 5,   notes: "Tension release. Melodic element optional." }
+    - { name: build_2,  bars: 8,   notes: "Full build with filter sweep." }
+    - { name: drop_2,   bars: 21,  notes: "Extended weapon drop. Switch sounds at bar 13." }
+    - { name: break_2,  bars: 3,   notes: "Minimal. Sub only." }
+    - { name: build_3,  bars: 5,   notes: "Shortest build. Maximum tension." }
+    - { name: drop_3,   bars: 13,  notes: "Final weapon. Hardest sounds." }
+    - { name: outro,    bars: 8,   notes: "Wind down. Reverb tails." }
+
+  psbs_preset: WEAPON
+  rco_profile: PACK_WEAPON
+  wavetable: DUBFORGE_PHI_CORE.wav
+
+  serum_macros:
+    macro_1: { label: PHI MORPH,   default: 40, target: wt_position }
+    macro_2: { label: FM DEPTH,    default: 50, target: fm_index }
+    macro_3: { label: SUB WEIGHT,  default: 80, target: sub_gain }
+    macro_4: { label: GRIT,        default: 65, target: distortion_drive }
+
+  sound_design_notes:
+    - "Drop 1: neuro reese with phi-ratio FM"
+    - "Drop 1b: same root, different wavetable position"
+    - "Drop 2 first half (bars 1-13): heavy growl, GROWL_RESAMPLER"
+    - "Drop 2 second half (bars 14-21): switch to riddim chop"
+    - "Drop 3: combination of all elements, most chaotic"
+
+# ===================================================================
+# BLUEPRINT 2: FIBONACCI EMOTIVE
+# ===================================================================
+FIBONACCI_EMOTIVE:
+  description: >
+    Emotional journey structure. Longer sections for narrative arc.
+    Phi-timed builds with melodic content. Drops still hit hard
+    but serve the emotional story.
+  bpm: 150
+  key: D_minor
+  tuning_a4: 432
+
+  arrangement:
+    - { name: intro,     bars: 13,  notes: "Atmospheric. Piano/pad + sub. Set mood." }
+    - { name: verse_1,   bars: 8,   notes: "Vocal or melodic lead. Half-time feel." }
+    - { name: build_1,   bars: 8,   notes: "Gradual. Phi-curve energy rise." }
+    - { name: drop_1,    bars: 13,  notes: "Melodic bass. PHI CORE clean positions." }
+    - { name: break_1,   bars: 8,   notes: "Vocal return. Strip to minimal." }
+    - { name: verse_2,   bars: 8,   notes: "New lyric/melody. Build anticipation." }
+    - { name: build_2,   bars: 5,   notes: "Shorter build. More urgent." }
+    - { name: drop_2,    bars: 21,  notes: "Full emotional payload. Layer all elements." }
+    - { name: bridge,    bars: 8,   notes: "Stripped back. Just vocal + pad." }
+    - { name: drop_3,    bars: 13,  notes: "Final drop. Most emotional. All layers." }
+    - { name: outro,     bars: 13,  notes: "Long fade. Reverb + delay tails." }
+
+  psbs_preset: DEFAULT
+  rco_profile: EMOTIVE_LONG
+  wavetable: DUBFORGE_PHI_CORE.wav
+
+  serum_macros:
+    macro_1: { label: PHI MORPH,   default: 20, target: wt_position }
+    macro_2: { label: WARMTH,      default: 40, target: filter_cutoff }
+    macro_3: { label: SUB WEIGHT,  default: 90, target: sub_gain }
+    macro_4: { label: ATMOSPHERE,  default: 50, target: reverb_mix }
+
+  sound_design_notes:
+    - "Drops use clean PHI CORE positions (0-80)"
+    - "Sub is dominant — full mono sine, loud"
+    - "Mid-range growl kept minimal, serve the melody"
+    - "Reverb and delay used generously for atmosphere"
+    - "Drop 2 longest section — build the full emotional arc here"
+
+# ===================================================================
+# BLUEPRINT 3: FIBONACCI HYBRID
+# ===================================================================
+FIBONACCI_HYBRID:
+  description: >
+    Best of both worlds: weapon aggression with emotive breaks.
+    Switches between clean/emotional and dirty/aggressive.
+    DJ-friendly: clear mix points every 8 bars.
+  bpm: 150
+  key: E_minor
+  tuning_a4: 432
+
+  arrangement:
+    - { name: intro,         bars: 8,   notes: "Clean pad. Establish key." }
+    - { name: build_1,       bars: 8,   notes: "Exponential energy curve." }
+    - { name: drop_1_weapon, bars: 13,  notes: "Weapon drop. PSBS WEAPON." }
+    - { name: melodic_break, bars: 13,  notes: "Full melodic section. Vocals/leads." }
+    - { name: build_2,       bars: 5,   notes: "Phi-curve. Faster tension." }
+    - { name: drop_2_emotive, bars: 13, notes: "Emotional drop. Melodic bass." }
+    - { name: break_2,       bars: 5,   notes: "Strip down. Sub + reverb only." }
+    - { name: build_3,       bars: 8,   notes: "Build to final weapon." }
+    - { name: drop_3_weapon, bars: 21,  notes: "Extended final weapon. Switch at bar 13." }
+    - { name: outro,         bars: 8,   notes: "Clean outro. DJ-ready." }
+
+  psbs_preset: WEAPON  # switches to DEFAULT in emotive sections
+  rco_profile: PACK_WEAPON
+  wavetable: DUBFORGE_PHI_CORE.wav
+
+  serum_macros:
+    macro_1: { label: PHI MORPH,    default: 30, target: wt_position }
+    macro_2: { label: AGGRESSION,   default: 50, target: distortion_drive }
+    macro_3: { label: SUB WEIGHT,   default: 85, target: sub_gain }
+    macro_4: { label: SPACE,        default: 35, target: reverb_mix }
+
+  sound_design_notes:
+    - "Weapon drops: dirty wavetable positions (200+), heavy distortion"
+    - "Emotive drops: clean positions (0-80), minimal distortion"
+    - "The contrast IS the hook — listener gets both worlds"
+    - "Melodic break should be distinctly different timbre"
+    - "Drop 3 extended: start weapon, evolve to hybrid at bar 13"
+    - "DJ mix points at bar 0 of every section divisible by 8"

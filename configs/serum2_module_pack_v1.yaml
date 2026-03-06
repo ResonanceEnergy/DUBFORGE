@@ -1,0 +1,240 @@
+# -------------------------------------------------------------------
+# DUBFORGE — Serum 2 Module Pack v1.0
+# Includes: TRANCE_ARP_ENGINE, MIDBASS_GROWL_RESAMPLER_ENGINE,
+#           PHI_CORE_WT_ENGINE, FM_BASS_ENGINE, SUB_LAYER_ENGINE
+# -------------------------------------------------------------------
+
+version: "1.0"
+pack: DUBFORGE_SERUM2_MODULE_PACK_V1
+author: DUBFORGE
+date: "2026-03-05"
+doctrine: Planck x phi Fractal Basscraft v1.0
+tuning_ref: 432  # Hz
+
+# ===================================================================
+# MODULE 1: PHI CORE WAVETABLE ENGINE
+# ===================================================================
+PHI_CORE_WT_ENGINE:
+  description: >
+    Phi-spaced additive synthesis wavetable generator for Serum 2.
+    Uses golden ratio harmonic series for organic, fractal timbres.
+  serum_osc: A
+  wavetable: DUBFORGE_PHI_CORE.wav
+  wt_position:
+    macro: 1
+    label: PHI MORPH
+    range: [0, 255]
+    default: 0
+  unison:
+    voices: 5
+    detune_cents: 7.64  # phi-derived: 12.36 / phi
+    blend: 0.618        # 1/phi
+    mode: super
+  pitch:
+    coarse: 0
+    fine: 0.0
+    env_depth: 0
+  filter:
+    type: lowpass_24
+    cutoff_hz: 800
+    resonance: 0.25
+    env_amount: 0.618
+    env_attack_ms: 5     # phi^2 ≈ 2.618 rounded
+    env_decay_ms: 233    # Fibonacci
+    env_sustain: 0.382   # 1 - 1/phi
+    env_release_ms: 377  # Fibonacci-adjacent
+
+# ===================================================================
+# MODULE 2: FM BASS ENGINE
+# ===================================================================
+FM_BASS_ENGINE:
+  description: >
+    FM synthesis bass using phi-ratio carrier:modulator relationship.
+    Oscillator B modulates Oscillator A at golden ratio intervals.
+  serum_osc_a:
+    waveform: sine
+    pitch_coarse: 0
+  serum_osc_b:
+    waveform: sine
+    pitch_coarse: 0
+    pitch_fine: 7.02     # log2(phi) * 12 semitones
+    fm_to_a: true
+  fm_depth:
+    macro: 2
+    label: FM DEPTH
+    range: [0, 100]
+    default: 35
+  unison:
+    voices: 3
+    detune_cents: 4.72   # phi-derived
+    mode: super
+  filter:
+    type: bandpass_12
+    cutoff_hz: 250
+    resonance: 0.4
+
+# ===================================================================
+# MODULE 3: SUB LAYER ENGINE
+# ===================================================================
+SUB_LAYER_ENGINE:
+  description: >
+    Clean sub-bass layer. Pure sine, mono, no effects.
+    Tuned to root with optional 432 Hz shift.
+  serum_osc: A
+  waveform: sine
+  pitch:
+    coarse: -12          # one octave down from root
+    fine: 0.0
+  unison:
+    voices: 1
+    detune_cents: 0
+  filter:
+    type: lowpass_12
+    cutoff_hz: 120
+    resonance: 0.0
+  effects:
+    - type: none
+  stereo_width: 0.0     # pure mono
+  gain_db: 0.0
+  note: >
+    Always mono. No stereo processing. No distortion.
+    This is the foundation. Keep it clean.
+
+# ===================================================================
+# MODULE 4: TRANCE ARP ENGINE
+# ===================================================================
+TRANCE_ARP_ENGINE:
+  description: >
+    Fibonacci-timed arpeggiator module for trance-style sequences.
+    Note durations and pattern lengths follow Fibonacci numbers.
+    Gate times use phi-ratio proportions.
+  mode: arp
+  direction: up_down
+  octave_range: 3
+  tempo_sync: true
+  rate: "1/16"
+  gate_percent: 61.8     # phi percentage
+  swing: 0.0
+
+  pattern:
+    name: FIBONACCI_RISE
+    steps: 13            # Fibonacci
+    sequence:            # semitone offsets from root
+      - 0                # 1 (Fibonacci index 1)
+      - 0                # 1
+      - 2                # 2 → whole step
+      - 3                # 3 → minor third
+      - 5                # 5 → perfect fourth
+      - 8                # 8 → minor sixth (octave fold if needed)
+      - 0                # reset: 13 → octave (mod 12 = 1 → 0)
+      - 5
+      - 3
+      - 2
+      - 0
+      - 0
+      - -5               # down fourth for turnaround
+
+  velocity_pattern:
+    mode: fibonacci_accent
+    accent_indices: [0, 1, 2, 4, 7, 12]   # Fibonacci-1 indices
+    accent_velocity: 127
+    normal_velocity: 80
+
+  serum_osc: A
+  wavetable: DUBFORGE_PHI_CORE.wav
+  wt_position:
+    macro: 1
+    range: [0, 100]
+  unison:
+    voices: 7
+    detune_cents: 12.36  # ~phi * 7.64
+    mode: super
+  filter:
+    type: lowpass_24
+    cutoff_hz: 2000
+    resonance: 0.35
+    env_amount: 0.5
+    lfo_mod:
+      rate: "1/4"
+      depth: 0.3
+  effects:
+    - type: reverb
+      size: 0.618
+      damping: 0.382
+      mix: 0.25
+    - type: delay
+      time_l: "3/16"     # Fibonacci: 3
+      time_r: "5/16"     # Fibonacci: 5
+      feedback: 0.382
+      mix: 0.2
+
+# ===================================================================
+# MODULE 5: MIDBASS GROWL RESAMPLER ENGINE
+# ===================================================================
+MIDBASS_GROWL_RESAMPLER_ENGINE:
+  description: >
+    Resample + mangle pipeline for mid-bass growls.
+    Takes a single-cycle source, applies fractal-driven
+    modulation, distortion, and formant shifting to create
+    evolving growl textures. Outputs Serum-ready wavetable.
+  source: any            # accepts wavetable, audio clip, or live input
+  pipeline:
+    - step: pitch_shift
+      semitones: 0
+      formant_preserve: true
+      formant_shift: 3   # Fibonacci
+
+    - step: distortion
+      type: waveshape
+      drive: 0.618       # phi proportion
+      curve: tanh
+      mix: 0.8
+
+    - step: frequency_shift
+      hz: 34             # Fibonacci
+      mix: 0.4
+
+    - step: comb_filter
+      delay_ms: 2.618    # phi^2 ms
+      feedback: 0.55
+      mix: 0.5
+
+    - step: bit_reduce
+      bits: 8
+      sample_rate_reduce: 0.382  # factor
+      mix: 0.3
+
+    - step: formant_filter
+      vowel_sequence: [A, E, I, O, U]
+      rate: "1/8"
+      depth: 0.618
+      mix: 0.6
+
+    - step: resample_to_wavetable
+      frames: 256
+      frame_size: 2048
+      crossfade: phi      # phi-weighted frame blending
+      normalize: true
+
+  output:
+    format: wav
+    path: output/wavetables/DUBFORGE_GROWL_RESAMPLED.wav
+    serum_compatible: true
+
+  macros:
+    macro_1:
+      label: GROWL DEPTH
+      targets: [distortion.drive, comb_filter.feedback]
+      range: [0, 100]
+    macro_2:
+      label: FORMANT SHIFT
+      targets: [formant_filter.depth, pitch_shift.formant_shift]
+      range: [0, 100]
+    macro_3:
+      label: GRIT
+      targets: [bit_reduce.mix, distortion.mix]
+      range: [0, 100]
+    macro_4:
+      label: MOVEMENT
+      targets: [frequency_shift.hz, formant_filter.rate]
+      range: [0, 100]
