@@ -8,7 +8,7 @@
 - Location: /Users/gripandripphdd/DUBFORGE/DUBFORGE
 - Purpose: Planck x phi fractal basscraft sound design engine
 - Author: gripandripphdd
-- Primary DAW target: Serum 2 / Ableton
+- Primary DAW target: Serum 2 / Ableton Live
 - Genre: Dubstep / Bass music (Subtronics-influenced)
 
 ## STANDING DOCTRINE (never override unless user says so)
@@ -25,14 +25,16 @@
 ## ENGINE STATUS — ALL BUILT & VERIFIED (run_all.py passes clean)
 
 ### Python Modules (engine/)
-| Module              | File                | Status  | Description                                    |
-|---------------------|---------------------|---------|------------------------------------------------|
-| PHI CORE            | phi_core.py         | DONE    | Phi-spaced wavetable gen → Serum .wav           |
-| RCO                 | rco.py              | DONE    | Rollercoaster energy curve optimizer             |
-| PSBS                | psbs.py             | DONE    | 5-layer phase-separated bass (phi crossovers)    |
-| SB Analyzer         | sb_analyzer.py      | DONE    | Subtronics corpus analysis (REAL data, 74 trks)  |
-| Trance Arp          | trance_arp.py       | DONE    | Fibonacci-timed arpeggiator                      |
-| Growl Resampler     | growl_resampler.py  | DONE    | Resample+mangle pipeline for mid-bass growls     |
+| Module              | File                   | Status  | Description                                    |
+|---------------------|------------------------|---------|------------------------------------------------|
+| PHI CORE            | phi_core.py            | DONE    | Phi-spaced wavetable gen → Serum .wav           |
+| RCO                 | rco.py                 | DONE    | Rollercoaster energy curve optimizer             |
+| PSBS                | psbs.py                | DONE    | 5-layer phase-separated bass (phi crossovers)    |
+| SB Analyzer         | sb_analyzer.py         | DONE    | Subtronics corpus analysis (REAL data, 74 trks)  |
+| Trance Arp          | trance_arp.py          | DONE    | Fibonacci-timed arpeggiator                      |
+| Growl Resampler     | growl_resampler.py     | DONE    | Resample+mangle pipeline for mid-bass growls     |
+| Chord Progression   | chord_progression.py   | DONE    | 11 presets, 17 chord quals, phi voicing, 835 lines |
+| Ableton Live        | ableton_live.py        | DONE    | Full LOM, session/arrangement gen, M4L scripts    |
 
 ### YAML Configs (configs/)
 | Config                          | Status | Description                                      |
@@ -123,9 +125,76 @@ Audio: DRM-locked .m4p — NO spectral analysis yet. Metadata-only engine.
 - [ ] Automate wavetable building pipeline (CLI args)
 - [ ] SoundCloud / YouTube audio fetch for spectral math
 - [ ] 432 Hz full tuning mode implementation
-- [ ] Ableton Live integration (ALS template generation)
+- [x] Ableton Live integration (ALS template generation) ← DONE
+- [ ] ALS file writer (gzipped XML export for native .als import)
 - [ ] Real-time MIDI arp output from trance_arp module
 - [ ] A/B DJ acceptance testing protocol
+- [ ] Ableton Link integration for multi-device sync
+- [ ] MIDI Remote Script for Push/hardware controller
+
+## ABLETON LIVE ENGINE DETAILS
+
+### Architecture Knowledge (learned inside-out)
+- Live Object Model: 10 core classes (Application, Song, Track, ClipSlot, Clip,
+  Device, DeviceParameter, Scene, RackDevice, MixerDevice + sub-types)
+- Session View: clip×scene matrix, launch quantization, follow actions
+- Arrangement View: linear timeline, cue points, automation lanes
+- Device chain: MIDI FX → Instrument → Audio FX → Mixer
+- Routing: Input/Output types, Send/Return buses, Resampling
+- Rack system: Instrument/Audio/Drum/MIDI racks with chains + macros
+- ALS format: gzipped XML containing full project state
+- Python API: `import Live` → `song = app.get_document()` → full R/W access
+- Max for Live: Python scripts inside M4L devices control entire LOM
+- MIDI Remote Scripts: Python scripts for hardware controller integration
+- TuningSystem: Custom micro-tuning, reference_pitch, note_tunings in cents
+- Ableton Link: Network tempo/beat sync protocol
+
+### Generated Outputs (output/ableton/)
+| Output                                  | Type              |
+|-----------------------------------------|-------------------|
+| session_dubforge_dubstep_weapon.json    | Session Template  |
+| session_dubforge_emotive_melodic.json   | Session Template  |
+| session_dubforge_hybrid_fractal.json    | Session Template  |
+| session_dubforge_tesseract.json         | Session Template  |
+| session_dubforge_fibonacci_live.json    | Session Template  |
+| arrangement_dubforge_weapon_arr.json    | Arrangement       |
+| arrangement_dubforge_emotive_arr.json   | Arrangement       |
+| device_chain_psbs_rack.json            | Device Preset     |
+| device_chain_master.json               | Device Preset     |
+| dubforge_m4l_setup.py                  | Max4Live Script   |
+| lom_reference.json                     | LOM Database      |
+
+### Session Template Structure (10 tracks + 2 returns + 7 scenes)
+1. SUB (20-89 Hz, mono, clean)
+2. LOW (89-144 Hz, warm)
+3. MID GROWL (144-233 Hz, FM/wavetable heavy)
+4. HIGH (233-377 Hz, fizz/harmonics)
+5. CLICK (377-610 Hz, transient)
+6. CHORDS (emotional content)
+7. LEAD (top melody)
+8. ARP (Fibonacci arpeggiator)
+9. DRUMS (Drum Rack)
+10. FX/RISERS (transitions)
+Return A: REVERB (phi decay = 2.472s)
+Return B: DELAY (Fibonacci L=3/16, R=5/16, feedback=1/phi²)
+
+### MIDI Clip Generation
+- Sub bass: sustained notes with phi gate ratio (~0.618)
+- Mid bass: Fibonacci-timed triggers with phi-velocity dynamics
+- Arp: Fibonacci sequence indices mapped to scale degrees
+- Chord stabs: Fibonacci rhythmic spacing
+
+## CHORD PROGRESSION ENGINE DETAILS
+
+### Key Design Decisions
+- Roman numeral resolution: pop/EDM convention (key's own scale, NOT always major)
+- Andalusian cadence: uses natural minor for VII=G (not harmonic minor G#)
+- 11 presets: WEAPON_DARK, EMOTIVE_RISE, FRACTAL_SPIRAL, ANDALUSIAN_WEAPON,
+  GOLDEN_RATIO, TESSERACT, WOOK_TRIP, FIBONACCI_DROP, STEPWISE_GRIND,
+  432_SACRED, ANTIFRACTAL
+- Phi voicing spread, Fibonacci harmonic rhythm
+- MIDI + frequency dual output
+- JSON export format
 
 ## CHAT HISTORY SUMMARY
 
@@ -142,6 +211,25 @@ Session 2 (2026-03-05 continued):
 - Updated SB Analyzer with exact real tracklist + durations
 - Built VIP delta matching (VIPs + remixes vs FRACTALS originals)
 - Full rebuild verified — all 74 tracks, 24 VIP/remix deltas, clean pass
+
+Session 3 (2026-03-06):
+- Built chord_progression.py (835 lines, 11 presets, 17 chord qualities)
+- Fixed Roman numeral resolution: major-scale-always → key's own scale (pop/EDM convention)
+- Fixed Andalusian cadence: harmonic_minor → natural minor for correct VII=G
+- Integrated into run_all.py and __init__.py — full build passes clean
+- Committed as a0ba4d3
+
+Session 4 (2026-03-06 continued):
+- Researched Ableton Live architecture inside-out (LOM, Python API, M4L, Remote Scripts)
+- Built engine/ableton_live.py — comprehensive Ableton Live integration engine
+- 10 LOM core classes documented, full hierarchy mapped
+- Session templates (5 presets), Arrangement templates, Device chain presets
+- MIDI clip generators (sub, mid, arp, chord stab) with phi/Fibonacci doctrine
+- Max for Live control script generator
+- PSBS Instrument Rack architecture (5 chains mimicking DUBFORGE bass layers)
+- Master chain: EQ8 → Glue Comp → OTT (phi crossovers) → Limiter
+- Return tracks: Reverb (phi decay) + Delay (Fibonacci timing)
+- Updated DOCTRINE.md (v1.1), .dubforge_memory, run_all.py, __init__.py
 
 ## HOW TO RESTORE
 

@@ -41,6 +41,37 @@
 | Mid-Bass Growl Resampler| `growl_resamp`   | Resample + mangle mid-bass growls                |
 | Subtronics Analyzer    | `sb_analyzer`     | Timestamp/metadata analysis of reference tracks  |
 | Fibonacci Blueprint    | `fib_blueprint`   | Drop structure templates keyed to Fibonacci      |
+| Chord Progression      | `chord_progression` | Music theory + phi voicing + 11 EDM presets    |
+| Ableton Live Engine    | `ableton_live`    | Full LOM integration, session/arrangement gen    |
+
+---
+
+## Chord Progression Rules
+
+1. Roman numeral resolution uses **pop/EDM convention** (resolves from key's own scale).
+2. 17 chord qualities supported (major through phi_triad).
+3. 5 scale types: major, minor, harmonic_minor, phrygian_dominant, dorian.
+4. Phi-ratio voicing spread applied to chord inversions.
+5. Fibonacci harmonic rhythm for non-uniform chord durations.
+6. 432 Hz tuning option for all frequency calculations.
+7. MIDI note + frequency dual output for every chord tone.
+
+---
+
+## Ableton Live Integration Rules
+
+1. **Live Object Model (LOM)** is the programmatic API — all 10 core classes mapped.
+2. Session View templates follow PSBS track architecture (5 bass layers + support tracks).
+3. Arrangement templates use **Fibonacci bar counts** for section durations.
+4. **Golden Section Point** (total_beats / phi) marks the climax position in arrangements.
+5. Device chains mirror DUBFORGE signal flow: Instrument → EQ (band isolation) → Saturator → Utility.
+6. Return tracks use **phi-ratio decay** (reverb) and **Fibonacci timing** (delay).
+7. Master chain: EQ Eight → Glue Comp → OTT (phi crossovers) → Limiter.
+8. MIDI clips use phi gate ratios (~0.618 of beat) and phi-velocity curves.
+9. Max for Live control scripts generated for automated set construction.
+10. Ableton's TuningSystem class used for 432 Hz micro-tuning integration.
+11. Clip launch quantization defaults to 1 Bar for drop-safe triggering.
+12. Rack Macros follow Serum convention: M1=PHI MORPH, M2=FM DEPTH, M3=SUB WEIGHT, M4=GRIT.
 
 ---
 
@@ -92,6 +123,7 @@ n=47  ~580.68 Hz         upper-mid
 
 ---
 
-**Version:** 1.0
+**Version:** 1.1
 **Author:** DUBFORGE
-**Date:** 2026-03-05
+**Date:** 2026-03-06
+**Modules:** 10 (8 engines + chord progression + Ableton Live)
