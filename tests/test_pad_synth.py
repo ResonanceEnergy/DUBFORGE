@@ -13,14 +13,20 @@ from engine.pad_synth import (
     choir_pad_bank,
     dark_pad_bank,
     evolving_pad_bank,
+    glass_pad_bank,
+    granular_pad_bank,
     lush_pad_bank,
     shimmer_pad_bank,
     synthesize_choir_pad,
     synthesize_dark_pad,
     synthesize_evolving_pad,
+    synthesize_glass_pad,
+    synthesize_granular_pad,
     synthesize_lush_pad,
     synthesize_pad,
     synthesize_shimmer_pad,
+    synthesize_warm_pad,
+    warm_pad_bank,
     write_pad_manifest,
 )
 
@@ -70,8 +76,21 @@ class TestSynthesizers(unittest.TestCase):
         p = PadPreset("t", "choir", 220.0, duration_s=0.5)
         self._assert_valid(synthesize_choir_pad(p))
 
+    def test_glass_pad(self):
+        p = PadPreset("t", "glass", 220.0, duration_s=0.5)
+        self._assert_valid(synthesize_glass_pad(p))
+
+    def test_warm_pad(self):
+        p = PadPreset("t", "warm", 220.0, duration_s=0.5)
+        self._assert_valid(synthesize_warm_pad(p))
+
+    def test_granular_pad(self):
+        p = PadPreset("t", "granular", 220.0, duration_s=0.5)
+        self._assert_valid(synthesize_granular_pad(p))
+
     def test_router_all_types(self):
-        for ptype in ("lush", "dark", "shimmer", "evolving", "choir"):
+        for ptype in ("lush", "dark", "shimmer", "evolving", "choir",
+                      "glass", "warm", "granular"):
             p = PadPreset("t", ptype, 220.0, duration_s=0.3)
             signal = synthesize_pad(p)
             self.assertGreater(len(signal), 0)
@@ -112,8 +131,23 @@ class TestBanks(unittest.TestCase):
         self.assertEqual(bank.name, "CHOIR_PADS")
         self.assertEqual(len(bank.presets), 4)
 
+    def test_glass_pad_bank(self):
+        bank = glass_pad_bank()
+        self.assertEqual(bank.name, "GLASS_PADS")
+        self.assertEqual(len(bank.presets), 4)
+
+    def test_warm_pad_bank(self):
+        bank = warm_pad_bank()
+        self.assertEqual(bank.name, "WARM_PADS")
+        self.assertEqual(len(bank.presets), 4)
+
+    def test_granular_pad_bank(self):
+        bank = granular_pad_bank()
+        self.assertEqual(bank.name, "GRANULAR_PADS")
+        self.assertEqual(len(bank.presets), 4)
+
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_PAD_BANKS), 5)
+        self.assertEqual(len(ALL_PAD_BANKS), 8)
 
     def test_all_banks_synthesize(self):
         for bank_name, gen_fn in ALL_PAD_BANKS.items():
@@ -123,9 +157,9 @@ class TestBanks(unittest.TestCase):
                 self.assertGreater(len(signal), 0,
                                    f"Failed: {bank_name}/{preset.name}")
 
-    def test_total_presets_is_20(self):
+    def test_total_presets_is_32(self):
         total = sum(len(fn().presets) for fn in ALL_PAD_BANKS.values())
-        self.assertEqual(total, 20)
+        self.assertEqual(total, 32)
 
 
 class TestManifest(unittest.TestCase):
@@ -139,7 +173,7 @@ class TestManifest(unittest.TestCase):
             with open(path) as f:
                 data = json.load(f)
             self.assertIn("banks", data)
-            self.assertEqual(len(data["banks"]), 5)
+            self.assertEqual(len(data["banks"]), 8)
 
 
 if __name__ == "__main__":

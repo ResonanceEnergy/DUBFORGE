@@ -287,6 +287,99 @@ def synthesize_acid_lead(preset: LeadPreset,
     return _normalize(signal)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# v2.0 — 3 new lead types (12 presets)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def synthesize_saw_lead(preset: LeadPreset,
+                        sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Saw lead — raw bright sawtooth with subtle detune."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    detune = 2 ** (preset.detune_cents / 1200) if preset.detune_cents else 1.002
+    signal = np.zeros(n)
+    for voice_f in [preset.frequency, preset.frequency * detune]:
+        for h in range(1, 16):
+            if voice_f * h > sample_rate / 2:
+                break
+            signal += ((-1) ** h / h) * np.sin(2 * math.pi * voice_f * h * t)
+    signal *= 0.5
+
+    # Bright resonant filter
+    alpha = min(0.99, preset.filter_cutoff * 0.6 + 0.1)
+    y1, y2 = 0.0, 0.0
+    for i in range(n):
+        y1 = y1 + alpha * (signal[i] - y1)
+        y2 = y2 + alpha * (y1 - y2)
+        signal[i] = y1 + preset.resonance * (y1 - y2)
+
+    env = _adsr_envelope(n, preset, sample_rate)
+    signal *= env
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    return _normalize(signal)
+
+
+def synthesize_pwm_lead(preset: LeadPreset,
+                        sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """PWM lead — pulse-width modulated square with movement."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Pulse width modulated via LFO
+    lfo = 0.3 + 0.2 * np.sin(2 * math.pi * 3.0 * t)  # width 0.1–0.5
+    phase = (preset.frequency * t) % 1.0
+    signal = np.where(phase < lfo, 1.0, -1.0).astype(np.float64)
+
+    # Lowpass to tame aliasing
+    alpha = min(0.99, preset.filter_cutoff * 0.5 + 0.15)
+    y = 0.0
+    for i in range(n):
+        y = y * (1 - alpha) + signal[i] * alpha
+        signal[i] = y
+
+    env = _adsr_envelope(n, preset, sample_rate)
+    signal *= env
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    return _normalize(signal)
+
+
+def synthesize_formant_lead(preset: LeadPreset,
+                            sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Formant lead — vowel-shaped resonance on a saw source."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Saw source
+    signal = np.zeros(n)
+    for h in range(1, 12):
+        if preset.frequency * h > sample_rate / 2:
+            break
+        signal += ((-1) ** h / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+
+    # Formant filter — two resonant peaks ("ah" vowel morphing to "ee")
+    formants = [(730, 1090), (270, 2290)]  # (start_f, end_f) per peak
+    filtered = np.zeros(n)
+    for start_f, end_f in formants:
+        freq_sweep = np.linspace(start_f, end_f, n)
+        y1, y2 = 0.0, 0.0
+        layer = np.zeros(n)
+        for i in range(n):
+            a = min(0.99, freq_sweep[i] / sample_rate * 2)
+            y1 = y1 + a * (signal[i] - y1)
+            y2 = y2 + a * (y1 - y2)
+            layer[i] = y1 + preset.resonance * 2 * (y1 - y2)
+        filtered += layer * 0.5
+
+    env = _adsr_envelope(n, preset, sample_rate)
+    filtered *= env
+    if preset.distortion > 0:
+        filtered = np.tanh(filtered * (1 + preset.distortion * 3))
+    return _normalize(filtered)
+
+
 def synthesize_lead(preset: LeadPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct lead synthesizer."""
@@ -296,6 +389,9 @@ def synthesize_lead(preset: LeadPreset,
         "fm_lead": synthesize_fm_lead,
         "supersaw": synthesize_supersaw_lead,
         "acid": synthesize_acid_lead,
+        "saw": synthesize_saw_lead,
+        "pwm": synthesize_pwm_lead,
+        "formant": synthesize_formant_lead,
     }
     fn = synthesizers.get(preset.lead_type)
     if fn is None:
@@ -392,12 +488,67 @@ def acid_lead_bank() -> LeadBank:
     )
 
 
+def saw_lead_bank() -> LeadBank:
+    """Saw leads — bright raw sawtooth."""
+    return LeadBank(
+        name="SAW_LEADS",
+        presets=[
+            LeadPreset("saw_C4", "saw", 261.63, duration_s=0.6,
+                       detune_cents=8, filter_cutoff=0.8, resonance=0.3),
+            LeadPreset("saw_E4", "saw", 329.63, duration_s=0.6,
+                       detune_cents=10, filter_cutoff=0.85, resonance=0.35),
+            LeadPreset("saw_G4", "saw", 392.00, duration_s=0.6,
+                       detune_cents=6, filter_cutoff=0.75, resonance=0.25),
+            LeadPreset("saw_A4", "saw", 440.00, duration_s=0.6,
+                       detune_cents=12, filter_cutoff=0.9, resonance=0.4),
+        ],
+    )
+
+
+def pwm_lead_bank() -> LeadBank:
+    """PWM leads — pulse-width modulated movement."""
+    return LeadBank(
+        name="PWM_LEADS",
+        presets=[
+            LeadPreset("pwm_C4", "pwm", 261.63, duration_s=0.8,
+                       filter_cutoff=0.7, distortion=0.1),
+            LeadPreset("pwm_E4", "pwm", 329.63, duration_s=0.8,
+                       filter_cutoff=0.75, distortion=0.15),
+            LeadPreset("pwm_G4", "pwm", 392.00, duration_s=0.8,
+                       filter_cutoff=0.65, distortion=0.05),
+            LeadPreset("pwm_A4", "pwm", 440.00, duration_s=0.8,
+                       filter_cutoff=0.8, distortion=0.2),
+        ],
+    )
+
+
+def formant_lead_bank() -> LeadBank:
+    """Formant leads — vowel-shaped resonance."""
+    return LeadBank(
+        name="FORMANT_LEADS",
+        presets=[
+            LeadPreset("formant_C4", "formant", 261.63, duration_s=0.7,
+                       resonance=0.6, distortion=0.15),
+            LeadPreset("formant_E4", "formant", 329.63, duration_s=0.7,
+                       resonance=0.5, distortion=0.1),
+            LeadPreset("formant_G4", "formant", 392.00, duration_s=0.7,
+                       resonance=0.7, distortion=0.2),
+            LeadPreset("formant_A4", "formant", 440.00, duration_s=0.7,
+                       resonance=0.55, distortion=0.12),
+        ],
+    )
+
+
 ALL_LEAD_BANKS: dict[str, callable] = {
     "screech":  screech_lead_bank,
     "pluck":    pluck_lead_bank,
     "fm_lead":  fm_lead_bank,
     "supersaw": supersaw_lead_bank,
     "acid":     acid_lead_bank,
+    # v2.0
+    "saw":      saw_lead_bank,
+    "pwm":      pwm_lead_bank,
+    "formant":  formant_lead_bank,
 }
 
 

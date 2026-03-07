@@ -196,7 +196,7 @@ class TestPatternGenerators(unittest.TestCase):
         self.assertGreaterEqual(len(hat_hits), 40)
 
     def test_all_patterns_registered(self):
-        self.assertEqual(len(ALL_DRUM_PATTERNS), 50)
+        self.assertEqual(len(ALL_DRUM_PATTERNS), 66)
         for name, fn in ALL_DRUM_PATTERNS.items():
             p = fn()
             self.assertIsInstance(p, DrumPattern)

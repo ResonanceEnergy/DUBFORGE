@@ -442,6 +442,48 @@ def breathy_noise_chops() -> VocalChopBank:
     )
 
 
+def robotic_chops() -> VocalChopBank:
+    """Robotic vocal chops — hard-tuned metallic vowel textures."""
+    return VocalChopBank(
+        name="ROBOTIC_CHOPS",
+        chops=[
+            VocalChop("robot_ah_C3", "ah", "C3", 0.25,
+                       attack_s=0.001, release_s=0.05,
+                       formant_shift=6.0, distortion=0.5),
+            VocalChop("robot_oh_E3", "oh", "E3", 0.2,
+                       attack_s=0.001, release_s=0.04,
+                       formant_shift=8.0, distortion=0.6),
+            VocalChop("robot_ee_G3", "ee", "G3", 0.3,
+                       attack_s=0.001, release_s=0.06,
+                       formant_shift=10.0, distortion=0.7),
+            VocalChop("robot_oo_A3", "oo", "A3", 0.25,
+                       attack_s=0.001, release_s=0.05,
+                       formant_shift=12.0, distortion=0.4),
+        ],
+    )
+
+
+def granular_chops() -> VocalChopBank:
+    """Granular vocal chops — micro-stuttered grain-cloud textures."""
+    return VocalChopBank(
+        name="GRANULAR_CHOPS",
+        chops=[
+            VocalChop("grain_ah_C4", "ah", "C4", 0.5,
+                       stutter_count=32, stutter_pitch_drift=0.5,
+                       distortion=0.2),
+            VocalChop("grain_eh_E4", "eh", "E4", 0.4,
+                       stutter_count=24, stutter_pitch_drift=-0.3,
+                       distortion=0.3),
+            VocalChop("grain_oh_G3", "oh", "G3", 0.6,
+                       stutter_count=48, stutter_pitch_drift=0.2,
+                       distortion=0.15),
+            VocalChop("grain_ee_A3", "ee", "A3", 0.45,
+                       stutter_count=16, stutter_pitch_drift=1.0,
+                       distortion=0.25),
+        ],
+    )
+
+
 ALL_CHOP_BANKS: dict[str, callable] = {
     "drop_vowel":      drop_vowel_chops,
     "stutter":         stutter_chops,
@@ -450,6 +492,9 @@ ALL_CHOP_BANKS: dict[str, callable] = {
     "extreme_stutter": extreme_stutter_chops,
     "formant_shifted": formant_shifted_chops,
     "breathy_noise":   breathy_noise_chops,
+    # v2.0
+    "robotic":         robotic_chops,
+    "granular":        granular_chops,
 }
 
 

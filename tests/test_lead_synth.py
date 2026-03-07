@@ -12,13 +12,19 @@ from engine.lead_synth import (
     LeadPreset,
     acid_lead_bank,
     fm_lead_bank,
+    formant_lead_bank,
     pluck_lead_bank,
+    pwm_lead_bank,
+    saw_lead_bank,
     screech_lead_bank,
     supersaw_lead_bank,
     synthesize_acid_lead,
     synthesize_fm_lead,
+    synthesize_formant_lead,
     synthesize_lead,
     synthesize_pluck_lead,
+    synthesize_pwm_lead,
+    synthesize_saw_lead,
     synthesize_screech_lead,
     synthesize_supersaw_lead,
     write_lead_manifest,
@@ -71,8 +77,21 @@ class TestSynthesizers(unittest.TestCase):
                         filter_cutoff=0.8, distortion=0.3)
         self._assert_valid(synthesize_acid_lead(p))
 
+    def test_saw_lead(self):
+        p = LeadPreset("t", "saw", 440.0, duration_s=0.2)
+        self._assert_valid(synthesize_saw_lead(p))
+
+    def test_pwm_lead(self):
+        p = LeadPreset("t", "pwm", 440.0, duration_s=0.2)
+        self._assert_valid(synthesize_pwm_lead(p))
+
+    def test_formant_lead(self):
+        p = LeadPreset("t", "formant", 440.0, duration_s=0.2)
+        self._assert_valid(synthesize_formant_lead(p))
+
     def test_router_all_types(self):
-        for ltype in ("screech", "pluck", "fm_lead", "supersaw", "acid"):
+        for ltype in ("screech", "pluck", "fm_lead", "supersaw", "acid",
+                      "saw", "pwm", "formant"):
             p = LeadPreset("t", ltype, 440.0, duration_s=0.2)
             signal = synthesize_lead(p)
             self.assertGreater(len(signal), 0)
@@ -113,8 +132,23 @@ class TestBanks(unittest.TestCase):
         self.assertEqual(bank.name, "ACID_LEADS")
         self.assertEqual(len(bank.presets), 4)
 
+    def test_saw_lead_bank(self):
+        bank = saw_lead_bank()
+        self.assertEqual(bank.name, "SAW_LEADS")
+        self.assertEqual(len(bank.presets), 4)
+
+    def test_pwm_lead_bank(self):
+        bank = pwm_lead_bank()
+        self.assertEqual(bank.name, "PWM_LEADS")
+        self.assertEqual(len(bank.presets), 4)
+
+    def test_formant_lead_bank(self):
+        bank = formant_lead_bank()
+        self.assertEqual(bank.name, "FORMANT_LEADS")
+        self.assertEqual(len(bank.presets), 4)
+
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_LEAD_BANKS), 5)
+        self.assertEqual(len(ALL_LEAD_BANKS), 8)
 
     def test_all_banks_synthesize(self):
         for bank_name, gen_fn in ALL_LEAD_BANKS.items():
@@ -124,9 +158,9 @@ class TestBanks(unittest.TestCase):
                 self.assertGreater(len(signal), 0,
                                    f"Failed: {bank_name}/{preset.name}")
 
-    def test_total_presets_is_20(self):
+    def test_total_presets_is_32(self):
         total = sum(len(fn().presets) for fn in ALL_LEAD_BANKS.values())
-        self.assertEqual(total, 20)
+        self.assertEqual(total, 32)
 
 
 class TestManifest(unittest.TestCase):
@@ -140,7 +174,7 @@ class TestManifest(unittest.TestCase):
             with open(path) as f:
                 data = json.load(f)
             self.assertIn("banks", data)
-            self.assertEqual(len(data["banks"]), 5)
+            self.assertEqual(len(data["banks"]), 8)
 
 
 if __name__ == "__main__":

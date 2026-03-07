@@ -187,7 +187,7 @@ class TestChopBankPresets(unittest.TestCase):
             self.assertGreater(c.distortion, 0)
 
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_CHOP_BANKS), 7)
+        self.assertEqual(len(ALL_CHOP_BANKS), 9)
 
     def test_all_banks_synthesize(self):
         for bank_name, gen_fn in ALL_CHOP_BANKS.items():
@@ -231,7 +231,7 @@ class TestChopManifest(unittest.TestCase):
             with open(path) as f:
                 data = json.load(f)
             self.assertIn("banks", data)
-            self.assertEqual(len(data["banks"]), 7)
+            self.assertEqual(len(data["banks"]), 9)
 
 
 if __name__ == "__main__":

@@ -270,6 +270,97 @@ def synthesize_choir_pad(preset: PadPreset,
     return _normalize(signal)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# v2.0 — 3 new pad types (12 presets)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def synthesize_glass_pad(preset: PadPreset,
+                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Glass pad — crystalline bell-like harmonics with slow swell."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    signal = np.zeros(n)
+    # Inharmonic partials at glass-bowl ratios
+    ratios = [1.0, 2.76, 5.4, 8.93, 13.34]
+    for i, r in enumerate(ratios):
+        freq = preset.frequency * r
+        if freq > sample_rate / 2:
+            break
+        amp = 0.4 / (i + 1) ** 0.8
+        signal += amp * np.sin(2 * math.pi * freq * t)
+
+    # Slow brightness swell
+    swell = np.linspace(0.2, preset.brightness, n) ** PHI
+    y = 0.0
+    for i in range(n):
+        a = max(0.01, swell[i] * 0.6)
+        y = y * (1 - a) + signal[i] * a
+        signal[i] = y
+
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
+def synthesize_warm_pad(preset: PadPreset,
+                        sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Warm pad — analog-style triangle + filtered saw with chorus."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Triangle wave (odd harmonics, alternating sign)
+    tri = np.zeros(n)
+    for h in range(1, 8, 2):
+        if preset.frequency * h > sample_rate / 2:
+            break
+        tri += ((-1) ** ((h - 1) // 2)) / (h * h) * np.sin(
+            2 * math.pi * preset.frequency * h * t)
+
+    # Detuned chorus layer
+    detune = 2 ** (preset.detune_cents / 1200)
+    chorus = np.sin(2 * math.pi * preset.frequency * detune * t)
+    chorus += np.sin(2 * math.pi * preset.frequency / detune * t)
+
+    signal = 0.6 * tri + 0.2 * chorus
+
+    # Warm lowpass
+    alpha = max(0.01, preset.filter_cutoff * 0.4)
+    y = 0.0
+    for i in range(n):
+        y = y * (1 - alpha) + signal[i] * alpha
+        signal[i] = y
+
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
+def synthesize_granular_pad(preset: PadPreset,
+                            sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Granular pad — cloud of micro-grains with pitch scatter."""
+    n = int(preset.duration_s * sample_rate)
+    rng = np.random.default_rng(999)
+
+    signal = np.zeros(n)
+    grain_size = int(0.03 * sample_rate)  # 30ms grains
+    num_grains = int(preset.duration_s * 40 * max(0.1, preset.brightness))
+
+    for _ in range(num_grains):
+        pos = rng.integers(0, max(1, n - grain_size))
+        pitch_scatter = preset.frequency * (1 + rng.uniform(-0.05, 0.05)
+                                            * preset.detune_cents / 10)
+        g_t = np.arange(grain_size) / sample_rate
+        grain = np.sin(2 * math.pi * pitch_scatter * g_t)
+        # Hann window
+        window = 0.5 * (1 - np.cos(2 * math.pi * np.arange(grain_size)
+                                    / grain_size))
+        grain *= window * rng.uniform(0.3, 0.8)
+        end = min(n, pos + grain_size)
+        signal[pos:end] += grain[:end - pos]
+
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
 def synthesize_pad(preset: PadPreset,
                    sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct pad synthesizer."""
@@ -279,6 +370,9 @@ def synthesize_pad(preset: PadPreset,
         "shimmer": synthesize_shimmer_pad,
         "evolving": synthesize_evolving_pad,
         "choir": synthesize_choir_pad,
+        "glass": synthesize_glass_pad,
+        "warm": synthesize_warm_pad,
+        "granular": synthesize_granular_pad,
     }
     fn = synthesizers.get(preset.pad_type)
     if fn is None:
@@ -375,12 +469,67 @@ def choir_pad_bank() -> PadBank:
     )
 
 
+def glass_pad_bank() -> PadBank:
+    """Glass pads — crystalline bell-like tones."""
+    return PadBank(
+        name="GLASS_PADS",
+        presets=[
+            PadPreset("glass_C3", "glass", 130.81, duration_s=5.0,
+                      brightness=0.8, filter_cutoff=0.7, attack_s=0.4),
+            PadPreset("glass_E3", "glass", 164.81, duration_s=5.0,
+                      brightness=0.9, filter_cutoff=0.8, attack_s=0.3),
+            PadPreset("glass_G3", "glass", 196.00, duration_s=5.0,
+                      brightness=0.7, filter_cutoff=0.6, attack_s=0.5),
+            PadPreset("glass_A3", "glass", 220.00, duration_s=5.0,
+                      brightness=1.0, filter_cutoff=0.9, attack_s=0.2),
+        ],
+    )
+
+
+def warm_pad_bank() -> PadBank:
+    """Warm pads — analog-style chorused triangles."""
+    return PadBank(
+        name="WARM_PADS",
+        presets=[
+            PadPreset("warm_C3", "warm", 130.81, duration_s=7.0,
+                      detune_cents=15, filter_cutoff=0.3, attack_s=1.0),
+            PadPreset("warm_D3", "warm", 146.83, duration_s=7.0,
+                      detune_cents=12, filter_cutoff=0.25, attack_s=1.2),
+            PadPreset("warm_E3", "warm", 164.81, duration_s=7.0,
+                      detune_cents=18, filter_cutoff=0.35, attack_s=0.8),
+            PadPreset("warm_G3", "warm", 196.00, duration_s=7.0,
+                      detune_cents=10, filter_cutoff=0.2, attack_s=1.5),
+        ],
+    )
+
+
+def granular_pad_bank() -> PadBank:
+    """Granular pads — cloud-texture micro-grain ambience."""
+    return PadBank(
+        name="GRANULAR_PADS",
+        presets=[
+            PadPreset("granular_C3", "granular", 130.81, duration_s=6.0,
+                      detune_cents=20, brightness=0.6, attack_s=0.5),
+            PadPreset("granular_E3", "granular", 164.81, duration_s=6.0,
+                      detune_cents=30, brightness=0.7, attack_s=0.6),
+            PadPreset("granular_G3", "granular", 196.00, duration_s=6.0,
+                      detune_cents=15, brightness=0.5, attack_s=0.8),
+            PadPreset("granular_A3", "granular", 220.00, duration_s=6.0,
+                      detune_cents=25, brightness=0.8, attack_s=0.4),
+        ],
+    )
+
+
 ALL_PAD_BANKS: dict[str, callable] = {
     "lush":     lush_pad_bank,
     "dark":     dark_pad_bank,
     "shimmer":  shimmer_pad_bank,
     "evolving": evolving_pad_bank,
     "choir":    choir_pad_bank,
+    # v2.0
+    "glass":    glass_pad_bank,
+    "warm":     warm_pad_bank,
+    "granular": granular_pad_bank,
 }
 
 

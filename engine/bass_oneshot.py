@@ -338,6 +338,96 @@ def synthesize_donk_bass(preset: BassPreset,
     return signal
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# v2.0 — 3 new bass types (12 presets)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def synthesize_saw_bass(preset: BassPreset,
+                        sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Saw bass — bright sawtooth with harmonic saturation."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    signal = np.zeros(n)
+    for h in range(1, 16):
+        if preset.frequency * h > sample_rate / 2:
+            break
+        signal += ((-1) ** h / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+
+    # Harmonic saturation
+    signal = np.tanh(signal * 1.5) * 0.8 + signal * 0.2
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_tape_bass(preset: BassPreset,
+                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Tape bass — warm analog-style with tape saturation and wow."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Slightly detuned triangle for warmth
+    detune = 2 ** (preset.detune_cents / 1200) if preset.detune_cents else 1.003
+    signal = np.zeros(n)
+    for freq in [preset.frequency, preset.frequency * detune]:
+        for h in range(1, 8, 2):
+            if freq * h > sample_rate / 2:
+                break
+            signal += ((-1) ** ((h - 1) // 2)) / (h * h) * np.sin(
+                2 * math.pi * freq * h * t)
+    signal *= 0.5
+
+    # Tape wow (slow pitch wobble)
+    wow = 1.0 + 0.002 * np.sin(2 * math.pi * 0.8 * t)
+    phase = np.cumsum(2 * math.pi * preset.frequency * wow / sample_rate)
+    signal += 0.3 * np.sin(phase)
+
+    # Tape saturation (gentle)
+    signal = np.tanh(signal * 1.2)
+
+    # Lowpass for warmth
+    alpha = 0.15
+    y = 0.0
+    for i in range(n):
+        y = y * (1 - alpha) + signal[i] * alpha
+        signal[i] = y
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_dist_fm_bass(preset: BassPreset,
+                            sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Distorted FM bass — heavy FM with aggressive waveshaping."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    carrier = preset.frequency
+    ratio = preset.fm_ratio if preset.fm_ratio > 1 else 2.5
+    depth = preset.fm_depth if preset.fm_depth > 0 else 4.0
+    modulator = carrier * ratio
+
+    # FM with fixed modulation (no decay)
+    mod_signal = depth * carrier * np.sin(2 * math.pi * modulator * t)
+    signal = np.sin(2 * math.pi * carrier * t + mod_signal)
+
+    # Multi-stage distortion
+    signal = np.tanh(signal * 2)
+    drive = max(preset.distortion, 0.5)
+    signal = np.tanh(signal * (1 + drive * 4))
+
+    # Bandpass emphasis around fundamental
+    alpha = max(0.05, preset.filter_cutoff * 0.3)
+    y = 0.0
+    for i in range(n):
+        y = y * (1 - alpha) + signal[i] * alpha
+        signal[i] = signal[i] * 0.3 + y * 0.7
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
 def synthesize_bass(preset: BassPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct bass synthesizer."""
@@ -351,6 +441,9 @@ def synthesize_bass(preset: BassPreset,
         "neuro": synthesize_neuro_bass,
         "acid": synthesize_acid_bass,
         "donk": synthesize_donk_bass,
+        "saw": synthesize_saw_bass,
+        "tape": synthesize_tape_bass,
+        "dist_fm": synthesize_dist_fm_bass,
     }
     fn = synthesizers.get(preset.bass_type)
     if fn is None:
@@ -499,6 +592,49 @@ def donk_bass_bank() -> BassBank:
     )
 
 
+def saw_bass_bank() -> BassBank:
+    """Saw bass — bright harmonically rich sawtooth."""
+    return BassBank(
+        name="SAW_BASS",
+        presets=[
+            BassPreset("saw_bass_C2", "saw", NOTE_C2, distortion=0.2),
+            BassPreset("saw_bass_D2", "saw", NOTE_D2, distortion=0.3),
+            BassPreset("saw_bass_E2", "saw", NOTE_E2, distortion=0.15),
+            BassPreset("saw_bass_F2", "saw", NOTE_F2, distortion=0.25),
+        ],
+    )
+
+
+def tape_bass_bank() -> BassBank:
+    """Tape bass — warm analog tape-saturated tone."""
+    return BassBank(
+        name="TAPE_BASS",
+        presets=[
+            BassPreset("tape_bass_C2", "tape", NOTE_C2, detune_cents=5),
+            BassPreset("tape_bass_D2", "tape", NOTE_D2, detune_cents=8),
+            BassPreset("tape_bass_E2", "tape", NOTE_E2, detune_cents=3),
+            BassPreset("tape_bass_F2", "tape", NOTE_F2, detune_cents=6),
+        ],
+    )
+
+
+def dist_fm_bass_bank() -> BassBank:
+    """Distorted FM bass — aggressive waveshaped FM."""
+    return BassBank(
+        name="DIST_FM_BASS",
+        presets=[
+            BassPreset("dist_fm_C2", "dist_fm", NOTE_C2,
+                       fm_ratio=2.5, fm_depth=4.0, distortion=0.6),
+            BassPreset("dist_fm_D2", "dist_fm", NOTE_D2,
+                       fm_ratio=3.0, fm_depth=3.5, distortion=0.7),
+            BassPreset("dist_fm_E2", "dist_fm", NOTE_E2,
+                       fm_ratio=2.0, fm_depth=5.0, distortion=0.5),
+            BassPreset("dist_fm_F2", "dist_fm", NOTE_F2,
+                       fm_ratio=2.5, fm_depth=3.0, distortion=0.8),
+        ],
+    )
+
+
 ALL_BASS_BANKS: dict[str, callable] = {
     "sub_sine":    sub_sine_bank,
     "reese":       reese_bank,
@@ -509,6 +645,10 @@ ALL_BASS_BANKS: dict[str, callable] = {
     "neuro_bass":  neuro_bass_bank,
     "acid_bass":   acid_bass_bank,
     "donk_bass":   donk_bass_bank,
+    # v2.0
+    "saw_bass":    saw_bass_bank,
+    "tape_bass":   tape_bass_bank,
+    "dist_fm_bass": dist_fm_bass_bank,
 }
 
 
