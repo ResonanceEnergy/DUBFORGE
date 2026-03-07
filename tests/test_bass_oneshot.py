@@ -16,7 +16,9 @@ from engine.bass_oneshot import (
     fm_bass_bank,
     growl_bass_bank,
     neuro_bass_bank,
+    phase_bass_bank,
     reese_bank,
+    ring_mod_bass_bank,
     saw_bass_bank,
     square_bass_bank,
     sub_sine_bank,
@@ -27,7 +29,9 @@ from engine.bass_oneshot import (
     synthesize_fm_bass,
     synthesize_growl_bass,
     synthesize_neuro_bass,
+    synthesize_phase_bass,
     synthesize_reese,
+    synthesize_ring_mod_bass,
     synthesize_saw_bass,
     synthesize_square_bass,
     synthesize_sub_sine,
@@ -116,6 +120,14 @@ class TestSynthesizers(unittest.TestCase):
                         fm_ratio=2.5, fm_depth=4.0, distortion=0.6)
         self._assert_valid(synthesize_dist_fm_bass(p))
 
+    def test_ring_mod_bass(self):
+        p = BassPreset("t", "ring_mod", 65.41, duration_s=0.2)
+        self._assert_valid(synthesize_ring_mod_bass(p))
+
+    def test_phase_bass(self):
+        p = BassPreset("t", "phase", 65.41, duration_s=0.2)
+        self._assert_valid(synthesize_phase_bass(p))
+
     def test_router_unknown(self):
         p = BassPreset("t", "laser", 100.0)
         with self.assertRaises(ValueError):
@@ -193,8 +205,22 @@ class TestBanks(unittest.TestCase):
         self.assertEqual(bank.name, "DIST_FM_BASS")
         self.assertEqual(len(bank.presets), 4)
 
+    def test_ring_mod_bass_bank(self):
+        bank = ring_mod_bass_bank()
+        self.assertEqual(bank.name, "RING_MOD_BASS")
+        self.assertEqual(len(bank.presets), 4)
+        for p in bank.presets:
+            self.assertEqual(p.bass_type, "ring_mod")
+
+    def test_phase_bass_bank(self):
+        bank = phase_bass_bank()
+        self.assertEqual(bank.name, "PHASE_BASS")
+        self.assertEqual(len(bank.presets), 4)
+        for p in bank.presets:
+            self.assertEqual(p.bass_type, "phase")
+
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_BASS_BANKS), 12)
+        self.assertEqual(len(ALL_BASS_BANKS), 14)
 
     def test_all_banks_synthesize(self):
         for bank_name, gen_fn in ALL_BASS_BANKS.items():
@@ -204,9 +230,9 @@ class TestBanks(unittest.TestCase):
                 self.assertGreater(len(signal), 0,
                                    f"Failed: {bank_name}/{preset.name}")
 
-    def test_total_presets_is_48(self):
+    def test_total_presets_is_56(self):
         total = sum(len(fn().presets) for fn in ALL_BASS_BANKS.values())
-        self.assertEqual(total, 48)
+        self.assertEqual(total, 56)
 
 
 class TestManifest(unittest.TestCase):
@@ -220,7 +246,7 @@ class TestManifest(unittest.TestCase):
             with open(path) as f:
                 data = json.load(f)
             self.assertIn("banks", data)
-            self.assertEqual(len(data["banks"]), 12)
+            self.assertEqual(len(data["banks"]), 14)
 
 
 if __name__ == "__main__":

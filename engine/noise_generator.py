@@ -218,6 +218,66 @@ def synthesize_tape(preset: NoisePreset,
     return signal / (np.max(np.abs(signal)) + 1e-10)
 
 
+def synthesize_digital(preset: NoisePreset,
+                      sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Digital noise — bit-crushed aliased texture."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(42)
+
+    # Low sample-rate noise (aliased)
+    rate_reduction = max(2, int(4 + (1 - preset.brightness) * 20))
+    raw_len = max(1, n // rate_reduction)
+    raw = rng.standard_normal(raw_len)
+    # Repeat each sample to create staircase
+    digital = np.repeat(raw, rate_reduction)[:n]
+    if len(digital) < n:
+        digital = np.pad(digital, (0, n - len(digital)), mode="edge")
+
+    # Bit-crush
+    bits = max(2, int(4 + preset.brightness * 8))
+    levels = 2 ** bits
+    digital = np.round(digital * levels) / levels
+
+    env = _fade_envelope(n, preset, sample_rate)
+    mod = _amplitude_mod(t, preset)
+    signal = digital * env * mod * preset.gain
+    return signal / (np.max(np.abs(signal)) + 1e-10)
+
+
+def synthesize_rain_noise(preset: NoisePreset,
+                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Rain-like noise — bandpass-filtered with droplet transients."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(42)
+
+    # Bandpass base (brown-ish with some high-freq)
+    white = rng.standard_normal(n)
+    k_lp = max(1, int((1 - preset.brightness) * 15) + 2)
+    kernel_lp = np.ones(k_lp) / k_lp
+    filtered = np.convolve(white, kernel_lp, mode="same")
+    filtered /= np.max(np.abs(filtered)) + 1e-10
+
+    # Random droplets
+    num_drops = int(preset.density * preset.duration_s * 40)
+    for _ in range(num_drops):
+        pos = rng.integers(0, max(1, n - 200))
+        drop_len = rng.integers(30, 150)
+        end = min(n, pos + drop_len)
+        amp = rng.uniform(0.2, 0.6)
+        freq = rng.uniform(3000, 8000)
+        t_d = np.arange(end - pos) / sample_rate
+        drop = amp * np.sin(2 * math.pi * freq * t_d)
+        drop *= np.exp(-np.arange(end - pos) / max(1, drop_len * 0.2))
+        filtered[pos:end] += drop
+
+    env = _fade_envelope(n, preset, sample_rate)
+    mod = _amplitude_mod(t, preset)
+    signal = filtered * env * mod * preset.gain
+    return signal / (np.max(np.abs(signal)) + 1e-10)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTER
 # ═══════════════════════════════════════════════════════════════════════════
@@ -231,6 +291,8 @@ def synthesize_noise(preset: NoisePreset,
         "brown": synthesize_brown,
         "vinyl": synthesize_vinyl,
         "tape": synthesize_tape,
+        "digital": synthesize_digital,
+        "rain": synthesize_rain_noise,
     }
     fn = synthesizers.get(preset.noise_type)
     if fn is None:
@@ -318,12 +380,47 @@ def tape_noise_bank() -> NoiseBank:
     )
 
 
+def digital_noise_bank() -> NoiseBank:
+    """Digital noise textures — bit-crushed artifacts — 4 presets."""
+    return NoiseBank(
+        name="digital",
+        presets=[
+            NoisePreset("digital_clean", "digital", 4.0, brightness=0.7, gain=0.65),
+            NoisePreset("digital_harsh", "digital", 4.0, brightness=0.3, gain=0.7),
+            NoisePreset("digital_pulsing", "digital", 6.0, brightness=0.5,
+                        modulation=0.4, mod_rate=PHI, gain=0.6),
+            NoisePreset("digital_glitch", "digital", 2.0, brightness=0.2,
+                        density=0.8, gain=0.75),
+        ],
+    )
+
+
+def rain_noise_bank() -> NoiseBank:
+    """Rain noise textures — bandpass with droplets — 4 presets."""
+    return NoiseBank(
+        name="rain",
+        presets=[
+            NoisePreset("rain_light", "rain", 4.0, brightness=0.6,
+                        density=0.2, gain=0.6),
+            NoisePreset("rain_heavy", "rain", 4.0, brightness=0.5,
+                        density=0.8, gain=0.7),
+            NoisePreset("rain_tropical", "rain", 6.0, brightness=0.7,
+                        density=0.6, modulation=0.2, mod_rate=0.3, gain=0.65),
+            NoisePreset("rain_drizzle", "rain", 3.0, brightness=0.4,
+                        density=0.1, gain=0.55),
+        ],
+    )
+
+
 ALL_NOISE_BANKS: dict[str, callable] = {
     "white": white_noise_bank,
     "pink": pink_noise_bank,
     "brown": brown_noise_bank,
     "vinyl": vinyl_noise_bank,
     "tape": tape_noise_bank,
+    # v2.2
+    "digital": digital_noise_bank,
+    "rain": rain_noise_bank,
 }
 
 

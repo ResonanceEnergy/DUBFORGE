@@ -242,6 +242,119 @@ def synthesize_ocean(preset: TexturePreset,
     return _normalize(signal)
 
 
+def synthesize_forest(preset: TexturePreset,
+                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Forest texture — layered rustling with occasional bird-like chirps."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(505)
+
+    # Rustling base (low-passed noise)
+    noise = rng.uniform(-1, 1, n) * 0.25
+    kernel = max(2, int((1 - preset.brightness) * 25) + 3)
+    padded = np.pad(noise, kernel, mode="edge")
+    rustle = np.convolve(padded, np.ones(kernel) / kernel, "same")
+    rustle = rustle[kernel:kernel + n]
+
+    # Slow wind-like modulation
+    mod_rate = preset.modulation_rate if preset.modulation_rate > 0 else 0.2
+    wind_lfo = 0.6 + 0.4 * np.sin(2 * math.pi * mod_rate * t)
+    rustle *= wind_lfo
+
+    # Chirp events
+    num_chirps = int(preset.density * preset.duration_s * 5)
+    for _ in range(num_chirps):
+        pos = rng.integers(0, max(1, n - 4000))
+        chirp_len = rng.integers(1000, 3000)
+        end = min(n, pos + chirp_len)
+        freq_start = rng.uniform(2000, 5000)
+        freq_end = rng.uniform(3000, 7000)
+        freq_sweep = np.linspace(freq_start, freq_end, end - pos)
+        phase = np.cumsum(2 * math.pi * freq_sweep / sample_rate)
+        chirp = 0.15 * np.sin(phase) * np.exp(
+            -np.arange(end - pos) / max(1, chirp_len * 0.3))
+        rustle[pos:end] += chirp
+
+    signal = _fade_in_out(rustle, fade_s=1.5)
+    return _normalize(signal)
+
+
+def synthesize_cave(preset: TexturePreset,
+                    sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Cave texture — resonant drips with deep reverberant space."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(606)
+
+    # Deep ambient drone
+    base_freq = 40 + preset.brightness * 60
+    drone = np.zeros(n)
+    for i in range(4):
+        freq = base_freq * (PHI ** i)
+        if freq > 500:
+            break
+        amp = 0.15 / (i + 1)
+        drone += amp * np.sin(2 * math.pi * freq * t
+                              + rng.uniform(0, 2 * math.pi))
+
+    # Drip events
+    num_drips = int(preset.density * preset.duration_s * 8)
+    for _ in range(num_drips):
+        pos = rng.integers(0, max(1, n - 3000))
+        drip_len = rng.integers(500, 2000)
+        end = min(n, pos + drip_len)
+        freq = rng.uniform(800, 3000)
+        t_d = np.arange(end - pos) / sample_rate
+        drip = 0.3 * np.sin(2 * math.pi * freq * t_d)
+        drip *= np.exp(-np.arange(end - pos) / max(1, drip_len * 0.15))
+        drone[pos:end] += drip
+
+    # Reverb-like comb delay
+    if preset.depth > 0:
+        delay = int(0.07 * sample_rate)
+        for i in range(delay, n):
+            drone[i] += drone[i - delay] * preset.depth * 0.35
+
+    signal = _fade_in_out(drone, fade_s=2.0)
+    return _normalize(signal)
+
+
+def synthesize_machine(preset: TexturePreset,
+                       sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Machine texture — rhythmic mechanical hum with industrial noise."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(707)
+
+    # Mechanical hum (50/60 Hz with harmonics)
+    hum_freq = 50 + preset.brightness * 20
+    hum = np.zeros(n)
+    for h in range(1, 6):
+        hum += (0.3 / h) * np.sin(2 * math.pi * hum_freq * h * t)
+
+    # Rhythmic clanking
+    clank_rate = preset.modulation_rate if preset.modulation_rate > 0 else 2.0
+    clank_period = int(sample_rate / clank_rate)
+    for pos in range(0, n, max(1, clank_period)):
+        clank_len = min(rng.integers(200, 800), n - pos)
+        end = pos + clank_len
+        freq = rng.uniform(500, 2000)
+        t_c = np.arange(clank_len) / sample_rate
+        clank = 0.2 * preset.density * np.sin(
+            2 * math.pi * freq * t_c
+        ) * np.exp(-np.arange(clank_len) / max(1, clank_len * 0.2))
+        hum[pos:end] += clank
+
+    # Industrial noise floor
+    noise = rng.uniform(-0.1, 0.1, n)
+    if preset.distortion > 0:
+        hum = np.tanh(hum * (1 + preset.distortion * 3))
+
+    signal = hum + noise * 0.3
+    signal = _fade_in_out(signal, fade_s=1.0)
+    return _normalize(signal)
+
+
 def synthesize_texture(preset: TexturePreset,
                        sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct texture synthesizer."""
@@ -251,6 +364,9 @@ def synthesize_texture(preset: TexturePreset,
         "space": synthesize_space,
         "static": synthesize_static,
         "ocean": synthesize_ocean,
+        "forest": synthesize_forest,
+        "cave": synthesize_cave,
+        "machine": synthesize_machine,
     }
     fn = synthesizers.get(preset.texture_type)
     if fn is None:
@@ -355,12 +471,75 @@ def ocean_texture_bank() -> TextureBank:
     )
 
 
+def forest_texture_bank() -> TextureBank:
+    """Forest texture variants — rustling to dense canopy."""
+    return TextureBank(
+        name="FOREST_TEXTURES",
+        presets=[
+            TexturePreset("forest_light", "forest", 8.0,
+                          brightness=0.5, density=0.2, depth=0.3,
+                          modulation_rate=0.15),
+            TexturePreset("forest_dense", "forest", 8.0,
+                          brightness=0.4, density=0.6, depth=0.5,
+                          modulation_rate=0.25),
+            TexturePreset("forest_dawn", "forest", 10.0,
+                          brightness=0.6, density=0.8, depth=0.4,
+                          modulation_rate=0.1),
+            TexturePreset("forest_night", "forest", 10.0,
+                          brightness=0.3, density=0.4, depth=0.6,
+                          modulation_rate=0.2),
+        ],
+    )
+
+
+def cave_texture_bank() -> TextureBank:
+    """Cave texture variants — shallow grotto to deep cavern."""
+    return TextureBank(
+        name="CAVE_TEXTURES",
+        presets=[
+            TexturePreset("cave_shallow", "cave", 10.0,
+                          brightness=0.5, density=0.3, depth=0.3),
+            TexturePreset("cave_deep", "cave", 12.0,
+                          brightness=0.2, density=0.2, depth=0.8),
+            TexturePreset("cave_dripping", "cave", 10.0,
+                          brightness=0.4, density=0.7, depth=0.5),
+            TexturePreset("cave_cathedral", "cave", 12.0,
+                          brightness=0.3, density=0.4, depth=0.9),
+        ],
+    )
+
+
+def machine_texture_bank() -> TextureBank:
+    """Machine texture variants — gentle hum to industrial grind."""
+    return TextureBank(
+        name="MACHINE_TEXTURES",
+        presets=[
+            TexturePreset("machine_idle", "machine", 8.0,
+                          brightness=0.3, density=0.2, depth=0.3,
+                          modulation_rate=1.0),
+            TexturePreset("machine_factory", "machine", 8.0,
+                          brightness=0.5, density=0.6, depth=0.5,
+                          modulation_rate=2.0, distortion=0.2),
+            TexturePreset("machine_grind", "machine", 6.0,
+                          brightness=0.7, density=0.8, depth=0.6,
+                          modulation_rate=3.0, distortion=0.5),
+            TexturePreset("machine_pulse", "machine", 8.0,
+                          brightness=0.4, density=0.4, depth=0.4,
+                          modulation_rate=PHI),
+        ],
+    )
+
+
 ALL_TEXTURE_BANKS: dict[str, callable] = {
     "rain":   rain_texture_bank,
     "wind":   wind_texture_bank,
     "space":  space_texture_bank,
     "static": static_texture_bank,
     "ocean":  ocean_texture_bank,
+    # v2.2
+    "forest":  forest_texture_bank,
+    "cave":    cave_texture_bank,
+    "machine": machine_texture_bank,
 }
 
 

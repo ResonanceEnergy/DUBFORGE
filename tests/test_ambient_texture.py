@@ -10,10 +10,16 @@ import numpy as np
 from engine.ambient_texture import (
     ALL_TEXTURE_BANKS,
     TexturePreset,
+    cave_texture_bank,
+    forest_texture_bank,
+    machine_texture_bank,
     ocean_texture_bank,
     rain_texture_bank,
     space_texture_bank,
     static_texture_bank,
+    synthesize_cave,
+    synthesize_forest,
+    synthesize_machine,
     synthesize_ocean,
     synthesize_rain,
     synthesize_space,
@@ -68,8 +74,21 @@ class TestSynthesizers(unittest.TestCase):
         p = TexturePreset("t", "ocean", duration_s=0.5)
         self._assert_valid(synthesize_ocean(p))
 
+    def test_forest(self):
+        p = TexturePreset("t", "forest", duration_s=0.5)
+        self._assert_valid(synthesize_forest(p))
+
+    def test_cave(self):
+        p = TexturePreset("t", "cave", duration_s=0.5)
+        self._assert_valid(synthesize_cave(p))
+
+    def test_machine(self):
+        p = TexturePreset("t", "machine", duration_s=0.5)
+        self._assert_valid(synthesize_machine(p))
+
     def test_router_all_types(self):
-        for ttype in ("rain", "wind", "space", "static", "ocean"):
+        for ttype in ("rain", "wind", "space", "static", "ocean",
+                      "forest", "cave", "machine"):
             p = TexturePreset("t", ttype, duration_s=0.3)
             signal = synthesize_texture(p)
             self.assertGreater(len(signal), 0)
@@ -110,8 +129,29 @@ class TestBanks(unittest.TestCase):
         self.assertEqual(bank.name, "OCEAN_TEXTURES")
         self.assertEqual(len(bank.presets), 4)
 
+    def test_forest_texture_bank(self):
+        bank = forest_texture_bank()
+        self.assertEqual(bank.name, "FOREST_TEXTURES")
+        self.assertEqual(len(bank.presets), 4)
+        for p in bank.presets:
+            self.assertEqual(p.texture_type, "forest")
+
+    def test_cave_texture_bank(self):
+        bank = cave_texture_bank()
+        self.assertEqual(bank.name, "CAVE_TEXTURES")
+        self.assertEqual(len(bank.presets), 4)
+        for p in bank.presets:
+            self.assertEqual(p.texture_type, "cave")
+
+    def test_machine_texture_bank(self):
+        bank = machine_texture_bank()
+        self.assertEqual(bank.name, "MACHINE_TEXTURES")
+        self.assertEqual(len(bank.presets), 4)
+        for p in bank.presets:
+            self.assertEqual(p.texture_type, "machine")
+
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_TEXTURE_BANKS), 5)
+        self.assertEqual(len(ALL_TEXTURE_BANKS), 8)
 
     def test_all_banks_synthesize(self):
         for bank_name, gen_fn in ALL_TEXTURE_BANKS.items():
@@ -121,9 +161,9 @@ class TestBanks(unittest.TestCase):
                 self.assertGreater(len(signal), 0,
                                    f"Failed: {bank_name}/{preset.name}")
 
-    def test_total_presets_is_20(self):
+    def test_total_presets_is_32(self):
         total = sum(len(fn().presets) for fn in ALL_TEXTURE_BANKS.values())
-        self.assertEqual(total, 20)
+        self.assertEqual(total, 32)
 
 
 class TestManifest(unittest.TestCase):
@@ -137,7 +177,7 @@ class TestManifest(unittest.TestCase):
             with open(path) as f:
                 data = json.load(f)
             self.assertIn("banks", data)
-            self.assertEqual(len(data["banks"]), 5)
+            self.assertEqual(len(data["banks"]), 8)
 
 
 if __name__ == "__main__":

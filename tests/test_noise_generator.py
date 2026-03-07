@@ -12,10 +12,14 @@ from engine.noise_generator import (
     NoiseBank,
     NoisePreset,
     brown_noise_bank,
+    digital_noise_bank,
     pink_noise_bank,
+    rain_noise_bank,
     synthesize_brown,
+    synthesize_digital,
     synthesize_noise,
     synthesize_pink,
+    synthesize_rain_noise,
     synthesize_tape,
     synthesize_vinyl,
     synthesize_white,
@@ -85,12 +89,21 @@ class TestNoiseSynthesizers(unittest.TestCase):
                         modulation=0.5, mod_rate=1.618)
         self._check_audio(synthesize_white(p), p)
 
+    def test_digital(self):
+        p = NoisePreset("t", "digital", duration_s=0.5)
+        self._check_audio(synthesize_digital(p), p)
+
+    def test_rain_noise(self):
+        p = NoisePreset("t", "rain", duration_s=0.5)
+        self._check_audio(synthesize_rain_noise(p), p)
+
 
 class TestNoiseRouter(unittest.TestCase):
     """Router dispatch tests."""
 
     def test_routes_all_types(self):
-        for noise_type in ("white", "pink", "brown", "vinyl", "tape"):
+        for noise_type in ("white", "pink", "brown", "vinyl", "tape",
+                          "digital", "rain"):
             p = NoisePreset("t", noise_type, duration_s=0.3)
             audio = synthesize_noise(p)
             self.assertEqual(len(audio), int(0.3 * 44100))
@@ -105,11 +118,11 @@ class TestNoiseBanks(unittest.TestCase):
     """Bank function tests."""
 
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_NOISE_BANKS), 5)
+        self.assertEqual(len(ALL_NOISE_BANKS), 7)
 
     def test_total_presets(self):
         total = sum(len(fn().presets) for fn in ALL_NOISE_BANKS.values())
-        self.assertEqual(total, 20)
+        self.assertEqual(total, 28)
 
     def test_each_bank_has_4_presets(self):
         for name, fn in ALL_NOISE_BANKS.items():
@@ -119,7 +132,8 @@ class TestNoiseBanks(unittest.TestCase):
 
     def test_bank_functions(self):
         for fn in (white_noise_bank, pink_noise_bank, brown_noise_bank,
-                   vinyl_noise_bank, tape_noise_bank):
+                   vinyl_noise_bank, tape_noise_bank, digital_noise_bank,
+                   rain_noise_bank):
             bank = fn()
             self.assertEqual(len(bank.presets), 4)
             for preset in bank.presets:
@@ -129,7 +143,7 @@ class TestNoiseBanks(unittest.TestCase):
     def test_manifest_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             manifest = write_noise_manifest(tmp)
-            self.assertEqual(len(manifest["banks"]), 5)
+            self.assertEqual(len(manifest["banks"]), 7)
             manifest_path = Path(tmp) / "analysis" / "noise_manifest.json"
             self.assertTrue(manifest_path.exists())
             data = json.loads(manifest_path.read_text())

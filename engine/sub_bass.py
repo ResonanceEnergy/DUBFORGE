@@ -189,6 +189,49 @@ def synthesize_rumble(preset: SubBassPreset,
     return signal / (np.max(np.abs(signal)) + 1e-10)
 
 
+def synthesize_pulse_sub(preset: SubBassPreset,
+                        sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Square-pulse sub-bass with variable duty cycle."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    env = _adsr_envelope(n, preset, sample_rate)
+    mod = _apply_lfo(t, preset)
+
+    # Build square from odd harmonics (bandlimited)
+    signal = np.zeros(n)
+    for h in range(1, 8, 2):
+        freq = preset.frequency * h
+        if freq > sample_rate / 2:
+            break
+        amp = preset.sub_weight / h if h == 1 else preset.harmonic_mix / h
+        signal += amp * np.sin(2 * math.pi * freq * mod * t)
+    signal = _soft_clip(signal * env, preset.drive)
+    return signal / (np.max(np.abs(signal)) + 1e-10)
+
+
+def synthesize_triangle_sub(preset: SubBassPreset,
+                           sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Triangle-wave sub-bass — warm and round."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    env = _adsr_envelope(n, preset, sample_rate)
+    mod = _apply_lfo(t, preset)
+
+    # Triangle from odd harmonics with alternating sign and 1/h² decay
+    signal = np.zeros(n)
+    for i, h in enumerate(range(1, 10, 2)):
+        freq = preset.frequency * h
+        if freq > sample_rate / 2:
+            break
+        sign = (-1) ** i
+        amp = sign / (h * h)
+        signal += amp * np.sin(2 * math.pi * freq * mod * t)
+    signal *= (8 / (math.pi ** 2))
+    signal = preset.sub_weight * signal
+    signal = _soft_clip(signal * env, preset.drive)
+    return signal / (np.max(np.abs(signal)) + 1e-10)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTER
 # ═══════════════════════════════════════════════════════════════════════════
@@ -202,6 +245,8 @@ def synthesize_sub_bass(preset: SubBassPreset,
         "fifth": synthesize_fifth,
         "harmonic": synthesize_harmonic,
         "rumble": synthesize_rumble,
+        "pulse": synthesize_pulse_sub,
+        "triangle": synthesize_triangle_sub,
     }
     fn = synthesizers.get(preset.sub_type)
     if fn is None:
@@ -291,12 +336,42 @@ def rumble_bank() -> SubBassBank:
     )
 
 
+def pulse_sub_bank() -> SubBassBank:
+    """Pulse-wave sub-bass — 4 presets."""
+    return SubBassBank(
+        name="pulse",
+        presets=[
+            SubBassPreset(f"pulse_{note}", "pulse", freq,
+                          duration_s=1.8, attack_s=0.01, decay_s=0.2,
+                          sustain=0.85, release_s=0.4,
+                          harmonic_mix=0.2, drive=0.15)
+            for note, freq in _SUB_NOTES
+        ],
+    )
+
+
+def triangle_sub_bank() -> SubBassBank:
+    """Triangle-wave sub-bass — warm round tone — 4 presets."""
+    return SubBassBank(
+        name="triangle",
+        presets=[
+            SubBassPreset(f"triangle_{note}", "triangle", freq,
+                          duration_s=2.0, attack_s=0.02, decay_s=0.3,
+                          sustain=0.88, release_s=0.5, drive=0.05)
+            for note, freq in _SUB_NOTES
+        ],
+    )
+
+
 ALL_SUB_BASS_BANKS: dict[str, callable] = {
     "deep_sines": deep_sine_bank,
     "octaves": octave_bank,
     "fifths": fifth_bank,
     "harmonics": harmonic_bank,
     "rumbles": rumble_bank,
+    # v2.2
+    "pulses": pulse_sub_bank,
+    "triangles": triangle_sub_bank,
 }
 
 

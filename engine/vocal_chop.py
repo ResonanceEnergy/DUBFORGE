@@ -484,6 +484,48 @@ def granular_chops() -> VocalChopBank:
     )
 
 
+def glitched_chops() -> VocalChopBank:
+    """Glitched vocal chops — extreme pitch drift and distortion."""
+    return VocalChopBank(
+        name="GLITCHED_CHOPS",
+        chops=[
+            VocalChop("glitch_ah_C4", "ah", "C4", 0.3,
+                       stutter_count=16, stutter_pitch_drift=2.0,
+                       distortion=0.5),
+            VocalChop("glitch_oh_E4", "oh", "E4", 0.25,
+                       stutter_count=20, stutter_pitch_drift=-1.5,
+                       distortion=0.6),
+            VocalChop("glitch_ee_G3", "ee", "G3", 0.35,
+                       stutter_count=24, stutter_pitch_drift=1.0,
+                       distortion=0.4),
+            VocalChop("glitch_eh_A3", "eh", "A3", 0.4,
+                       stutter_count=12, stutter_pitch_drift=-2.0,
+                       distortion=0.55),
+        ],
+    )
+
+
+def whisper_chops() -> VocalChopBank:
+    """Whisper vocal chops — breathy low-volume with formant shift."""
+    return VocalChopBank(
+        name="WHISPER_CHOPS",
+        chops=[
+            VocalChop("whisper_ah_C4", "ah", "C4", 0.4,
+                       attack_s=0.02, release_s=0.1,
+                       formant_shift=-6.0, distortion=0.0),
+            VocalChop("whisper_oh_E4", "oh", "E4", 0.35,
+                       attack_s=0.02, release_s=0.08,
+                       formant_shift=-8.0, distortion=0.05),
+            VocalChop("whisper_oo_G3", "oo", "G3", 0.5,
+                       attack_s=0.03, release_s=0.12,
+                       formant_shift=-4.0, distortion=0.0),
+            VocalChop("whisper_ee_A3", "ee", "A3", 0.3,
+                       attack_s=0.015, release_s=0.1,
+                       formant_shift=-10.0, distortion=0.02),
+        ],
+    )
+
+
 ALL_CHOP_BANKS: dict[str, callable] = {
     "drop_vowel":      drop_vowel_chops,
     "stutter":         stutter_chops,
@@ -495,6 +537,9 @@ ALL_CHOP_BANKS: dict[str, callable] = {
     # v2.0
     "robotic":         robotic_chops,
     "granular":        granular_chops,
+    # v2.2
+    "glitched":        glitched_chops,
+    "whisper":         whisper_chops,
 }
 
 

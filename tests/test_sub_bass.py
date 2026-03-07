@@ -15,13 +15,17 @@ from engine.sub_bass import (
     fifth_bank,
     harmonic_bank,
     octave_bank,
+    pulse_sub_bank,
     rumble_bank,
     synthesize_deep_sine,
     synthesize_fifth,
     synthesize_harmonic,
     synthesize_octave,
+    synthesize_pulse_sub,
     synthesize_rumble,
     synthesize_sub_bass,
+    synthesize_triangle_sub,
+    triangle_sub_bank,
     write_sub_bass_manifest,
 )
 
@@ -79,6 +83,16 @@ class TestSubBassSynthesizers(unittest.TestCase):
         audio = synthesize_rumble(p)
         self._check_audio(audio, p)
 
+    def test_pulse_sub(self):
+        p = SubBassPreset("t", "pulse", 41.2, duration_s=0.5)
+        audio = synthesize_pulse_sub(p)
+        self._check_audio(audio, p)
+
+    def test_triangle_sub(self):
+        p = SubBassPreset("t", "triangle", 41.2, duration_s=0.5)
+        audio = synthesize_triangle_sub(p)
+        self._check_audio(audio, p)
+
     def test_drive_saturation(self):
         p = SubBassPreset("t", "deep_sine", 41.2, duration_s=0.3, drive=0.8)
         audio = synthesize_deep_sine(p)
@@ -89,7 +103,8 @@ class TestSubBassRouter(unittest.TestCase):
     """Router dispatch tests."""
 
     def test_routes_all_types(self):
-        for sub_type in ("deep_sine", "octave", "fifth", "harmonic", "rumble"):
+        for sub_type in ("deep_sine", "octave", "fifth", "harmonic", "rumble",
+                        "pulse", "triangle"):
             p = SubBassPreset("t", sub_type, 41.2, duration_s=0.3)
             audio = synthesize_sub_bass(p)
             self.assertEqual(len(audio), int(0.3 * 44100))
@@ -104,11 +119,11 @@ class TestSubBassBanks(unittest.TestCase):
     """Bank function tests."""
 
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_SUB_BASS_BANKS), 5)
+        self.assertEqual(len(ALL_SUB_BASS_BANKS), 7)
 
     def test_total_presets(self):
         total = sum(len(fn().presets) for fn in ALL_SUB_BASS_BANKS.values())
-        self.assertEqual(total, 20)
+        self.assertEqual(total, 28)
 
     def test_each_bank_has_4_presets(self):
         for name, fn in ALL_SUB_BASS_BANKS.items():
@@ -118,7 +133,8 @@ class TestSubBassBanks(unittest.TestCase):
 
     def test_bank_functions(self):
         for fn in (deep_sine_bank, octave_bank, fifth_bank,
-                   harmonic_bank, rumble_bank):
+                   harmonic_bank, rumble_bank, pulse_sub_bank,
+                   triangle_sub_bank):
             bank = fn()
             self.assertEqual(len(bank.presets), 4)
             for preset in bank.presets:
@@ -128,7 +144,7 @@ class TestSubBassBanks(unittest.TestCase):
     def test_manifest_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             manifest = write_sub_bass_manifest(tmp)
-            self.assertEqual(len(manifest["banks"]), 5)
+            self.assertEqual(len(manifest["banks"]), 7)
             manifest_path = Path(tmp) / "analysis" / "sub_bass_manifest.json"
             self.assertTrue(manifest_path.exists())
             data = json.loads(manifest_path.read_text())

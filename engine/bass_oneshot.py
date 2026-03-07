@@ -428,6 +428,56 @@ def synthesize_dist_fm_bass(preset: BassPreset,
     return _apply_bass_envelope(signal, preset, sample_rate)
 
 
+def synthesize_ring_mod_bass(preset: BassPreset,
+                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Ring-modulated bass — metallic clanging tone."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    carrier = np.sin(2 * math.pi * preset.frequency * t)
+    ratio = preset.fm_ratio if preset.fm_ratio > 1 else 1.618
+    mod_freq = preset.frequency * ratio
+    modulator = np.sin(2 * math.pi * mod_freq * t)
+
+    # Ring modulation (multiply)
+    signal = carrier * modulator
+
+    # Add sub for weight
+    signal += 0.5 * np.sin(2 * math.pi * preset.frequency * t)
+
+    # Filter
+    if preset.filter_cutoff < 1.0:
+        alpha = max(0.05, preset.filter_cutoff * 0.4)
+        y = 0.0
+        for i in range(n):
+            y = y * (1 - alpha) + signal[i] * alpha
+            signal[i] = y
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_phase_bass(preset: BassPreset,
+                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Phase-modulated bass — thick phasing sweep."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Two detuned oscillators with sweeping phase offset
+    detune = 2 ** (preset.detune_cents / 1200) if preset.detune_cents else 1.005
+    lfo_rate = PHI * 0.5
+    phase_sweep = 2 * math.pi * np.sin(2 * math.pi * lfo_rate * t)
+
+    osc1 = np.sin(2 * math.pi * preset.frequency * t)
+    osc2 = np.sin(2 * math.pi * preset.frequency * detune * t + phase_sweep)
+    signal = osc1 + osc2
+
+    # Add sub harmonic
+    signal += 0.4 * np.sin(2 * math.pi * preset.frequency * 0.5 * t)
+    signal *= 0.5
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
 def synthesize_bass(preset: BassPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct bass synthesizer."""
@@ -444,6 +494,8 @@ def synthesize_bass(preset: BassPreset,
         "saw": synthesize_saw_bass,
         "tape": synthesize_tape_bass,
         "dist_fm": synthesize_dist_fm_bass,
+        "ring_mod": synthesize_ring_mod_bass,
+        "phase": synthesize_phase_bass,
     }
     fn = synthesizers.get(preset.bass_type)
     if fn is None:
@@ -635,6 +687,40 @@ def dist_fm_bass_bank() -> BassBank:
     )
 
 
+def ring_mod_bass_bank() -> BassBank:
+    """Ring-modulated bass — metallic clanging tone."""
+    return BassBank(
+        name="RING_MOD_BASS",
+        presets=[
+            BassPreset("ring_mod_C2", "ring_mod", NOTE_C2,
+                       fm_ratio=1.618, filter_cutoff=0.7),
+            BassPreset("ring_mod_D2", "ring_mod", NOTE_D2,
+                       fm_ratio=2.0, filter_cutoff=0.6),
+            BassPreset("ring_mod_E2", "ring_mod", NOTE_E2,
+                       fm_ratio=1.5, filter_cutoff=0.8),
+            BassPreset("ring_mod_F2", "ring_mod", NOTE_F2,
+                       fm_ratio=PHI, filter_cutoff=0.65),
+        ],
+    )
+
+
+def phase_bass_bank() -> BassBank:
+    """Phase-modulated bass — thick phasing sweep."""
+    return BassBank(
+        name="PHASE_BASS",
+        presets=[
+            BassPreset("phase_bass_C2", "phase", NOTE_C2,
+                       detune_cents=8),
+            BassPreset("phase_bass_D2", "phase", NOTE_D2,
+                       detune_cents=12),
+            BassPreset("phase_bass_E2", "phase", NOTE_E2,
+                       detune_cents=5),
+            BassPreset("phase_bass_F2", "phase", NOTE_F2,
+                       detune_cents=10),
+        ],
+    )
+
+
 ALL_BASS_BANKS: dict[str, callable] = {
     "sub_sine":    sub_sine_bank,
     "reese":       reese_bank,
@@ -649,6 +735,9 @@ ALL_BASS_BANKS: dict[str, callable] = {
     "saw_bass":    saw_bass_bank,
     "tape_bass":   tape_bass_bank,
     "dist_fm_bass": dist_fm_bass_bank,
+    # v2.2
+    "ring_mod_bass": ring_mod_bass_bank,
+    "phase_bass":    phase_bass_bank,
 }
 
 
