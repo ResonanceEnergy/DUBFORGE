@@ -173,6 +173,14 @@ n=47  ~580.68 Hz         upper-mid
 
 ---
 
+### Roadmap (Future Features)
+
+- **L1: Serum 2 .fxp Export** — Generate native Serum preset files from `serum2.py` patch definitions
+- **L2: MIDI File Export** — Write `.mid` files from chord progressions and arp patterns
+- **L3: Ableton .als Generation** — Produce Ableton Live Set files from session/arrangement templates
+
+---
+
 **Version:** 1.3
 **Author:** DUBFORGE
 **Date:** 2026-03-06
