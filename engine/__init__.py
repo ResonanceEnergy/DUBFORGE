@@ -66,6 +66,19 @@ from engine.memory import (
     phi_recency_score,
     phi_relevance,
 )
+from engine.midi_export import (
+    NoteEvent,
+    arp_pattern_to_events,
+    events_to_track,
+    export_arp_midi,
+    export_clip_midi,
+    export_full_arrangement,
+    export_progression_midi,
+    midi_clip_to_events,
+    progression_to_events,
+    write_midi_file,
+    write_single_track_midi,
+)
 from engine.phi_core import (
     FIBONACCI,
     PHI,
@@ -247,6 +260,18 @@ __all__ = [
     "phi_relevance",
     # log
     "get_logger",
+    # midi_export
+    "NoteEvent",
+    "progression_to_events",
+    "arp_pattern_to_events",
+    "midi_clip_to_events",
+    "events_to_track",
+    "write_midi_file",
+    "write_single_track_midi",
+    "export_progression_midi",
+    "export_arp_midi",
+    "export_clip_midi",
+    "export_full_arrangement",
     # config_loader
     "load_config",
     "get_config_value",

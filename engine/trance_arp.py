@@ -209,6 +209,18 @@ def main() -> None:
     for p in patterns:
         export_pattern(p)
 
+    # Export MIDI files
+    midi_count = 0
+    try:
+        from engine.midi_export import export_arp_midi
+        midi_dir = Path("output/midi")
+        for p in patterns:
+            export_arp_midi(p, out_dir=midi_dir, root_note=60, bpm=150)
+            midi_count += 1
+        print(f"  ✓ {midi_count} arp MIDI files exported to {midi_dir}/")
+    except Exception as exc:
+        print(f"  ⚠ MIDI export failed: {exc}")
+
     print("Trance Arp Engine complete.")
 
 

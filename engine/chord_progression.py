@@ -780,12 +780,25 @@ def main() -> None:
     except FileNotFoundError:
         pass
 
+    midi_dir = Path(__file__).parent.parent / "output" / "midi"
+    midi_dir.mkdir(parents=True, exist_ok=True)
+
     print(f"  Generating {len(ALL_PRESETS)} chord progression presets...")
     print()
 
+    midi_count = 0
     for name, preset_fn in ALL_PRESETS.items():
         prog = preset_fn()
         filepath = export_progression(prog, out_dir)
+
+        # Export MIDI file alongside JSON
+        try:
+            from engine.midi_export import export_progression_midi
+            midi_path = export_progression_midi(prog, out_dir=midi_dir)
+            midi_count += 1
+        except Exception as exc:
+            midi_path = None
+            print(f"    ⚠ MIDI export failed: {exc}")
 
         # Print summary
         chord_syms = " → ".join(c["symbol"] for c in prog.chords)
@@ -801,9 +814,13 @@ def main() -> None:
         print(f"    Fibonacci interval ratio: {analysis.get('fibonacci_interval_ratio', 0)}")
         print(f"    Tags: {', '.join(prog.tags)}")
         print(f"    → {filepath}")
+        if midi_path:
+            print(f"    → {midi_path}")
         print()
 
     print(f"  ✓ {len(ALL_PRESETS)} progressions exported")
+    if midi_count:
+        print(f"  ✓ {midi_count} MIDI files exported to {midi_dir}/")
 
 
 if __name__ == "__main__":

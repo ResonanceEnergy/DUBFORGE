@@ -73,6 +73,7 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("serum2",            "Serum 2 Engine"),
     ("dojo",              "Producer Dojo Engine"),
     ("growl_resampler",   "Mid-Bass Growl Resampler"),
+    ("midi_export",       "MIDI File Export Engine"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]

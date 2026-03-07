@@ -1,12 +1,18 @@
 """Tests for engine.config_loader — YAML loading, constants, validation."""
 
 import pytest
-from engine.config_loader import (
-    PHI, FIBONACCI, A4_432, A4_440,
-    load_config, get_config_value, list_configs,
-    validate_config, validate_all_configs,
-)
 
+from engine.config_loader import (
+    A4_432,
+    A4_440,
+    FIBONACCI,
+    PHI,
+    get_config_value,
+    list_configs,
+    load_config,
+    validate_all_configs,
+    validate_config,
+)
 
 # ── Constants ─────────────────────────────────────────────────────────────
 

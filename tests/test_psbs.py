@@ -1,14 +1,12 @@
 """Tests for engine.psbs — Phase-Separated Bass System."""
 
-import pytest
 from engine.psbs import (
-    BassLayer,
     PSBSPreset,
-    phi_crossovers,
+    calculate_phase_coherence,
     default_psbs,
+    phi_crossovers,
     weapon_psbs,
     wook_psbs,
-    calculate_phase_coherence,
 )
 
 

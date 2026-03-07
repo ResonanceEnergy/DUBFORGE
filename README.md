@@ -25,6 +25,7 @@ DUBFORGE/
 │   ├── ableton_live.py                  # Ableton Live integration
 │   ├── serum2.py                        # Serum 2 synthesizer engine
 │   ├── dojo.py                          # Producer Dojo / ill.Gates engine
+│   ├── midi_export.py                    # MIDI file export engine
 │   ├── memory.py                        # Long-term memory persistence
 │   └── log.py                           # Centralized logging
 │
@@ -48,6 +49,7 @@ DUBFORGE/
     ├── analysis/                         # JSON reports + PNG charts
     ├── serum2/                           # Serum 2 architecture + patches
     ├── ableton/                          # Ableton Live session/arrangement templates
+    ├── midi/                             # DAW-ready .mid files (drag & drop)
     ├── dojo/                             # Producer Dojo methodology outputs
     └── memory/                           # Long-term memory persistence data
 ```
@@ -69,6 +71,7 @@ python3 -m engine.chord_progression # Generate chord progressions
 python3 -m engine.ableton_live      # Generate Ableton templates
 python3 -m engine.serum2            # Generate Serum 2 patches
 python3 -m engine.dojo              # Generate Dojo methodology
+python3 -m engine.midi_export        # Export all MIDI files
 python3 -m engine.memory            # Memory system diagnostics
 python3 -m engine.config_loader     # List all configs
 ```
@@ -78,6 +81,7 @@ python3 -m engine.config_loader     # List all configs
 - Python 3.10+
 - NumPy (`pip install numpy`)
 - PyYAML (`pip install pyyaml`)
+- mido (`pip install mido`) — MIDI file export
 - matplotlib (optional, for RCO curve plots)
 
 ## Engine Modules
@@ -95,6 +99,7 @@ python3 -m engine.config_loader     # List all configs
 | **Ableton Live** | Full LOM integration — session/arrangement templates, device chains, M4L scripts. |
 | **Serum 2** | Complete synth architecture — oscillators, filters, mod matrix, 8 DUBFORGE patches. |
 | **Producer Dojo** | ill.Gates methodology — belt system, The Approach, 128 Rack, session templates. |
+| **MIDI Export** | MIDI file generator — exports chord progressions, arps, bass clips, and full arrangements as DAW-ready .mid files. |
 | **Memory Engine** | Long-term persistence — session logging, asset registry, parameter evolution, phi-weighted recall, growth tracking. |
 
 ## Configs
@@ -131,5 +136,18 @@ See [DOCTRINE.md](DOCTRINE.md) for the full DUBFORGE Doctrine v1.0 — the found
 
 ---
 
-**Version:** 1.4  
+## MIDI Output
+
+The MIDI export engine generates **19 .mid files** from all DUBFORGE note data:
+
+- **11 chord progressions** — WEAPON_DARK, EMOTIVE_RISE, FRACTAL_SPIRAL, GOLDEN_RATIO, etc.
+- **3 arp patterns** — fibonacci_rise, phi_spiral, golden_gate
+- **4 Ableton clips** — sub_bass, mid_bass, arp, chord_stab
+- **1 full arrangement** — DUBFORGE_FULL.mid with 6 tracks (sub, mid, arp, chords, fib arp, stab)
+
+All files land in `output/midi/`. Drag any `.mid` into Ableton, FL Studio, or any DAW.
+
+---
+
+**Version:** 1.5  
 **Author:** DUBFORGE

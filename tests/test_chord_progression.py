@@ -1,10 +1,8 @@
 """Tests for engine.chord_progression — chord building and progressions."""
 
-import pytest
 from engine.chord_progression import (
-    build_progression,
-    build_chord,
     ALL_PRESETS,
+    build_chord,
 )
 
 

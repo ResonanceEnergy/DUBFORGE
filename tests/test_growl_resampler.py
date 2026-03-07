@@ -4,14 +4,12 @@ import numpy as np
 import pytest
 
 from engine.growl_resampler import (
+    bit_reduce,
+    comb_filter,
+    generate_fm_source,
+    generate_saw_source,
     pitch_shift,
     waveshape_distortion,
-    frequency_shift,
-    comb_filter,
-    bit_reduce,
-    formant_filter,
-    generate_saw_source,
-    generate_fm_source,
 )
 
 

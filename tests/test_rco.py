@@ -1,17 +1,15 @@
 """Tests for engine.rco — Rollercoaster Optimizer energy curves."""
 
-import pytest
 from engine.rco import (
-    Section,
     RCOProfile,
-    phi_curve,
-    fibonacci_step_curve,
-    linear_curve,
     exponential_curve,
+    fibonacci_step_curve,
     generate_energy_curve,
-    subtronics_weapon_preset,
+    linear_curve,
+    phi_curve,
     subtronics_emotive_preset,
     subtronics_hybrid_preset,
+    subtronics_weapon_preset,
 )
 
 

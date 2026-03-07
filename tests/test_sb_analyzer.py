@@ -1,16 +1,16 @@
 """Tests for engine.sb_analyzer — Subtronics corpus analyzer."""
 import pytest
+
 from engine.sb_analyzer import (
-    Track,
     Album,
     SignatureVector,
-    build_corpus,
-    load_corpus,
+    Track,
     analyze_corpus,
+    build_corpus,
     build_signature_vector,
+    load_corpus,
     vip_delta_analysis,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

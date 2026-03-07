@@ -45,6 +45,7 @@
 | Serum 2 Engine          | `serum2`            | Full synth architecture, patches, mod matrix     |
 | Producer Dojo Engine    | `dojo`              | ill.Gates methodology, belt system, 128 Rack     |
 | Memory Engine           | `memory`            | Long-term persistence, recall, growth tracking   |
+| MIDI Export Engine      | `midi_export`       | .mid file generation from all note data sources  |
 
 ---
 
@@ -169,6 +170,7 @@ n=47  ~580.68 Hz         upper-mid
 - Serum 2 output goes to `output/serum2/`
 - Ableton Live output goes to `output/ableton/`
 - Producer Dojo output goes to `output/dojo/`
+- All MIDI output goes to `output/midi/`
 - Memory persistence goes to `output/memory/`
 
 ---
@@ -176,12 +178,12 @@ n=47  ~580.68 Hz         upper-mid
 ### Roadmap (Future Features)
 
 - **L1: Serum 2 .fxp Export** — Generate native Serum preset files from `serum2.py` patch definitions
-- **L2: MIDI File Export** — Write `.mid` files from chord progressions and arp patterns
+- ~~**L2: MIDI File Export**~~ — ✅ DONE (v1.5) — `midi_export.py` generates 19 .mid files from chord progressions, arp patterns, Ableton clips, and full arrangements
 - **L3: Ableton .als Generation** — Produce Ableton Live Set files from session/arrangement templates
 
 ---
 
-**Version:** 1.4
+**Version:** 1.5
 **Author:** DUBFORGE
-**Date:** 2026-03-06
-**Modules:** 13 (phi_core, config_loader, log, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory)
+**Date:** 2026-03-07
+**Modules:** 14 (phi_core, config_loader, log, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory, midi_export)

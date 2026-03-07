@@ -1,27 +1,21 @@
 """Tests for engine.dojo — Producer Dojo / ill.Gates methodology engine."""
-import pytest
 from engine.dojo import (
-    BeltRank,
-    ApproachPhase,
-    TechniqueType,
-    BeltLevel,
-    ApproachStep,
-    DojoTechnique,
-    RackZone,
-    RackCategory,
-    BELT_SYSTEM,
-    THE_APPROACH,
-    DOJO_TECHNIQUES,
     ARTIST_PROFILE,
+    BELT_SYSTEM,
     DOJO_PLATFORM,
+    DOJO_TECHNIQUES,
+    THE_APPROACH,
+    ApproachPhase,
+    BeltRank,
+    RackCategory,
+    RackZone,
+    TechniqueType,
     build_128_rack,
     build_dojo_session_template,
-    phi_belt_progression,
     phi_approach_timing,
+    phi_belt_progression,
     phi_mudpie_recipe,
 )
-from engine.config_loader import PHI
-
 
 # ── Constants ────────────────────────────────────────────────────
 

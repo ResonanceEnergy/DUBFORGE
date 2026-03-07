@@ -1,7 +1,5 @@
 """Tests for engine.memory — MemoryEngine, phi scoring."""
 
-import pytest
-import time
 from engine.memory import (
     MemoryEngine,
     get_memory,

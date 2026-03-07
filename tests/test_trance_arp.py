@@ -1,15 +1,12 @@
 """Tests for engine.trance_arp — Fibonacci arpeggiator engine."""
-import pytest
 from engine.trance_arp import (
     ArpNote,
     ArpPattern,
     fibonacci_rise_pattern,
-    phi_spiral_pattern,
     golden_gate_pattern,
     pattern_to_midi_data,
+    phi_spiral_pattern,
 )
-from engine.config_loader import PHI
-
 
 # ── ArpNote dataclass ────────────────────────────────────────────
 

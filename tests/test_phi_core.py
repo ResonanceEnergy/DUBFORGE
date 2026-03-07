@@ -1,21 +1,16 @@
 """Tests for engine.phi_core — wavetable generation, midi/freq utilities."""
 
-import math
 import numpy as np
-import pytest
 
 from engine.phi_core import (
-    PHI,
-    FIBONACCI,
-    phi_harmonic_series,
     fibonacci_harmonic_series,
-    phi_amplitude_curve,
+    freq_to_midi,
     generate_phi_core_v1,
     generate_phi_core_v2_wook,
     midi_to_freq,
-    freq_to_midi,
+    phi_amplitude_curve,
+    phi_harmonic_series,
 )
-
 
 # ── midi_to_freq / freq_to_midi ──────────────────────────────────────────
 

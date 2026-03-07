@@ -1,6 +1,7 @@
 """Shared test fixtures for DUBFORGE test suite."""
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 @pytest.fixture
