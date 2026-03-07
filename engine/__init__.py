@@ -14,6 +14,18 @@ from engine.ableton_live import (
 from engine.ableton_live import (
     SESSION_PRESETS as ABLETON_PRESETS,
 )
+from engine.als_generator import (
+    ALL_ALS_TEMPLATES,
+    ALSProject,
+    ALSScene,
+    ALSTrack,
+    build_als_xml,
+    dubstep_weapon_session,
+    emotive_melodic_session,
+    hybrid_fractal_session,
+    write_als,
+    write_als_json,
+)
 from engine.chord_progression import (
     ALL_PRESETS as CHORD_PRESETS,
 )
@@ -48,6 +60,35 @@ from engine.dojo import (
     phi_belt_progression,
     phi_mudpie_recipe,
 )
+from engine.drum_generator import (
+    ALL_DRUM_PATTERNS,
+    DrumHit,
+    DrumPattern,
+    generate_breakbeat,
+    generate_dubstep_build,
+    generate_dubstep_drop,
+    generate_fibonacci_fill,
+    generate_halftime_groove,
+    generate_intro_minimal,
+    pattern_to_midi_track,
+    write_drum_midi,
+    write_full_drum_arrangement,
+)
+from engine.fxp_writer import (
+    ALL_PRESETS as FXP_PRESETS,
+)
+from engine.fxp_writer import (
+    FXPBank,
+    FXPPreset,
+    VSTParam,
+    dubstep_growl_preset,
+    dubstep_lead_preset,
+    dubstep_pad_preset,
+    dubstep_sub_preset,
+    read_fxp,
+    write_fxb,
+    write_fxp,
+)
 from engine.growl_resampler import (
     bit_reduce,
     comb_filter,
@@ -60,6 +101,20 @@ from engine.growl_resampler import (
     waveshape_distortion,
 )
 from engine.log import get_logger
+from engine.mastering_chain import (
+    MasterReport,
+    MasterSettings,
+    apply_eq,
+    compress,
+    dubstep_master_settings,
+    estimate_lufs,
+    limit,
+    loudness_normalize,
+    master,
+    master_file,
+    stereo_widen,
+    streaming_master_settings,
+)
 from engine.memory import (
     MemoryEngine,
     get_memory,
@@ -103,6 +158,9 @@ from engine.psbs import (
 from engine.psbs import (
     export_preset as export_psbs_preset,
 )
+from engine.psbs import (
+    export_wavetable as export_psbs_wavetable,
+)
 from engine.rco import (
     RCOProfile,
     Section,
@@ -115,6 +173,18 @@ from engine.rco import (
     subtronics_emotive_preset,
     subtronics_hybrid_preset,
     subtronics_weapon_preset,
+)
+from engine.sample_slicer import (
+    SlicePoint,
+    SliceResult,
+    SliceSegment,
+    detect_onsets,
+    fibonacci_slice_points,
+    read_audio,
+    slice_audio,
+    slice_file,
+    snap_to_grid,
+    write_audio,
 )
 from engine.sb_analyzer import (
     Album,
@@ -187,6 +257,7 @@ __all__ = [
     "calculate_phase_coherence",
     "render_psbs_cycle",
     "export_psbs_preset",
+    "export_psbs_wavetable",
     # sb_analyzer
     "SBTrack",
     "Album",
@@ -272,6 +343,66 @@ __all__ = [
     "export_arp_midi",
     "export_clip_midi",
     "export_full_arrangement",
+    # drum_generator
+    "DrumHit",
+    "DrumPattern",
+    "ALL_DRUM_PATTERNS",
+    "generate_dubstep_drop",
+    "generate_dubstep_build",
+    "generate_halftime_groove",
+    "generate_fibonacci_fill",
+    "generate_breakbeat",
+    "generate_intro_minimal",
+    "pattern_to_midi_track",
+    "write_drum_midi",
+    "write_full_drum_arrangement",
+    # sample_slicer
+    "SlicePoint",
+    "SliceSegment",
+    "SliceResult",
+    "detect_onsets",
+    "snap_to_grid",
+    "fibonacci_slice_points",
+    "slice_audio",
+    "slice_file",
+    "read_audio",
+    "write_audio",
+    # mastering_chain
+    "MasterSettings",
+    "MasterReport",
+    "master",
+    "master_file",
+    "loudness_normalize",
+    "compress",
+    "limit",
+    "apply_eq",
+    "stereo_widen",
+    "estimate_lufs",
+    "dubstep_master_settings",
+    "streaming_master_settings",
+    # als_generator
+    "ALSTrack",
+    "ALSScene",
+    "ALSProject",
+    "ALL_ALS_TEMPLATES",
+    "build_als_xml",
+    "write_als",
+    "write_als_json",
+    "dubstep_weapon_session",
+    "emotive_melodic_session",
+    "hybrid_fractal_session",
+    # fxp_writer
+    "VSTParam",
+    "FXPPreset",
+    "FXPBank",
+    "FXP_PRESETS",
+    "write_fxp",
+    "read_fxp",
+    "write_fxb",
+    "dubstep_sub_preset",
+    "dubstep_growl_preset",
+    "dubstep_lead_preset",
+    "dubstep_pad_preset",
     # config_loader
     "load_config",
     "get_config_value",

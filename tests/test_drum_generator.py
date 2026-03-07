@@ -1,0 +1,262 @@
+"""Tests for engine.drum_generator — Drum & Percussion MIDI Generator."""
+
+import os
+import tempfile
+import unittest
+
+import mido
+
+from engine.drum_generator import (
+    ALL_DRUM_PATTERNS,
+    DRUM_CHANNEL,
+    GM_DRUMS,
+    TICKS_PER_BEAT,
+    DrumHit,
+    DrumPattern,
+    fibonacci_accent_pattern,
+    generate_breakbeat,
+    generate_dubstep_build,
+    generate_dubstep_drop,
+    generate_fibonacci_fill,
+    generate_halftime_groove,
+    generate_intro_minimal,
+    pattern_to_midi_track,
+    phi_velocity,
+    write_drum_manifest,
+    write_drum_midi,
+    write_full_drum_arrangement,
+)
+
+
+class TestDrumHit(unittest.TestCase):
+    """Test DrumHit dataclass."""
+
+    def test_defaults(self):
+        h = DrumHit(note=36, beat=0.0)
+        self.assertEqual(h.velocity, 100)
+        self.assertAlmostEqual(h.duration, 0.1)
+
+    def test_custom_values(self):
+        h = DrumHit(note=38, beat=2.0, velocity=120, duration=0.5)
+        self.assertEqual(h.note, 38)
+        self.assertAlmostEqual(h.beat, 2.0)
+        self.assertEqual(h.velocity, 120)
+
+
+class TestDrumPattern(unittest.TestCase):
+    """Test DrumPattern dataclass."""
+
+    def test_total_beats(self):
+        p = DrumPattern(name="test", bars=4)
+        self.assertEqual(p.total_beats, 16)
+
+    def test_total_beats_custom_time_sig(self):
+        p = DrumPattern(name="test", bars=2, time_sig=(3, 4))
+        self.assertEqual(p.total_beats, 6)
+
+    def test_empty_hits(self):
+        p = DrumPattern(name="test")
+        self.assertEqual(len(p.hits), 0)
+
+
+class TestPhiVelocity(unittest.TestCase):
+    """Test phi_velocity function."""
+
+    def test_on_beat(self):
+        v = phi_velocity(100, 0.0)
+        self.assertEqual(v, 100)
+
+    def test_off_beat_lower(self):
+        v = phi_velocity(100, 0.5)
+        self.assertLess(v, 100)
+        self.assertGreater(v, 0)
+
+    def test_ghost_notes(self):
+        v = phi_velocity(100, 0.25)
+        self.assertLess(v, phi_velocity(100, 0.5))
+
+    def test_clamps_to_range(self):
+        v = phi_velocity(127, 0.0, swing=5.0)
+        self.assertLessEqual(v, 127)
+        self.assertGreaterEqual(v, 1)
+
+
+class TestFibonacciAccentPattern(unittest.TestCase):
+    """Test fibonacci_accent_pattern."""
+
+    def test_length(self):
+        pattern = fibonacci_accent_pattern(16)
+        self.assertEqual(len(pattern), 16)
+
+    def test_accents_higher(self):
+        pattern = fibonacci_accent_pattern(16, base_vel=80)
+        self.assertTrue(any(v > 80 for v in pattern))
+        self.assertTrue(all(v <= 127 for v in pattern))
+
+
+class TestGMDrums(unittest.TestCase):
+    """Test GM drum map."""
+
+    def test_kick_note(self):
+        self.assertEqual(GM_DRUMS["kick"], 36)
+
+    def test_snare_note(self):
+        self.assertEqual(GM_DRUMS["snare"], 38)
+
+    def test_hat_closed(self):
+        self.assertEqual(GM_DRUMS["hat_closed"], 42)
+
+    def test_all_unique(self):
+        values = list(GM_DRUMS.values())
+        self.assertEqual(len(values), len(set(values)))
+
+
+class TestPatternGenerators(unittest.TestCase):
+    """Test all pattern generator functions."""
+
+    def test_dubstep_drop(self):
+        p = generate_dubstep_drop(4)
+        self.assertEqual(p.name, "DUBSTEP_DROP")
+        self.assertEqual(p.bars, 4)
+        self.assertGreater(len(p.hits), 0)
+
+    def test_dubstep_build(self):
+        p = generate_dubstep_build(8)
+        self.assertEqual(p.name, "DUBSTEP_BUILD")
+        self.assertEqual(p.bars, 8)
+        self.assertGreater(len(p.hits), 0)
+
+    def test_halftime_groove(self):
+        p = generate_halftime_groove(4)
+        self.assertEqual(p.name, "HALFTIME_GROOVE")
+        self.assertGreater(len(p.hits), 0)
+
+    def test_fibonacci_fill(self):
+        p = generate_fibonacci_fill(1)
+        self.assertEqual(p.name, "FIBONACCI_FILL")
+        self.assertGreater(len(p.hits), 0)
+
+    def test_breakbeat(self):
+        p = generate_breakbeat(4)
+        self.assertEqual(p.name, "BREAKBEAT")
+        self.assertGreater(len(p.hits), 0)
+
+    def test_intro_minimal(self):
+        p = generate_intro_minimal(8)
+        self.assertEqual(p.name, "INTRO_MINIMAL")
+        self.assertGreater(len(p.hits), 0)
+
+    def test_all_patterns_registered(self):
+        self.assertEqual(len(ALL_DRUM_PATTERNS), 6)
+        for name, fn in ALL_DRUM_PATTERNS.items():
+            p = fn()
+            self.assertIsInstance(p, DrumPattern)
+            self.assertGreater(len(p.hits), 0)
+
+    def test_single_bar_works(self):
+        """All generators should work with bars=1."""
+        for name, fn in ALL_DRUM_PATTERNS.items():
+            p = fn(bars=1)
+            self.assertEqual(p.bars, 1)
+
+
+class TestPatternToMidiTrack(unittest.TestCase):
+    """Test MIDI track conversion."""
+
+    def test_produces_track(self):
+        p = generate_dubstep_drop(1)
+        track = pattern_to_midi_track(p)
+        self.assertIsInstance(track, mido.MidiTrack)
+        self.assertGreater(len(track), 0)
+
+    def test_has_track_name(self):
+        p = generate_dubstep_drop(1)
+        track = pattern_to_midi_track(p)
+        names = [m for m in track if m.type == "track_name"]
+        self.assertEqual(len(names), 1)
+        self.assertEqual(names[0].name, "DUBSTEP_DROP")
+
+    def test_has_tempo(self):
+        p = generate_dubstep_drop(1)
+        track = pattern_to_midi_track(p, bpm=140.0)
+        tempos = [m for m in track if m.type == "set_tempo"]
+        self.assertEqual(len(tempos), 1)
+
+    def test_channel_is_drums(self):
+        p = generate_dubstep_drop(1)
+        track = pattern_to_midi_track(p)
+        note_msgs = [m for m in track if m.type in ("note_on", "note_off")]
+        for msg in note_msgs:
+            self.assertEqual(msg.channel, DRUM_CHANNEL)
+
+    def test_has_end_of_track(self):
+        p = generate_dubstep_drop(1)
+        track = pattern_to_midi_track(p)
+        self.assertEqual(track[-1].type, "end_of_track")
+
+
+class TestWriteDrumMidi(unittest.TestCase):
+    """Test MIDI file writing."""
+
+    def test_write_creates_file(self):
+        p = generate_dubstep_drop(2)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test_drums.mid")
+            result = write_drum_midi(p, path)
+            self.assertTrue(os.path.exists(result))
+
+    def test_written_file_is_valid_midi(self):
+        p = generate_halftime_groove(1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.mid")
+            write_drum_midi(p, path)
+            mid = mido.MidiFile(path)
+            self.assertEqual(mid.ticks_per_beat, TICKS_PER_BEAT)
+
+    def test_custom_bpm(self):
+        p = generate_dubstep_drop(1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.mid")
+            write_drum_midi(p, path, bpm=140.0)
+            mid = mido.MidiFile(path)
+            tempos = [m for track in mid.tracks for m in track if m.type == "set_tempo"]
+            self.assertEqual(len(tempos), 1)
+
+
+class TestWriteFullArrangement(unittest.TestCase):
+    """Test full drum arrangement writing."""
+
+    def test_multi_track_file(self):
+        patterns = {name: fn() for name, fn in ALL_DRUM_PATTERNS.items()}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "full.mid")
+            write_full_drum_arrangement(patterns, path)
+            mid = mido.MidiFile(path)
+            self.assertEqual(mid.type, 1)
+            self.assertGreater(len(mid.tracks), 1)
+
+    def test_creates_parent_dirs(self):
+        patterns = {"dubstep_drop": generate_dubstep_drop()}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "sub", "dir", "test.mid")
+            write_full_drum_arrangement(patterns, path)
+            self.assertTrue(os.path.exists(path))
+
+
+class TestWriteDrumManifest(unittest.TestCase):
+    """Test manifest generation."""
+
+    def test_writes_json(self):
+        patterns = {"drop": generate_dubstep_drop()}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = write_drum_manifest(patterns, tmpdir)
+            self.assertTrue(os.path.exists(path))
+            import json
+            with open(path) as f:
+                data = json.load(f)
+            self.assertIn("patterns", data)
+            self.assertIn("drop", data["patterns"])
+
+
+if __name__ == "__main__":
+    unittest.main()

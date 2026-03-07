@@ -351,6 +351,24 @@ def export_preset(preset: PSBSPreset, out_dir: str = "output/analysis"):
 
 # --- Main -----------------------------------------------------------------
 
+def export_wavetable(preset: PSBSPreset, out_dir: str = "output/wavetables",
+                     n_samples: int = 2048) -> str:
+    """Render a PSBS preset to a single-cycle WAV wavetable file."""
+    from engine.phi_core import write_wav
+
+    cycle = render_psbs_cycle(preset, n_samples=n_samples)
+    # Stack as single frame (Serum-compatible single-cycle)
+    frames = cycle.reshape(1, -1)
+
+    wt_dir = Path(out_dir)
+    wt_dir.mkdir(parents=True, exist_ok=True)
+    wav_name = f"PSBS_{preset.name.upper()}.wav"
+    wav_path = str(wt_dir / wav_name)
+    write_wav(wav_path, frames)
+    print(f"  PSBS wavetable: {wav_name}")
+    return wav_path
+
+
 def main() -> None:
     # Try YAML-driven presets first, fall back to hardcoded
     yaml_presets = load_psbs_presets_from_config()
@@ -365,6 +383,7 @@ def main() -> None:
 
     for preset in presets:
         export_preset(preset)
+        export_wavetable(preset)
 
     print("PSBS engine complete.")
 

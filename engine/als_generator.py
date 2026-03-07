@@ -1,0 +1,445 @@
+"""
+DUBFORGE Engine — Ableton Live Set (.als) Generator
+
+Generates valid Ableton Live 11/12 set files (.als) from DUBFORGE
+session templates.  An .als file is a gzip-compressed XML document.
+
+Outputs:
+    output/ableton/*.als — Ableton Live set files
+"""
+
+from __future__ import annotations
+
+import gzip
+import json
+import xml.etree.ElementTree as ET
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+from engine.config_loader import PHI
+from engine.log import get_logger
+
+_log = get_logger("dubforge.als_generator")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CONSTANTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+ALS_CREATOR = "DUBFORGE"
+ALS_SCHEMA_VERSION = "11.0.12"  # Ableton Live 11 schema
+DEFAULT_BPM = 150.0
+DEFAULT_TIME_SIG_NUM = 4
+DEFAULT_TIME_SIG_DEN = 4
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DATA MODEL
+# ═══════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class ALSTrack:
+    """Represents a track in an Ableton Live set."""
+    name: str
+    track_type: str = "midi"        # "midi" | "audio" | "return"
+    color: int = 0                  # Track color index (0-69)
+    volume_db: float = 0.0
+    pan: float = 0.0                # -1.0 to 1.0
+    mute: bool = False
+    solo: bool = False
+    armed: bool = False
+    midi_channel: int = 0           # 0-15
+    device_names: list[str] = field(default_factory=list)
+    clip_names: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ALSScene:
+    """Represents a scene (row of clips)."""
+    name: str
+    tempo: float = DEFAULT_BPM
+    time_sig: tuple[int, int] = (4, 4)
+
+
+@dataclass
+class ALSProject:
+    """Complete Ableton Live set project."""
+    name: str
+    bpm: float = DEFAULT_BPM
+    time_sig_num: int = DEFAULT_TIME_SIG_NUM
+    time_sig_den: int = DEFAULT_TIME_SIG_DEN
+    tracks: list[ALSTrack] = field(default_factory=list)
+    scenes: list[ALSScene] = field(default_factory=list)
+    master_volume_db: float = 0.0
+    notes: str = ""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# XML BUILDER
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _set_val(parent: ET.Element, tag: str, value: str) -> ET.Element:
+    """Create element with Value attribute (Ableton's pattern)."""
+    elem = ET.SubElement(parent, tag, Value=str(value))
+    return elem
+
+
+def _build_transport(root: ET.Element, project: ALSProject) -> None:
+    """Set tempo, time signature, and transport settings."""
+    transport = ET.SubElement(root, "Transport")
+    tempo = ET.SubElement(transport, "Tempo")
+    _set_val(tempo, "Manual", str(project.bpm))
+    _set_val(tempo, "AutomationTarget", "0")
+
+    time_sig = ET.SubElement(transport, "TimeSignature")
+    ts_val = ET.SubElement(time_sig, "TimeSignatures")
+    ts_event = ET.SubElement(ts_val, "RemoteableTimeSignature")
+    _set_val(ts_event, "Numerator", str(project.time_sig_num))
+    _set_val(ts_event, "Denominator", str(project.time_sig_den))
+
+
+def _build_midi_track(parent: ET.Element, track: ALSTrack,
+                      track_id: int) -> ET.Element:
+    """Build a MIDI track XML element."""
+    t = ET.SubElement(parent, "MidiTrack", Id=str(track_id))
+
+    # Name
+    name_elem = ET.SubElement(t, "Name")
+    _set_val(name_elem, "EffectiveName", track.name)
+    _set_val(name_elem, "UserName", track.name)
+
+    # Color
+    _set_val(t, "Color", str(track.color))
+
+    # Mixer
+    mixer = ET.SubElement(t, "DeviceChain")
+    mixer_elem = ET.SubElement(mixer, "Mixer")
+
+    volume = ET.SubElement(mixer_elem, "Volume")
+    _set_val(volume, "Manual", str(track.volume_db))
+    pan = ET.SubElement(mixer_elem, "Pan")
+    _set_val(pan, "Manual", str(track.pan))
+    _set_val(mixer_elem, "SoloSink", str(track.solo).lower())
+
+    # Armed
+    _set_val(t, "TrackArmed", str(track.armed).lower())
+
+    # Placeholder clip slots
+    main_seq = ET.SubElement(t, "MainSequencer")
+    clip_slots = ET.SubElement(main_seq, "ClipSlotList")
+    for i, clip_name in enumerate(track.clip_names):
+        slot = ET.SubElement(clip_slots, "ClipSlot", Id=str(i))
+        clip_elem = ET.SubElement(slot, "ClipSlot")
+        name_el = ET.SubElement(clip_elem, "Name")
+        _set_val(name_el, "Value", clip_name)
+
+    # Device references
+    devices = ET.SubElement(mixer, "DeviceChainList")
+    for dev_name in track.device_names:
+        dev = ET.SubElement(devices, "PluginDevice")
+        _set_val(dev, "ClassName", dev_name)
+
+    return t
+
+
+def _build_audio_track(parent: ET.Element, track: ALSTrack,
+                       track_id: int) -> ET.Element:
+    """Build an audio track XML element."""
+    t = ET.SubElement(parent, "AudioTrack", Id=str(track_id))
+
+    name_elem = ET.SubElement(t, "Name")
+    _set_val(name_elem, "EffectiveName", track.name)
+    _set_val(name_elem, "UserName", track.name)
+    _set_val(t, "Color", str(track.color))
+
+    mixer = ET.SubElement(t, "DeviceChain")
+    mixer_elem = ET.SubElement(mixer, "Mixer")
+    volume = ET.SubElement(mixer_elem, "Volume")
+    _set_val(volume, "Manual", str(track.volume_db))
+    pan = ET.SubElement(mixer_elem, "Pan")
+    _set_val(pan, "Manual", str(track.pan))
+
+    return t
+
+
+def _build_return_track(parent: ET.Element, track: ALSTrack,
+                        track_id: int) -> ET.Element:
+    """Build a return track XML element."""
+    t = ET.SubElement(parent, "ReturnTrack", Id=str(track_id))
+
+    name_elem = ET.SubElement(t, "Name")
+    _set_val(name_elem, "EffectiveName", track.name)
+    _set_val(name_elem, "UserName", track.name)
+    _set_val(t, "Color", str(track.color))
+
+    mixer = ET.SubElement(t, "DeviceChain")
+    mixer_elem = ET.SubElement(mixer, "Mixer")
+    volume = ET.SubElement(mixer_elem, "Volume")
+    _set_val(volume, "Manual", str(track.volume_db))
+
+    return t
+
+
+def build_als_xml(project: ALSProject) -> ET.Element:
+    """Build the complete Ableton Live set XML tree."""
+    root = ET.Element("Ableton",
+                      MajorVersion="5",
+                      MinorVersion=ALS_SCHEMA_VERSION,
+                      SchemaChangeCount="3",
+                      Creator=ALS_CREATOR)
+
+    live_set = ET.SubElement(root, "LiveSet")
+
+    # Transport
+    _build_transport(live_set, project)
+
+    # Tracks
+    tracks_elem = ET.SubElement(live_set, "Tracks")
+    track_id = 0
+    for track in project.tracks:
+        if track.track_type == "midi":
+            _build_midi_track(tracks_elem, track, track_id)
+        elif track.track_type == "audio":
+            _build_audio_track(tracks_elem, track, track_id)
+        elif track.track_type == "return":
+            _build_return_track(tracks_elem, track, track_id)
+        track_id += 1
+
+    # Scenes
+    scenes_elem = ET.SubElement(live_set, "Scenes")
+    for i, scene in enumerate(project.scenes):
+        s = ET.SubElement(scenes_elem, "Scene", Id=str(i))
+        name_el = ET.SubElement(s, "Name")
+        _set_val(name_el, "Value", scene.name)
+
+    # Master track
+    master = ET.SubElement(live_set, "MasterTrack")
+    master_mixer = ET.SubElement(master, "DeviceChain")
+    mixer_elem = ET.SubElement(master_mixer, "Mixer")
+    vol = ET.SubElement(mixer_elem, "Volume")
+    _set_val(vol, "Manual", str(project.master_volume_db))
+
+    # Annotation
+    if project.notes:
+        annotation = ET.SubElement(live_set, "Annotation")
+        _set_val(annotation, "Value", project.notes)
+
+    return root
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FILE I/O
+# ═══════════════════════════════════════════════════════════════════════════
+
+def write_als(project: ALSProject, path: str) -> str:
+    """Write an Ableton .als file (gzip-compressed XML)."""
+    root = build_als_xml(project)
+    xml_str = ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+    out_path = Path(path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with gzip.open(str(out_path), "wb") as f:
+        f.write(xml_str.encode("utf-8"))
+
+    _log.info("Wrote ALS: %s (%d tracks, %d scenes)",
+              out_path.name, len(project.tracks), len(project.scenes))
+    return str(out_path)
+
+
+def write_als_json(project: ALSProject, path: str) -> str:
+    """Write the project structure to JSON (for debugging)."""
+    data = asdict(project)
+    out_path = Path(path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w") as f:
+        json.dump(data, f, indent=2)
+    return str(out_path)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DUBSTEP SESSION TEMPLATES
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Track color indices (Ableton's palette)
+COLOR_RED = 0
+COLOR_ORANGE = 5
+COLOR_YELLOW = 10
+COLOR_GREEN = 18
+COLOR_CYAN = 25
+COLOR_BLUE = 30
+COLOR_PURPLE = 40
+COLOR_PINK = 50
+COLOR_WHITE = 69
+
+
+def dubstep_weapon_session() -> ALSProject:
+    """Subtronics-style dubstep weapon session template."""
+    return ALSProject(
+        name="DUBFORGE_WEAPON",
+        bpm=150.0,
+        tracks=[
+            ALSTrack(name="SUB", track_type="midi", color=COLOR_RED,
+                     volume_db=0, device_names=["PSBS_Sub"],
+                     clip_names=["Sub_Drop", "Sub_Build"]),
+            ALSTrack(name="MID_BASS", track_type="midi", color=COLOR_ORANGE,
+                     volume_db=-2, device_names=["Serum2_MidBass"],
+                     clip_names=["MB_Drop", "MB_Build", "MB_Fill"]),
+            ALSTrack(name="GROWL", track_type="midi", color=COLOR_YELLOW,
+                     volume_db=-3, device_names=["Serum2_Growl"],
+                     clip_names=["Growl_A", "Growl_B", "Growl_Fill"]),
+            ALSTrack(name="LEAD", track_type="midi", color=COLOR_CYAN,
+                     volume_db=-4, device_names=["Serum2_Lead"],
+                     clip_names=["Lead_Melody", "Lead_Stab"]),
+            ALSTrack(name="PAD", track_type="midi", color=COLOR_BLUE,
+                     volume_db=-6, device_names=["Serum2_Pad"],
+                     clip_names=["Pad_Intro", "Pad_Breakdown"]),
+            ALSTrack(name="ARP", track_type="midi", color=COLOR_GREEN,
+                     volume_db=-5, device_names=["Serum2_Arp"],
+                     clip_names=["Arp_Rise", "Arp_Drop"]),
+            ALSTrack(name="DRUMS", track_type="midi", color=COLOR_WHITE,
+                     volume_db=-1, midi_channel=9,
+                     clip_names=["Drums_Drop", "Drums_Build", "Drums_Fill"]),
+            ALSTrack(name="FX", track_type="audio", color=COLOR_PURPLE,
+                     volume_db=-8,
+                     clip_names=["Riser", "Impact", "Downlifter"]),
+            # Return tracks
+            ALSTrack(name="REVERB", track_type="return", color=COLOR_BLUE, volume_db=-10),
+            ALSTrack(name="DELAY", track_type="return", color=COLOR_GREEN, volume_db=-12),
+            ALSTrack(name="SIDECHAIN", track_type="return", color=COLOR_RED, volume_db=-6),
+        ],
+        scenes=[
+            ALSScene(name="INTRO", tempo=150.0),
+            ALSScene(name="BUILD_1", tempo=150.0),
+            ALSScene(name="DROP_1", tempo=150.0),
+            ALSScene(name="BREAKDOWN", tempo=150.0),
+            ALSScene(name="BUILD_2", tempo=150.0),
+            ALSScene(name="DROP_2", tempo=150.0),
+            ALSScene(name="BRIDGE", tempo=150.0),
+            ALSScene(name="DROP_3_VIP", tempo=150.0),
+            ALSScene(name="OUTRO", tempo=150.0),
+        ],
+        notes="Generated by DUBFORGE — Subtronics weapon template",
+    )
+
+
+def emotive_melodic_session() -> ALSProject:
+    """Emotive melodic dubstep session template."""
+    return ALSProject(
+        name="DUBFORGE_EMOTIVE",
+        bpm=140.0,
+        tracks=[
+            ALSTrack(name="SUB", track_type="midi", color=COLOR_RED,
+                     volume_db=0, device_names=["PSBS_Sub"]),
+            ALSTrack(name="BASS", track_type="midi", color=COLOR_ORANGE,
+                     volume_db=-2, device_names=["Serum2_Bass"]),
+            ALSTrack(name="CHORDS", track_type="midi", color=COLOR_CYAN,
+                     volume_db=-4, device_names=["Serum2_Chords"]),
+            ALSTrack(name="MELODY", track_type="midi", color=COLOR_GREEN,
+                     volume_db=-3, device_names=["Serum2_Lead"]),
+            ALSTrack(name="VOCAL_CHOP", track_type="audio", color=COLOR_PINK,
+                     volume_db=-5),
+            ALSTrack(name="PADS", track_type="midi", color=COLOR_BLUE,
+                     volume_db=-6, device_names=["Serum2_Pad"]),
+            ALSTrack(name="DRUMS", track_type="midi", color=COLOR_WHITE,
+                     volume_db=-1, midi_channel=9),
+            ALSTrack(name="PERC", track_type="audio", color=COLOR_YELLOW, volume_db=-8),
+            ALSTrack(name="REVERB", track_type="return", color=COLOR_BLUE, volume_db=-8),
+            ALSTrack(name="DELAY", track_type="return", color=COLOR_GREEN, volume_db=-10),
+        ],
+        scenes=[
+            ALSScene(name="INTRO", tempo=140.0),
+            ALSScene(name="VERSE", tempo=140.0),
+            ALSScene(name="BUILD", tempo=140.0),
+            ALSScene(name="DROP", tempo=140.0),
+            ALSScene(name="BREAKDOWN", tempo=140.0),
+            ALSScene(name="BUILD_2", tempo=140.0),
+            ALSScene(name="DROP_2", tempo=140.0),
+            ALSScene(name="OUTRO", tempo=140.0),
+        ],
+        notes="Generated by DUBFORGE — Emotive melodic template",
+    )
+
+
+def hybrid_fractal_session() -> ALSProject:
+    """Hybrid fractal dubstep session with phi-ratio track levels."""
+    tracks = []
+    # Main tracks with phi-ratio volume decay
+    track_defs = [
+        ("SUB", "midi", COLOR_RED),
+        ("MID_BASS_L", "midi", COLOR_ORANGE),
+        ("MID_BASS_R", "midi", COLOR_ORANGE),
+        ("GROWL_1", "midi", COLOR_YELLOW),
+        ("GROWL_2", "midi", COLOR_YELLOW),
+        ("REESE", "midi", COLOR_RED),
+        ("LEAD", "midi", COLOR_CYAN),
+        ("CHORDS", "midi", COLOR_BLUE),
+        ("ARP", "midi", COLOR_GREEN),
+        ("PAD", "midi", COLOR_BLUE),
+        ("DRUMS", "midi", COLOR_WHITE),
+        ("PERC", "audio", COLOR_PURPLE),
+        ("FX", "audio", COLOR_PINK),
+    ]
+
+    for i, (name, ttype, color) in enumerate(track_defs):
+        vol = -i * (1.0 / PHI)  # Phi-decay volume curve
+        tracks.append(ALSTrack(name=name, track_type=ttype, color=color,
+                               volume_db=round(vol, 1)))
+
+    # Returns
+    tracks.extend([
+        ALSTrack(name="VERB_SHORT", track_type="return", color=COLOR_BLUE, volume_db=-8),
+        ALSTrack(name="VERB_LONG", track_type="return", color=COLOR_BLUE, volume_db=-12),
+        ALSTrack(name="DELAY_1_4", track_type="return", color=COLOR_GREEN, volume_db=-10),
+        ALSTrack(name="DELAY_PHI", track_type="return", color=COLOR_GREEN, volume_db=-14),
+        ALSTrack(name="SIDECHAIN", track_type="return", color=COLOR_RED, volume_db=-6),
+    ])
+
+    return ALSProject(
+        name="DUBFORGE_HYBRID_FRACTAL",
+        bpm=150.0,
+        tracks=tracks,
+        scenes=[
+            ALSScene(name="INTRO"),
+            ALSScene(name="BUILD_A"),
+            ALSScene(name="DROP_A"),
+            ALSScene(name="FILL_FIBONACCI"),
+            ALSScene(name="DROP_B_HALFTIME"),
+            ALSScene(name="BREAKDOWN"),
+            ALSScene(name="BUILD_B"),
+            ALSScene(name="DROP_C_WEAPON"),
+            ALSScene(name="DROP_D_VIP"),
+            ALSScene(name="OUTRO"),
+        ],
+        notes="Generated by DUBFORGE — Hybrid fractal template with phi-ratio levels",
+    )
+
+
+ALL_ALS_TEMPLATES = {
+    "weapon":         dubstep_weapon_session,
+    "emotive":        emotive_melodic_session,
+    "hybrid_fractal": hybrid_fractal_session,
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════════════════════════════════════
+
+def main() -> None:
+    out_dir = Path("output/ableton")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for name, gen_fn in ALL_ALS_TEMPLATES.items():
+        project = gen_fn()
+        als_path = str(out_dir / f"DUBFORGE_{name}.als")
+        write_als(project, als_path)
+        print(f"  DUBFORGE_{name}.als  ({len(project.tracks)} tracks, {len(project.scenes)} scenes)")
+
+        json_path = str(out_dir / f"DUBFORGE_{name}_structure.json")
+        write_als_json(project, json_path)
+
+    print(f"ALS Generator complete — {len(ALL_ALS_TEMPLATES)} Ableton sets generated.")
+
+
+if __name__ == "__main__":
+    main()

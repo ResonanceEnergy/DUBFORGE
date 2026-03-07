@@ -74,6 +74,11 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("dojo",              "Producer Dojo Engine"),
     ("growl_resampler",   "Mid-Bass Growl Resampler"),
     ("midi_export",       "MIDI File Export Engine"),
+    ("drum_generator",    "Drum & Percussion Generator"),
+    ("sample_slicer",     "Sample Slicer"),
+    ("mastering_chain",   "Mastering Chain"),
+    ("als_generator",     "Ableton Live Set (.als) Generator"),
+    ("fxp_writer",        "FXP / VST2 Preset Writer"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]
