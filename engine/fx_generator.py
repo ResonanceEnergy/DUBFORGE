@@ -659,6 +659,75 @@ def dark_drone_presets() -> FXBank:
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# v2.1 — 12 new FX presets (3 banks)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def laser_presets() -> FXBank:
+    """Laser / zap FX — fast siren sweeps for sci-fi transitions."""
+    return FXBank(
+        name="LASERS",
+        presets=[
+            FXPreset("laser_zap", "siren", duration_s=0.15,
+                     start_freq=4000, end_freq=200, distortion=0.4,
+                     reverb_amount=0.1),
+            FXPreset("laser_pew", "siren", duration_s=0.1,
+                     start_freq=6000, end_freq=400, distortion=0.5,
+                     reverb_amount=0.05),
+            FXPreset("laser_beam", "siren", duration_s=0.3,
+                     start_freq=3000, end_freq=800, distortion=0.3,
+                     reverb_amount=0.2),
+            FXPreset("laser_blaster", "siren", duration_s=0.2,
+                     start_freq=5000, end_freq=300, distortion=0.6,
+                     reverb_amount=0.15),
+        ],
+    )
+
+
+def sweep_presets() -> FXBank:
+    """Wide sweep FX — full-spectrum risers for dramatic builds."""
+    bar_s = 4 * 60 / DEFAULT_BPM
+    return FXBank(
+        name="SWEEPS",
+        presets=[
+            FXPreset("sweep_full_up", "riser", duration_s=8 * bar_s,
+                     start_freq=20, end_freq=20000, distortion=0.05,
+                     reverb_amount=0.5),
+            FXPreset("sweep_full_down", "riser", duration_s=8 * bar_s,
+                     start_freq=18000, end_freq=30, distortion=0.08,
+                     reverb_amount=0.4),
+            FXPreset("sweep_narrow_hi", "riser", duration_s=4 * bar_s,
+                     start_freq=5000, end_freq=18000, distortion=0.1,
+                     reverb_amount=0.35),
+            FXPreset("sweep_sub_to_top", "riser", duration_s=16 * bar_s,
+                     start_freq=25, end_freq=16000, distortion=0.03,
+                     reverb_amount=0.6),
+        ],
+    )
+
+
+def alarm_presets() -> FXBank:
+    """Alarm FX — repeating siren tones for urgency and tension."""
+    bar_s = 4 * 60 / DEFAULT_BPM
+    return FXBank(
+        name="ALARMS",
+        presets=[
+            FXPreset("alarm_hi_lo", "siren", duration_s=4 * bar_s,
+                     start_freq=1800, end_freq=900, distortion=0.2,
+                     reverb_amount=0.25),
+            FXPreset("alarm_rapid", "siren", duration_s=2 * bar_s,
+                     start_freq=2200, end_freq=1800, distortion=0.35,
+                     reverb_amount=0.15),
+            FXPreset("alarm_slow_pulse", "siren", duration_s=8 * bar_s,
+                     start_freq=1000, end_freq=600, distortion=0.1,
+                     reverb_amount=0.4),
+            FXPreset("alarm_emergency", "siren", duration_s=4 * bar_s,
+                     start_freq=2500, end_freq=1200, distortion=0.45,
+                     reverb_amount=0.2),
+        ],
+    )
+
+
 ALL_FX_BANKS: dict[str, callable] = {
     "risers":      riser_presets,
     "impacts":     impact_presets,
@@ -671,6 +740,10 @@ ALL_FX_BANKS: dict[str, callable] = {
     "long_risers": long_riser_presets,
     "cinematic_impacts": cinematic_impact_presets,
     "dark_drones": dark_drone_presets,
+    # v2.1
+    "laser":       laser_presets,
+    "sweeps":      sweep_presets,
+    "alarms":      alarm_presets,
 }
 
 

@@ -42,7 +42,7 @@ _log = get_logger("dubforge.perc_synth")
 class PercPreset:
     """Settings for a single percussion hit."""
     name: str
-    perc_type: str          # kick | snare | clap | hat | rim
+    perc_type: str          # kick | snare | clap | hat | rim | cowbell | tambourine
     duration_s: float = 0.3
     pitch: float = 60.0     # Hz (fundamental for tonal percs)
     decay_s: float = 0.15
@@ -239,6 +239,71 @@ def synthesize_rim(preset: PercPreset,
     return _normalize(signal)
 
 
+def synthesize_cowbell(preset: PercPreset,
+                       sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Cowbell — dual-tone metallic hit with fast decay."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+
+    # Two inharmonic tones (classic 808 cowbell frequencies)
+    freq1 = preset.pitch
+    freq2 = preset.pitch * 1.504  # Slightly inharmonic
+    tone1 = np.sin(2 * math.pi * freq1 * t)
+    tone2 = np.sin(2 * math.pi * freq2 * t)
+
+    # Fast exponential decay
+    decay = np.exp(-t / max(0.001, preset.decay_s))
+
+    # Mix tones
+    signal = (tone1 * 0.6 + tone2 * 0.4) * decay
+    signal *= preset.tone_mix + (1 - preset.tone_mix) * 0.3
+
+    # Brightness: high-pass emphasis
+    if preset.brightness > 0.5:
+        signal += np.diff(np.concatenate([[0], signal])) * preset.brightness * 0.3
+
+    # Optional distortion
+    if preset.distortion > 0:
+        gain = 1.0 + preset.distortion * 4.0
+        signal = np.tanh(signal * gain) / np.tanh(gain)
+
+    signal /= np.max(np.abs(signal)) + 1e-10
+    return signal
+
+
+def synthesize_tambourine(preset: PercPreset,
+                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Tambourine — jingle noise burst with resonant ring."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(42)
+
+    # Noise burst (jingles)
+    noise = rng.standard_normal(n)
+    # Band-pass: high-pass then smooth
+    hp = np.diff(np.concatenate([[0], noise]))
+    k = max(1, int(sample_rate / (preset.pitch * 8)))
+    kernel = np.ones(k) / k
+    bp = np.convolve(hp, kernel, mode="same")
+
+    # Tonal ring component
+    ring = np.sin(2 * math.pi * preset.pitch * 2 * t) * 0.3
+
+    # Envelope: sharp attack + decay
+    attack_n = max(1, int(preset.attack_s * sample_rate))
+    env = np.exp(-t / max(0.001, preset.decay_s))
+    env[:attack_n] *= np.linspace(0, 1, attack_n)
+
+    signal = (bp * (1 - preset.tone_mix) + ring * preset.tone_mix) * env
+
+    if preset.distortion > 0:
+        gain = 1.0 + preset.distortion * 3.0
+        signal = np.tanh(signal * gain) / np.tanh(gain)
+
+    signal /= np.max(np.abs(signal)) + 1e-10
+    return signal
+
+
 def synthesize_perc(preset: PercPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct percussion synthesizer."""
@@ -248,6 +313,8 @@ def synthesize_perc(preset: PercPreset,
         "clap": synthesize_clap,
         "hat": synthesize_hat,
         "rim": synthesize_rim,
+        "cowbell": synthesize_cowbell,
+        "tambourine": synthesize_tambourine,
     }
     fn = synthesizers.get(preset.perc_type)
     if fn is None:
@@ -344,12 +411,50 @@ def rim_bank() -> PercBank:
     )
 
 
+def cowbell_bank() -> PercBank:
+    """Cowbell hits — metallic dual-tone percussion."""
+    return PercBank(
+        name="COWBELLS",
+        presets=[
+            PercPreset("cowbell_808", "cowbell", duration_s=0.2,
+                       pitch=540.0, decay_s=0.1, tone_mix=0.8, brightness=0.6),
+            PercPreset("cowbell_lo", "cowbell", duration_s=0.25,
+                       pitch=420.0, decay_s=0.12, tone_mix=0.7, brightness=0.5),
+            PercPreset("cowbell_bright", "cowbell", duration_s=0.15,
+                       pitch=600.0, decay_s=0.08, tone_mix=0.9, brightness=0.9),
+            PercPreset("cowbell_muted", "cowbell", duration_s=0.12,
+                       pitch=480.0, decay_s=0.06, tone_mix=0.6, brightness=0.4,
+                       distortion=0.1),
+        ],
+    )
+
+
+def tambourine_bank() -> PercBank:
+    """Tambourine hits — jingly noise bursts."""
+    return PercBank(
+        name="TAMBOURINES",
+        presets=[
+            PercPreset("tambourine_bright", "tambourine", duration_s=0.3,
+                       pitch=800.0, decay_s=0.15, tone_mix=0.3, brightness=0.8),
+            PercPreset("tambourine_dark", "tambourine", duration_s=0.25,
+                       pitch=600.0, decay_s=0.12, tone_mix=0.4, brightness=0.4),
+            PercPreset("tambourine_short", "tambourine", duration_s=0.15,
+                       pitch=900.0, decay_s=0.06, tone_mix=0.2, brightness=0.7),
+            PercPreset("tambourine_long", "tambourine", duration_s=0.5,
+                       pitch=700.0, decay_s=0.25, tone_mix=0.35, brightness=0.6),
+        ],
+    )
+
+
 ALL_PERC_BANKS: dict[str, callable] = {
     "kicks":  kick_bank,
     "snares": snare_bank,
     "claps":  clap_bank,
     "hats":   hat_bank,
     "rims":   rim_bank,
+    # v2.1
+    "cowbells":     cowbell_bank,
+    "tambourines":  tambourine_bank,
 }
 
 

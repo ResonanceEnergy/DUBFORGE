@@ -361,6 +361,55 @@ def synthesize_granular_pad(preset: PadPreset,
     return _normalize(signal)
 
 
+def synthesize_crystal_pad(preset: PadPreset,
+                           sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Crystal pad — bell-like tones with high harmonic shimmer."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+
+    # Bell-like partials at non-integer ratios
+    ratios = [1.0, 2.76, 4.17, 5.43, 7.89]
+    amps = [1.0, 0.5, 0.3, 0.15, 0.08]
+    signal = np.zeros(n)
+    for ratio, amp in zip(ratios, amps):
+        freq = preset.frequency * ratio
+        if freq < sample_rate / 2:
+            signal += amp * np.sin(2 * math.pi * freq * t)
+
+    # High shimmer via amplitude modulation
+    shimmer = 1.0 + preset.brightness * 0.3 * np.sin(
+        2 * math.pi * preset.lfo_rate * PHI * t
+    )
+    signal *= shimmer
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
+def synthesize_metallic_pad(preset: PadPreset,
+                            sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Metallic pad — inharmonic resonant tones."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+
+    # Metallic inharmonic partials
+    ratios = [1.0, 1.414, 2.236, 3.162, 4.583]  # sqrt-based inharmonic
+    amps = [1.0, 0.6, 0.4, 0.25, 0.12]
+    signal = np.zeros(n)
+    for ratio, amp in zip(ratios, amps):
+        freq = preset.frequency * ratio
+        if freq < sample_rate / 2:
+            phase_offset = ratio * 0.5  # phase separation
+            signal += amp * np.sin(
+                2 * math.pi * freq * t + phase_offset
+            )
+
+    # Slow resonance modulation
+    mod = 1.0 + 0.2 * np.sin(2 * math.pi * preset.lfo_rate * t)
+    signal *= mod
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
 def synthesize_pad(preset: PadPreset,
                    sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct pad synthesizer."""
@@ -373,6 +422,8 @@ def synthesize_pad(preset: PadPreset,
         "glass": synthesize_glass_pad,
         "warm": synthesize_warm_pad,
         "granular": synthesize_granular_pad,
+        "crystal": synthesize_crystal_pad,
+        "metallic": synthesize_metallic_pad,
     }
     fn = synthesizers.get(preset.pad_type)
     if fn is None:
@@ -520,6 +571,40 @@ def granular_pad_bank() -> PadBank:
     )
 
 
+def crystal_pad_bank() -> PadBank:
+    """Crystal pads — bell-like shimmering tones."""
+    return PadBank(
+        name="CRYSTAL_PADS",
+        presets=[
+            PadPreset("crystal_C3", "crystal", 130.81, duration_s=5.0,
+                      detune_cents=8, brightness=0.8, attack_s=0.3, lfo_rate=0.3),
+            PadPreset("crystal_E3", "crystal", 164.81, duration_s=5.0,
+                      detune_cents=12, brightness=0.9, attack_s=0.4, lfo_rate=0.25),
+            PadPreset("crystal_G3", "crystal", 196.00, duration_s=5.0,
+                      detune_cents=6, brightness=0.75, attack_s=0.35, lfo_rate=0.35),
+            PadPreset("crystal_A3", "crystal", 220.00, duration_s=5.0,
+                      detune_cents=10, brightness=0.85, attack_s=0.3, lfo_rate=0.2),
+        ],
+    )
+
+
+def metallic_pad_bank() -> PadBank:
+    """Metallic pads — inharmonic resonant tones."""
+    return PadBank(
+        name="METALLIC_PADS",
+        presets=[
+            PadPreset("metallic_C3", "metallic", 130.81, duration_s=5.0,
+                      detune_cents=5, brightness=0.6, attack_s=0.4, lfo_rate=0.15),
+            PadPreset("metallic_E3", "metallic", 164.81, duration_s=5.0,
+                      detune_cents=8, brightness=0.5, attack_s=0.5, lfo_rate=0.2),
+            PadPreset("metallic_G3", "metallic", 196.00, duration_s=5.0,
+                      detune_cents=10, brightness=0.55, attack_s=0.45, lfo_rate=0.18),
+            PadPreset("metallic_A3", "metallic", 220.00, duration_s=5.0,
+                      detune_cents=7, brightness=0.65, attack_s=0.35, lfo_rate=0.22),
+        ],
+    )
+
+
 ALL_PAD_BANKS: dict[str, callable] = {
     "lush":     lush_pad_bank,
     "dark":     dark_pad_bank,
@@ -530,6 +615,9 @@ ALL_PAD_BANKS: dict[str, callable] = {
     "glass":    glass_pad_bank,
     "warm":     warm_pad_bank,
     "granular": granular_pad_bank,
+    # v2.1
+    "crystal":  crystal_pad_bank,
+    "metallic": metallic_pad_bank,
 }
 
 

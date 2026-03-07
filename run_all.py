@@ -87,6 +87,8 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("lead_synth",        "Lead Sound Synthesizer"),
     ("perc_synth",        "Percussion One-Shot Synthesizer"),
     ("ambient_texture",   "Ambient Texture Generator"),
+    ("sub_bass",          "Sub-Bass One-Shot Generator"),
+    ("noise_generator",   "Noise Texture Generator"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]

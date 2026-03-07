@@ -487,6 +487,48 @@ def chaos_glitch_bank() -> TransitionBank:
     )
 
 
+def filter_sweep_bank() -> TransitionBank:
+    """Filter sweeps — rhythmic gate chops shaped as filter sweeps."""
+    return TransitionBank(
+        name="FILTER_SWEEPS",
+        presets=[
+            TransitionPreset("fsweep_lp_slow", "gate_chop", duration_s=2.0,
+                             start_freq=120, end_freq=800, gate_divisions=4,
+                             brightness=0.3, reverb_amount=0.3),
+            TransitionPreset("fsweep_hp_rise", "gate_chop", duration_s=1.0,
+                             start_freq=600, end_freq=4000, gate_divisions=8,
+                             brightness=0.9, reverb_amount=0.15),
+            TransitionPreset("fsweep_bp_wobble", "gate_chop", duration_s=1.5,
+                             start_freq=300, end_freq=1500, gate_divisions=16,
+                             brightness=0.6, distortion=0.2),
+            TransitionPreset("fsweep_resonant", "gate_chop",
+                             duration_s=0.75, start_freq=500,
+                             end_freq=3000, gate_divisions=12,
+                             brightness=0.8, distortion=0.35,
+                             reverb_amount=0.1),
+        ],
+    )
+
+
+def noise_burst_bank() -> TransitionBank:
+    """Noise bursts — reversed crash layers for explosive impacts."""
+    return TransitionBank(
+        name="NOISE_BURSTS",
+        presets=[
+            TransitionPreset("nburst_white", "reverse_crash", duration_s=0.5,
+                             start_freq=1000, brightness=1.0, distortion=0.3),
+            TransitionPreset("nburst_pink", "reverse_crash",
+                             duration_s=0.75, start_freq=600,
+                             brightness=0.6, reverb_amount=0.4),
+            TransitionPreset("nburst_dark", "reverse_crash", duration_s=1.0,
+                             start_freq=250, brightness=0.2, distortion=0.15,
+                             reverb_amount=0.5),
+            TransitionPreset("nburst_sizzle", "reverse_crash", duration_s=0.35,
+                             start_freq=2000, brightness=0.9, distortion=0.5),
+        ],
+    )
+
+
 ALL_TRANSITION_BANKS: dict[str, callable] = {
     "tape_stops":      tape_stop_bank,
     "tape_starts":     tape_start_bank,
@@ -498,6 +540,9 @@ ALL_TRANSITION_BANKS: dict[str, callable] = {
     "long_tape_stops": long_tape_stop_bank,
     "extreme_dives":   extreme_dive_bank,
     "chaos_glitch":    chaos_glitch_bank,
+    # v2.1
+    "filter_sweeps":   filter_sweep_bank,
+    "noise_bursts":    noise_burst_bank,
 }
 
 

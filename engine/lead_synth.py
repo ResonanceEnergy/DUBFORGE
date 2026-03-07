@@ -380,6 +380,48 @@ def synthesize_formant_lead(preset: LeadPreset,
     return _normalize(filtered)
 
 
+def synthesize_phase_lead(preset: LeadPreset,
+                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Phase lead — dual-oscillator with phase modulation sweep."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    env = _adsr_envelope(n, preset, sample_rate)
+
+    # Two oscillators with evolving phase offset
+    phase_sweep = np.linspace(0, math.pi * preset.filter_cutoff * 4, n)
+    osc1 = np.sin(2 * math.pi * preset.frequency * t)
+    osc2 = np.sin(2 * math.pi * preset.frequency * t + phase_sweep)
+
+    signal = osc1 + osc2 * 0.8
+    # Soft clip for presence
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal *= env
+    return _normalize(signal)
+
+
+def synthesize_ring_mod_lead(preset: LeadPreset,
+                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Ring modulation lead — carrier * modulator for metallic tones."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    env = _adsr_envelope(n, preset, sample_rate)
+
+    carrier = np.sin(2 * math.pi * preset.frequency * t)
+    mod_freq = preset.frequency * preset.fm_ratio
+    modulator = np.sin(2 * math.pi * mod_freq * t)
+
+    # Ring modulation with dry/wet mix
+    wet = carrier * modulator
+    dry_mix = max(0, 1.0 - preset.fm_depth)
+    signal = dry_mix * carrier + preset.fm_depth * wet
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal *= env
+    return _normalize(signal)
+
+
 def synthesize_lead(preset: LeadPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct lead synthesizer."""
@@ -392,6 +434,8 @@ def synthesize_lead(preset: LeadPreset,
         "saw": synthesize_saw_lead,
         "pwm": synthesize_pwm_lead,
         "formant": synthesize_formant_lead,
+        "phase_lead": synthesize_phase_lead,
+        "ring_mod": synthesize_ring_mod_lead,
     }
     fn = synthesizers.get(preset.lead_type)
     if fn is None:
@@ -539,6 +583,40 @@ def formant_lead_bank() -> LeadBank:
     )
 
 
+def phase_lead_bank() -> LeadBank:
+    """Phase leads — dual-oscillator phase sweep."""
+    return LeadBank(
+        name="PHASE_LEADS",
+        presets=[
+            LeadPreset("phase_C4", "phase_lead", 261.63, duration_s=0.6,
+                       filter_cutoff=0.7, distortion=0.1),
+            LeadPreset("phase_E4", "phase_lead", 329.63, duration_s=0.6,
+                       filter_cutoff=0.8, distortion=0.15),
+            LeadPreset("phase_G4", "phase_lead", 392.00, duration_s=0.6,
+                       filter_cutoff=0.6, distortion=0.05),
+            LeadPreset("phase_A4", "phase_lead", 440.00, duration_s=0.6,
+                       filter_cutoff=0.75, distortion=0.12),
+        ],
+    )
+
+
+def ring_mod_lead_bank() -> LeadBank:
+    """Ring mod leads — metallic ring modulation tones."""
+    return LeadBank(
+        name="RING_MOD_LEADS",
+        presets=[
+            LeadPreset("ring_mod_C4", "ring_mod", 261.63, duration_s=0.5,
+                       fm_ratio=1.5, fm_depth=0.6, distortion=0.1),
+            LeadPreset("ring_mod_E4", "ring_mod", 329.63, duration_s=0.5,
+                       fm_ratio=2.0, fm_depth=0.5, distortion=0.15),
+            LeadPreset("ring_mod_G4", "ring_mod", 392.00, duration_s=0.5,
+                       fm_ratio=1.618, fm_depth=0.7, distortion=0.08),
+            LeadPreset("ring_mod_A4", "ring_mod", 440.00, duration_s=0.5,
+                       fm_ratio=1.333, fm_depth=0.55, distortion=0.12),
+        ],
+    )
+
+
 ALL_LEAD_BANKS: dict[str, callable] = {
     "screech":  screech_lead_bank,
     "pluck":    pluck_lead_bank,
@@ -549,6 +627,9 @@ ALL_LEAD_BANKS: dict[str, callable] = {
     "saw":      saw_lead_bank,
     "pwm":      pwm_lead_bank,
     "formant":  formant_lead_bank,
+    # v2.1
+    "phase_lead": phase_lead_bank,
+    "ring_mod":   ring_mod_lead_bank,
 }
 
 
