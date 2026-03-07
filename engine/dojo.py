@@ -37,19 +37,16 @@ Outputs:
 """
 
 from __future__ import annotations
+
 import json
-import math
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSTANTS — DUBFORGE DOCTRINE
 # ═══════════════════════════════════════════════════════════════════════════
-
-from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440, get_config_value
-
+from engine.config_loader import A4_432, PHI, get_config_value
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BELT SYSTEM — Producer Dojo martial-arts ranking progression
@@ -1451,7 +1448,7 @@ def main() -> None:
 
     # Stats
     print()
-    print(f"  Producer Dojo Engine Stats:")
+    print("  Producer Dojo Engine Stats:")
     print(f"    Belt levels:          {len(BELT_SYSTEM)}")
     print(f"    Approach phases:      {len(THE_APPROACH)}")
     print(f"    Techniques:           {len(DOJO_TECHNIQUES)}")

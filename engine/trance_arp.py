@@ -8,11 +8,10 @@ Based on TRANCE_ARP_ENGINE specs from Serum 2 Module Pack v1.
 """
 
 import json
-import numpy as np
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
-from engine.config_loader import PHI, FIBONACCI, get_config_value
+
+from engine.config_loader import PHI, get_config_value
 
 
 @dataclass

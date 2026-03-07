@@ -22,10 +22,9 @@ Outputs:
 """
 
 from __future__ import annotations
+
 import json
-import math
-import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -33,8 +32,7 @@ from typing import Optional
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSTANTS — DUBFORGE DOCTRINE
 # ═══════════════════════════════════════════════════════════════════════════
-
-from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440, get_config_value
+from engine.config_loader import A4_432, FIBONACCI, PHI, get_config_value
 
 # Serum wavetable specs
 SERUM_FRAME_SIZE = 2048          # samples per frame
@@ -1571,7 +1569,7 @@ def main() -> None:
     total_dist_modes = len(DistortionMode)
     total_unison_modes = len(UnisonMode)
     print()
-    print(f"  Serum 2 Engine Stats:")
+    print("  Serum 2 Engine Stats:")
     print(f"    Oscillator types:  {total_osc_types}")
     print(f"    Warp modes:        {total_warp_modes}")
     print(f"    Filter types:      {total_filter_types}")

@@ -181,7 +181,7 @@ n=47  ~580.68 Hz         upper-mid
 
 ---
 
-**Version:** 1.3
+**Version:** 1.4
 **Author:** DUBFORGE
 **Date:** 2026-03-06
-**Modules:** 12 (phi_core, config_loader, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory)
+**Modules:** 13 (phi_core, config_loader, log, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory)

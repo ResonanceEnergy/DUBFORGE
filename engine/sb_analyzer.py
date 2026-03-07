@@ -14,11 +14,13 @@ Outputs:
 """
 
 import json
-import math
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
-from engine.config_loader import PHI, FIBONACCI, get_config_value, load_config
+
+from engine.config_loader import FIBONACCI, load_config
+from engine.log import get_logger
+
+_log = get_logger("dubforge.sb_analyzer")
 
 
 # --- Data Models ----------------------------------------------------------
@@ -313,8 +315,7 @@ def _load_corpus_from_yaml() -> list[Album] | None:
             ))
         return albums if albums else None
     except Exception as exc:
-        import sys
-        print(f"[sb_analyzer] YAML corpus load failed: {exc}", file=sys.stderr)
+        _log.warning("YAML corpus load failed: %s", exc)
         return None
 
 

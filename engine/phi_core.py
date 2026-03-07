@@ -9,13 +9,14 @@ Outputs:
     output/wavetables/DUBFORGE_PHI_CORE_v2_WOOK.wav
 """
 
-import numpy as np
-import struct
-import os
 import math as _math
+import os
+import struct
 from pathlib import Path
 
-from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440
+import numpy as np
+
+from engine.config_loader import A4_440, FIBONACCI, PHI
 
 # --- Constants -----------------------------------------------------------
 

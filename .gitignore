@@ -1,6 +1,9 @@
 # Ignore generated output
 output/
 
+# DUBFORGE memory context (user-local)
+.dubforge_memory
+
 # Python
 __pycache__/
 *.pyc

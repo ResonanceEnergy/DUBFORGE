@@ -115,15 +115,12 @@ Outputs:
 """
 
 import json
-import math
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from typing import Optional
+from dataclasses import dataclass, field
 from enum import IntEnum
+from pathlib import Path
 
 # --- DUBFORGE Constants ---------------------------------------------------
-
-from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440, load_config
+from engine.config_loader import FIBONACCI, PHI, load_config
 
 # Ableton color palette (subset — RGB as 0x00RRGGBB)
 ABLETON_COLORS = {
@@ -448,7 +445,6 @@ class ArrangementTemplate:
 # --- Utility Functions ----------------------------------------------------
 
 # Canonical midi_to_freq / freq_to_midi — imported from phi_core
-from engine.phi_core import midi_to_freq, freq_to_midi
 
 
 def phi_velocity_curve(n_notes: int, base: float = 80.0, peak: float = 120.0) -> list:
@@ -658,7 +654,7 @@ def generate_chord_stab_clip(
             ))
 
     return MIDIClip(
-        name=f"DUBFORGE_CHORD_STAB",
+        name="DUBFORGE_CHORD_STAB",
         length=beats,
         notes=notes,
         color=ABLETON_COLORS["purple"],
@@ -713,10 +709,10 @@ def psbs_device_chain() -> list:
                     display_name=f"EQ [{band_name} ISO]",
                     device_type=DeviceType.AUDIO_EFFECT,
                     parameters=[
-                        DeviceParam(f"Band 1 Freq", float(freqs["low"]), 20, 20000),
-                        DeviceParam(f"Band 1 Type", 6.0, 0, 8),  # High-pass
-                        DeviceParam(f"Band 8 Freq", float(freqs["high"]), 20, 20000),
-                        DeviceParam(f"Band 8 Type", 0.0, 0, 8),  # Low-pass
+                        DeviceParam("Band 1 Freq", float(freqs["low"]), 20, 20000),
+                        DeviceParam("Band 1 Type", 6.0, 0, 8),  # High-pass
+                        DeviceParam("Band 8 Freq", float(freqs["high"]), 20, 20000),
+                        DeviceParam("Band 8 Type", 0.0, 0, 8),  # Low-pass
                     ],
                 ).to_dict(),
                 DeviceConfig(
@@ -1116,12 +1112,12 @@ def generate_m4l_control_script(template: SessionTemplate) -> str:
     """
     lines = [
         '"""',
-        f'DUBFORGE — Max for Live Control Script',
+        'DUBFORGE — Max for Live Control Script',
         f'Template: {template.name}',
         f'Doctrine: {template.dubforge_doctrine}',
-        f'',
-        f'Usage: Load this as a Max for Live device script.',
-        f'       It will configure the Live set according to DUBFORGE specs.',
+        '',
+        'Usage: Load this as a Max for Live device script.',
+        '       It will configure the Live set according to DUBFORGE specs.',
         '"""',
         '',
         'import Live',
@@ -1134,19 +1130,19 @@ def generate_m4l_control_script(template: SessionTemplate) -> str:
         '    app = Live.Application.get_application()',
         '    song = app.get_document()',
         '',
-        f'    # Set tempo',
+        '    # Set tempo',
         f'    song.tempo = {template.bpm}',
         '',
-        f'    # Set time signature',
+        '    # Set time signature',
         f'    song.signature_numerator = {template.time_signature_num}',
         f'    song.signature_denominator = {template.time_signature_den}',
         '',
         f'    # Set scale (root_note: {template.root_note}, 0=C ... 11=B)',
         f'    song.root_note = {template.root_note}',
         f'    song.scale_name = "{template.scale_name}"',
-        f'    song.scale_mode = True',
+        '    song.scale_mode = True',
         '',
-        f'    # Set clip trigger quantization',
+        '    # Set clip trigger quantization',
         f'    song.clip_trigger_quantization = {template.clip_trigger_quant}',
         '',
         '    # --- Create Tracks ---',
@@ -1154,7 +1150,7 @@ def generate_m4l_control_script(template: SessionTemplate) -> str:
 
     for i, track in enumerate(template.tracks):
         ttype = "midi" if track.track_type == "midi" else "audio"
-        lines.append(f'')
+        lines.append('')
         lines.append(f'    # Track {i + 1}: {track.name}')
         if ttype == "midi":
             lines.append(f'    song.create_midi_track({i})')
@@ -1191,25 +1187,25 @@ def generate_m4l_control_script(template: SessionTemplate) -> str:
 
     for i, track in enumerate(template.tracks):
         for j, clip in enumerate(track.clips):
-            lines.append(f'')
+            lines.append('')
             lines.append(f'    # Clip: {clip.name} on track {i}, slot {j}')
             lines.append(f'    cs = song.tracks[{i}].clip_slots[{j}]')
             lines.append(f'    cs.create_clip({clip.length})')
-            lines.append(f'    c = cs.clip')
+            lines.append('    c = cs.clip')
             lines.append(f'    c.name = "{clip.name}"')
             lines.append(f'    c.color = {hex(clip.color)}')
             lines.append(f'    c.looping = {clip.looping}')
             if clip.notes:
-                lines.append(f'    c.add_new_notes({{')
-                lines.append(f'        "notes": [')
+                lines.append('    c.add_new_notes({')
+                lines.append('        "notes": [')
                 for note in clip.notes:
                     lines.append(
                         f'            {{"pitch": {note.pitch}, '
                         f'"start_time": {note.start_time:.4f}, '
                         f'"duration": {note.duration:.4f}, '
                         f'"velocity": {note.velocity:.1f}}},')
-                lines.append(f'        ]')
-                lines.append(f'    }})')
+                lines.append('        ]')
+                lines.append('    })')
 
     lines.extend([
         '',

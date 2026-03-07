@@ -10,16 +10,14 @@ Outputs Serum-ready wavetable.
 Based on MIDBASS_GROWL_RESAMPLER_ENGINE specs from Serum 2 Module Pack v1.
 """
 
-import numpy as np
 import math
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+
+import numpy as np
 
 # Import shared constants and wavetable writer
-from engine.config_loader import PHI, FIBONACCI, get_config_value
-from engine.phi_core import write_wav, WAVETABLE_SIZE
-
+from engine.config_loader import PHI, get_config_value
+from engine.phi_core import WAVETABLE_SIZE, write_wav
 
 # --- Processing Steps -----------------------------------------------------
 

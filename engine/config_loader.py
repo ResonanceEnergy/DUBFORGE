@@ -14,9 +14,12 @@ Usage:
     rco_profiles = cfg["rco"]["profiles"]
 """
 
-import os
 from pathlib import Path
 from typing import Any, Optional
+
+from engine.log import get_logger
+
+_log = get_logger("dubforge.config")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CANONICAL CONSTANTS — single source of truth
@@ -296,7 +299,7 @@ def main() -> None:
             for k in keys:
                 print(f"    • {k}")
         except Exception as e:
-            print(f"  {name}  ERROR: {e}")
+            _log.warning("Failed to load config %s: %s", name, e)
     print()
 
 

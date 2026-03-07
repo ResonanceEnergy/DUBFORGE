@@ -17,12 +17,12 @@ All crossover frequencies derived from phi-ratio ladder.
 
 import json
 import math
-import numpy as np
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
-from engine.config_loader import PHI, FIBONACCI, load_config
 
+import numpy as np
+
+from engine.config_loader import PHI, load_config
 
 # --- Layer Definitions ----------------------------------------------------
 

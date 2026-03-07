@@ -14,13 +14,12 @@ Outputs:
 """
 
 import json
-import math
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
-from engine.config_loader import PHI, FIBONACCI, load_config
 
+from engine.config_loader import PHI, load_config
 
 # --- Data Models ----------------------------------------------------------
 

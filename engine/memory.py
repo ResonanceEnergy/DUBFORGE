@@ -31,12 +31,12 @@ Usage:
 """
 
 from __future__ import annotations
-import json
+
 import hashlib
+import json
 import math
-import os
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -44,8 +44,8 @@ from typing import Any, Optional
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSTANTS — DUBFORGE DOCTRINE
 # ═══════════════════════════════════════════════════════════════════════════
+from engine.config_loader import FIBONACCI, PHI, get_config_value
 
-from engine.config_loader import PHI, FIBONACCI, get_config_value
 FIBONACCI_SET = set(FIBONACCI)
 
 # ─── Config-driven defaults ───────────────────────────────────────────────
@@ -645,7 +645,6 @@ class MemoryEngine:
         """
         registry = _load_json(self.asset_file, {"assets": []})
         assets = registry.get("assets", [])
-        now = time.time()
 
         results = []
         for asset in assets:
@@ -985,7 +984,7 @@ def main() -> None:
     mem.print_status()
 
     # Demo: start/end a diagnostic session
-    sid = mem.begin_session(notes="Memory system diagnostic run")
+    mem.begin_session(notes="Memory system diagnostic run")
     mem.log_event("memory", "diagnostic", {"test": True},
                   result_summary="Memory engine initialized and running")
     summary = mem.end_session(notes="Diagnostic complete")

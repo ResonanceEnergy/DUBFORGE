@@ -13,15 +13,15 @@ Usage:
 """
 
 import argparse
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 # Ensure engine is importable
 sys.path.insert(0, str(Path(__file__).parent))
 
-from engine.memory import get_memory
 from engine.log import get_logger
+from engine.memory import get_memory
 
 _log = get_logger("dubforge.build")
 
@@ -32,7 +32,7 @@ def _run_module(mem, step_label: str, module_name: str, import_and_run, failures
     print("-" * 40)
     t0 = time.time()
     try:
-        result = import_and_run()
+        import_and_run()
         elapsed_ms = (time.time() - t0) * 1000
         mem.log_event(
             module=module_name,
@@ -136,7 +136,7 @@ def main():
 
     # --- Determine which modules to run ---
     if args.module:
-        modules_to_run = [(n, l) for n, l in MODULE_REGISTRY if n == args.module]
+        modules_to_run = [(n, lbl) for n, lbl in MODULE_REGISTRY if n == args.module]
     else:
         modules_to_run = list(MODULE_REGISTRY)
 
@@ -169,7 +169,10 @@ def main():
     # --- Run modules ---
     for idx, (mod_name, label) in enumerate(modules_to_run, 1):
         step_label = f"[{idx}/{total}] {label}"
-        runner = lambda _n=mod_name: _import_and_run_module(_n)
+
+        def runner(_n=mod_name):
+            return _import_and_run_module(_n)
+
         if mem:
             _run_module(mem, step_label, mod_name, runner, failures)
         else:

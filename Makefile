@@ -13,10 +13,10 @@ test: ## Run pytest suite
 	python3 -m pytest tests/ -v
 
 lint: ## Lint with ruff
-	python3 -m ruff check engine/ run_all.py
+	python3 -m ruff check engine/ run_all.py tests/
 
 fmt: ## Auto-format with ruff
-	python3 -m ruff format engine/ run_all.py
+	python3 -m ruff format engine/ run_all.py tests/
 
 check: lint test ## Lint + test together
 

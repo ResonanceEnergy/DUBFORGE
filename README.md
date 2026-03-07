@@ -77,6 +77,7 @@ python3 -m engine.config_loader     # List all configs
 
 - Python 3.10+
 - NumPy (`pip install numpy`)
+- PyYAML (`pip install pyyaml`)
 - matplotlib (optional, for RCO curve plots)
 
 ## Engine Modules

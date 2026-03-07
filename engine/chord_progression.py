@@ -19,15 +19,12 @@ Outputs:
 """
 
 import json
-import math
-import numpy as np
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
 
 # --- Constants -----------------------------------------------------------
-
-from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440, get_config_value
+from engine.config_loader import A4_440, FIBONACCI, PHI, get_config_value
+from engine.phi_core import midi_to_freq
 
 # Chromatic note names
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -159,10 +156,6 @@ def midi_to_note(midi: int) -> tuple[str, int]:
     octave = (midi // 12) - 1
     note_idx = midi % 12
     return NOTE_NAMES[note_idx], octave
-
-
-# Canonical versions — import from phi_core (single source of truth)
-from engine.phi_core import midi_to_freq, freq_to_midi as freq_to_nearest_midi
 
 
 def get_scale_notes(root_name: str, scale_type: str = "minor") -> list[int]:
