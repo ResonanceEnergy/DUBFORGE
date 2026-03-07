@@ -12,9 +12,7 @@ import numpy as np
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
-
-PHI = 1.6180339887498948482
-FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
+from engine.config_loader import PHI, FIBONACCI, get_config_value
 
 
 @dataclass
@@ -36,6 +34,38 @@ class ArpPattern:
     octave_range: int = 3
     rate: str = "1/16"
     notes: list = field(default_factory=list)
+
+
+# --- Config-driven defaults -----------------------------------------------
+
+def _arp_config_defaults() -> dict:
+    """Load arp defaults from serum2_module_pack_v1.yaml if available."""
+    try:
+        return {
+            "gate_percent": get_config_value(
+                "serum2_module_pack_v1", "TRANCE_ARP_ENGINE", "gate_percent",
+                default=61.8),
+            "steps": get_config_value(
+                "serum2_module_pack_v1", "TRANCE_ARP_ENGINE", "pattern", "steps",
+                default=13),
+            "rate": get_config_value(
+                "serum2_module_pack_v1", "TRANCE_ARP_ENGINE", "rate",
+                default="1/16"),
+            "direction": get_config_value(
+                "serum2_module_pack_v1", "TRANCE_ARP_ENGINE", "direction",
+                default="up_down"),
+            "octave_range": get_config_value(
+                "serum2_module_pack_v1", "TRANCE_ARP_ENGINE", "octave_range",
+                default=3),
+        }
+    except FileNotFoundError:
+        return {
+            "gate_percent": 61.8,
+            "steps": 13,
+            "rate": "1/16",
+            "direction": "up_down",
+            "octave_range": 3,
+        }
 
 
 # --- Pattern Generators ---------------------------------------------------
@@ -170,7 +200,7 @@ def export_pattern(pattern: ArpPattern, out_dir: str = "output/analysis"):
 
 # --- Main -----------------------------------------------------------------
 
-def main():
+def main() -> None:
     patterns = [
         fibonacci_rise_pattern(),
         phi_spiral_pattern(),

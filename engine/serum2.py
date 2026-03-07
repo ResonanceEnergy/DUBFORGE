@@ -34,10 +34,7 @@ from typing import Optional
 # CONSTANTS — DUBFORGE DOCTRINE
 # ═══════════════════════════════════════════════════════════════════════════
 
-PHI = 1.6180339887498948482
-FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
-A4_432 = 432.0
-A4_440 = 440.0
+from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440, get_config_value
 
 # Serum wavetable specs
 SERUM_FRAME_SIZE = 2048          # samples per frame
@@ -1492,10 +1489,14 @@ MODULATION_DESTINATIONS = {
 # MAIN — Generate all Serum 2 engine outputs
 # ═══════════════════════════════════════════════════════════════════════════
 
-def main():
+def main() -> None:
     """Generate all Serum 2 engine JSON outputs."""
     out = Path("output/serum2")
     out.mkdir(parents=True, exist_ok=True)
+
+    # Load module-pack config for reference tuning
+    _tuning_ref = float(get_config_value(
+        "serum2_module_pack_v1", "tuning_ref", default=432))
 
     # 1) Full architecture reference
     arch_path = out / "serum2_architecture.json"

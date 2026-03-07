@@ -18,9 +18,7 @@ import math
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
-
-PHI = 1.6180339887498948482
-FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
+from engine.config_loader import PHI, FIBONACCI, get_config_value, load_config
 
 
 # --- Data Models ----------------------------------------------------------
@@ -286,6 +284,46 @@ def build_corpus() -> list[Album]:
     return corpus
 
 
+def _load_corpus_from_yaml() -> list[Album] | None:
+    """Try loading corpus from configs/sb_corpus_v1.yaml. Returns None on failure."""
+    try:
+        data = load_config("sb_corpus_v1")
+        if not data or "albums" not in data:
+            return None
+        albums: list[Album] = []
+        for ad in data["albums"]:
+            tracks = []
+            for td in ad.get("tracks", []):
+                tracks.append(Track(
+                    title=td.get("title", "?"),
+                    duration_s=float(td.get("duration", 0)),
+                    bpm=float(td.get("bpm", 150.0)),
+                    key=td.get("key", ""),
+                    is_vip=bool(td.get("is_vip", False)),
+                    is_remix=bool(td.get("is_remix", False)),
+                    is_collab=bool(td.get("is_collab", False)),
+                    collab_artist=td.get("collab_artist", ""),
+                    notes=td.get("notes", ""),
+                ))
+            albums.append(Album(
+                title=ad.get("title", "?"),
+                year=int(ad.get("year", 0)),
+                tracks=tracks,
+                platform_url=ad.get("platform_url", ""),
+            ))
+        return albums if albums else None
+    except Exception:
+        return None
+
+
+def load_corpus() -> list[Album]:
+    """Load corpus from YAML data file, falling back to hardcoded build_corpus()."""
+    yaml_corpus = _load_corpus_from_yaml()
+    if yaml_corpus is not None:
+        return yaml_corpus
+    return build_corpus()
+
+
 # --- Analysis Functions ---------------------------------------------------
 
 def analyze_corpus(corpus: list[Album]) -> dict:
@@ -447,11 +485,11 @@ def vip_delta_analysis(corpus: list[Album]) -> list[dict]:
 
 # --- Main -----------------------------------------------------------------
 
-def main():
+def main() -> None:
     out_dir = Path('output/analysis')
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    corpus = build_corpus()
+    corpus = load_corpus()
 
     # Full corpus report
     report = analyze_corpus(corpus)

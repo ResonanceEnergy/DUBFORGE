@@ -14,15 +14,13 @@ import struct
 import os
 from pathlib import Path
 
+from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440
+
 # --- Constants -----------------------------------------------------------
 
-PHI = 1.6180339887498948482
-FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
 SAMPLE_RATE = 44100
 WAVETABLE_SIZE = 2048      # Serum standard single-cycle length
 DEFAULT_FRAMES = 256       # Serum max wavetable frames
-A4_432 = 432.0
-A4_440 = 440.0
 
 
 # --- Helpers --------------------------------------------------------------
@@ -71,6 +69,21 @@ def morph_frames(frame_a: np.ndarray, frame_b: np.ndarray,
             blended /= peak
         frames.append(blended)
     return frames
+import math as _math
+
+
+# --- Frequency / MIDI utilities -------------------------------------------
+
+def midi_to_freq(midi_note: int, a4: float = A4_440) -> float:
+    """Convert MIDI note number to frequency in Hz."""
+    return a4 * (2.0 ** ((midi_note - 69) / 12.0))
+
+
+def freq_to_midi(freq: float, a4: float = A4_440) -> int:
+    """Convert frequency in Hz to nearest MIDI note number."""
+    if freq <= 0:
+        return 0
+    return round(69 + 12.0 * _math.log2(freq / a4))
 
 
 # --- WAV Writer (16-bit PCM, Serum compatible) ----------------------------
@@ -194,7 +207,7 @@ def generate_phi_core_v2_wook(n_frames: int = DEFAULT_FRAMES) -> list[np.ndarray
 
 # --- Main -----------------------------------------------------------------
 
-def main():
+def main() -> None:
     out_dir = Path('output/wavetables')
     out_dir.mkdir(parents=True, exist_ok=True)
 

@@ -1,0 +1,107 @@
+# ═══════════════════════════════════════════════════════════
+# DUBFORGE — Subtronics Discography Corpus
+# ═══════════════════════════════════════════════════════════
+# Durations sourced from actual Apple Music .m4p file metadata (mdls)
+# Path: ~/Music/Music/Media.localized/Apple Music/Subtronics/
+
+albums:
+  - title: FRACTALS
+    year: 2022
+    platform_url: https://music.apple.com/ca/album/fractals/1600129103
+    tracks:
+      - {title: "O.P.U.S.", duration: 201.08, notes: "Album opener"}
+      - {title: "Spacetime", duration: 168.00, is_collab: true, collab_artist: "NEVVE", notes: "feat. Nevve"}
+      - {title: "Cabin Fever", duration: 204.00}
+      - {title: "Open Your Mind (Anthology 999)", duration: 217.06}
+      - {title: "Gassed Up", duration: 238.18, is_collab: true, collab_artist: "Flowdan", notes: "feat. Flowdan"}
+      - {title: "Flute Dub", duration: 185.14}
+      - {title: "Gummy Worm", duration: 243.43, is_collab: true, collab_artist: "Boogie T", notes: "feat. Boogie T"}
+      - {title: "Cyclops Rocks", duration: 130.40, notes: "Shortest track in album"}
+      - {title: "Take Flight VIP", duration: 290.62, is_vip: true, notes: "LONGEST track in corpus — 4:50"}
+      - {title: "Morning Coffee", duration: 152.47, is_collab: true, collab_artist: "Sony", notes: "feat. Sony"}
+      - {title: "Into Pieces", duration: 211.76, is_collab: true, collab_artist: "Grabbitz", notes: "feat. Grabbitz"}
+      - {title: "FUNcKED", duration: 179.59}
+      - {title: "Griztronics II (Another Level)", duration: 165.52, is_collab: true, collab_artist: "GRiZ"}
+      - {title: "Tuba Demon", duration: 154.76}
+      - {title: "Hieroglyph", duration: 204.14}
+      - {title: "MetaFractal", duration: 163.83}
+
+  - title: Antifractals
+    year: 2022
+    platform_url: https://music.apple.com/ca/album/antifractals/1655750333
+    tracks:
+      # Remixes (tracks 1-14)
+      - {title: "Into Pieces (Wooli x Grabbitz Remix)", duration: 204.39, is_remix: true, collab_artist: "Wooli x Grabbitz"}
+      - {title: "Spacetime (Virtual Riot Remix)", duration: 210.21, is_remix: true, collab_artist: "Virtual Riot", notes: "feat. NEVVE"}
+      - {title: "Tuba Demon (HOL! Remix)", duration: 178.48, is_remix: true, collab_artist: "HOL!"}
+      - {title: "Take Flight (Kai Wachi Remix)", duration: 190.37, is_remix: true, collab_artist: "Kai Wachi"}
+      - {title: "O.P.U.S. (PEEKABOO Remix)", duration: 246.86, is_remix: true, collab_artist: "PEEKABOO"}
+      - {title: "Gummy Worm (Dirt Monkey x Jantsen Remix)", duration: 211.20, is_remix: true, collab_artist: "Dirt Monkey x Jantsen", notes: "feat. Boogie T"}
+      - {title: "Morning Coffee (Mr. Bill Remix)", duration: 180.00, is_remix: true, collab_artist: "Mr. Bill", notes: "feat. Sony"}
+      - {title: "Cyclops Rocks (LEVEL UP Remix)", duration: 120.83, is_remix: true, collab_artist: "LEVEL UP", notes: "Shortest track in corpus — 2:01"}
+      - {title: "Hieroglyph (Of The Trees Remix)", duration: 197.14, is_remix: true, collab_artist: "Of The Trees"}
+      - {title: "Cabin Fever (Kompany Remix)", duration: 182.07, is_remix: true, collab_artist: "Kompany"}
+      - {title: "Flute Dub (A Hundred Drums Remix)", duration: 253.26, is_remix: true, collab_artist: "A Hundred Drums"}
+      - {title: "MetaFractal (MUST DIE! Remix)", duration: 164.80, is_remix: true, collab_artist: "MUST DIE!"}
+      - {title: "FUNcKED (HE$H x Versa Remix)", duration: 196.14, is_remix: true, collab_artist: "HE$H x Versa"}
+      - {title: "Gassed Up (IMANU Remix)", duration: 178.50, is_remix: true, collab_artist: "IMANU", notes: "feat. Flowdan"}
+      # VIPs (tracks 15-24)
+      - {title: "Gassed Up VIP", duration: 226.29, is_vip: true, notes: "feat. Flowdan"}
+      - {title: "Cyclops Rocks VIP", duration: 148.74, is_vip: true}
+      - {title: "MetaFractal VIP", duration: 170.71, is_vip: true}
+      - {title: "Hieroglyph VIP", duration: 169.64, is_vip: true}
+      - {title: "Spacetime VIP", duration: 168.00, is_vip: true, notes: "feat. NEVVE"}
+      - {title: "Flute Dub VIP", duration: 154.29, is_vip: true}
+      - {title: "GRiZTRONICS II (Another Level) VIP", duration: 145.66, is_vip: true, is_collab: true, collab_artist: "GRiZ"}
+      - {title: "Take Flight Tech House VIP", duration: 210.00, is_vip: true, notes: "Genre-flip VIP — tech house"}
+      - {title: "Into Pieces VIP", duration: 217.41, is_vip: true, notes: "feat. Grabbitz"}
+      - {title: "Bunker Buster VIP", duration: 291.31, is_vip: true, notes: "Second longest track in corpus — 4:51"}
+
+  - title: Tesseract
+    year: 2023
+    platform_url: https://music.apple.com/ca/album/tesseract/1727874942
+    tracks:
+      - {title: "Cottage Gore", duration: 164.07}
+      - {title: "Only Star You See", duration: 189.94, is_collab: true, collab_artist: "Caitlyn Scarlett", notes: "feat. Caitlyn Scarlett"}
+      - {title: "Amnesia", duration: 155.59}
+      - {title: "Afternoon Coffee (Slide)", duration: 185.14, is_collab: true, collab_artist: "Ronzo", notes: "feat. Ronzo — Coffee series track"}
+      - {title: "Parabola Paradox (Slap It)", duration: 240.00, is_collab: true, collab_artist: "Kwengface", notes: "feat. Kwengface"}
+      - {title: "Alien Communication", duration: 303.43, notes: "LONGEST non-VIP track — 5:03"}
+      - {title: "Asteroid", duration: 243.20}
+      - {title: "Interface Wheel", duration: 197.14}
+      - {title: "Dreams (Plasma Reflex)", duration: 240.00, is_collab: true, collab_artist: "Crooked Bangs", notes: "feat. Crooked Bangs"}
+      - {title: "Reality Distortion", duration: 216.00}
+      - {title: "Insidious", duration: 241.63}
+      - {title: "Quantum Queso", duration: 176.57}
+      - {title: "Mind Pluck", duration: 270.86}
+      - {title: "Black Ice", duration: 260.00}
+      - {title: "Omnidirectional", duration: 222.61}
+      - {title: "Buried Alive", duration: 211.03, is_collab: true, collab_artist: "Jem Cooke", notes: "feat. Jem Cooke"}
+
+  - title: "Fibonacci Pt 1: Oblivion"
+    year: 2025
+    platform_url: https://music.apple.com/ca/album/fibonacci/1850610250
+    tracks:
+      - {title: "Oblivion", duration: 185.38}
+      - {title: "Mothclaws", duration: 210.21}
+      - {title: "Brass Danger", duration: 202.29}
+      - {title: "Stratosphere", duration: 174.22}
+      - {title: "Lock In", duration: 215.17}
+      - {title: "Brain Squeak", duration: 172.21}
+      - {title: "Fibonacci (Part 1)", duration: 164.80, notes: "Title track — Fibonacci number sequence reference"}
+      - {title: "Final Breath", duration: 229.03}
+
+  - title: "Fibonacci Pt 2: Infinity"
+    year: 2025
+    platform_url: https://music.apple.com/ca/album/fibonacci-pt-2-infinity/1850609271
+    tracks:
+      - {title: "Infinity", duration: 196.70}
+      - {title: "Anxious", duration: 200.63}
+      - {title: "Fuck Up", duration: 156.00}
+      - {title: "Nothing Between", duration: 246.36}
+      - {title: "Antidote (Midnight Coffee)", duration: 200.80, notes: "Coffee series track"}
+      - {title: "By A Thread", duration: 185.60}
+      - {title: "Contour", duration: 168.33}
+      - {title: "Gangstas", duration: 190.55}
+      - {title: "Friends", duration: 196.36}
+      - {title: "Got Away", duration: 214.29}

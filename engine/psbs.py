@@ -21,9 +21,7 @@ import numpy as np
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
-
-PHI = 1.6180339887498948482
-FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
+from engine.config_loader import PHI, FIBONACCI, load_config
 
 
 # --- Layer Definitions ----------------------------------------------------
@@ -278,6 +276,61 @@ def render_psbs_cycle(preset: PSBSPreset, n_samples: int = 2048) -> np.ndarray:
     return output
 
 
+# --- YAML-driven preset loader --------------------------------------------
+
+def load_psbs_presets_from_config() -> list[PSBSPreset]:
+    """
+    Load PSBS presets from rco_psbs_vip_delta_v1.1.yaml.
+    Falls back to hardcoded presets if YAML not available.
+    """
+    try:
+        cfg = load_config("rco_psbs_vip_delta_v1.1")
+    except FileNotFoundError:
+        return []
+
+    presets_data = cfg.get("psbs_presets", {})
+    if not isinstance(presets_data, dict):
+        return []
+
+    presets = []
+    for name, pdata in presets_data.items():
+        if not isinstance(pdata, dict):
+            continue
+        root_hz = float(pdata.get("root_hz", 55.0))
+        tuning = float(pdata.get("tuning_a4", 432.0))
+        xo_mode = str(pdata.get("crossover_mode", "phi"))
+        layers_raw = pdata.get("layers", {})
+        layers = []
+        if isinstance(layers_raw, dict):
+            for lname, ldata in layers_raw.items():
+                if not isinstance(ldata, dict):
+                    continue
+                freq_range = ldata.get("freq_range", [20, 200])
+                if isinstance(freq_range, list) and len(freq_range) >= 2:
+                    fl, fh = float(freq_range[0]), float(freq_range[1])
+                else:
+                    fl, fh = 20.0, 200.0
+                layers.append(BassLayer(
+                    name=lname,
+                    freq_low=fl,
+                    freq_high=fh,
+                    waveform=str(ldata.get("waveform", "sine")),
+                    gain_db=float(ldata.get("gain_db", 0.0)),
+                    phase_offset_deg=float(ldata.get("phase_deg", 0.0)),
+                    distortion=float(ldata.get("distortion", 0.0)),
+                    stereo_width=float(ldata.get("stereo_width", 0.0)),
+                    note=str(ldata.get("note", "")),
+                ))
+        presets.append(PSBSPreset(
+            name=f"PSBS_{name}",
+            root_hz=root_hz,
+            tuning_a4=tuning,
+            layers=layers,
+            crossover_mode=xo_mode,
+        ))
+    return presets
+
+
 # --- Export ----------------------------------------------------------------
 
 def export_preset(preset: PSBSPreset, out_dir: str = "output/analysis"):
@@ -298,12 +351,17 @@ def export_preset(preset: PSBSPreset, out_dir: str = "output/analysis"):
 
 # --- Main -----------------------------------------------------------------
 
-def main():
-    presets = [
-        default_psbs(),
-        weapon_psbs(),
-        wook_psbs(),
-    ]
+def main() -> None:
+    # Try YAML-driven presets first, fall back to hardcoded
+    yaml_presets = load_psbs_presets_from_config()
+    if yaml_presets:
+        presets = yaml_presets
+    else:
+        presets = [
+            default_psbs(),
+            weapon_psbs(),
+            wook_psbs(),
+        ]
 
     for preset in presets:
         export_preset(preset)

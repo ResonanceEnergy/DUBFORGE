@@ -27,10 +27,7 @@ from typing import Optional
 
 # --- Constants -----------------------------------------------------------
 
-PHI = 1.6180339887498948482
-FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
-A4_432 = 432.0
-A4_440 = 440.0
+from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440, get_config_value
 
 # Chromatic note names
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -164,16 +161,8 @@ def midi_to_note(midi: int) -> tuple[str, int]:
     return NOTE_NAMES[note_idx], octave
 
 
-def midi_to_freq(midi: int, a4: float = A4_440) -> float:
-    """Convert MIDI note to frequency. Supports 432 Hz tuning."""
-    return a4 * (2 ** ((midi - 69) / 12))
-
-
-def freq_to_nearest_midi(freq: float, a4: float = A4_440) -> int:
-    """Find nearest MIDI note for a given frequency."""
-    if freq <= 0:
-        return 0
-    return round(69 + 12 * math.log2(freq / a4))
+# Canonical versions — import from phi_core (single source of truth)
+from engine.phi_core import midi_to_freq, freq_to_midi as freq_to_nearest_midi
 
 
 def get_scale_notes(root_name: str, scale_type: str = "minor") -> list[int]:
@@ -782,9 +771,21 @@ def export_progression(prog: ChordProgression, out_dir: Path) -> Path:
 
 # --- Main -----------------------------------------------------------------
 
-def main():
+def main() -> None:
     """Generate all chord progression presets."""
     out_dir = Path(__file__).parent.parent / "output" / "analysis"
+
+    # Load blueprint defaults from YAML if available
+    default_bpm = 150
+    default_tuning = 440.0
+    try:
+        weapon_cfg = get_config_value(
+            "fibonacci_blueprint_pack_v1", "FIBONACCI_WEAPON", default={})
+        if isinstance(weapon_cfg, dict):
+            default_bpm = int(weapon_cfg.get("bpm", default_bpm))
+            default_tuning = float(weapon_cfg.get("tuning_a4", default_tuning))
+    except FileNotFoundError:
+        pass
 
     print(f"  Generating {len(ALL_PRESETS)} chord progression presets...")
     print()

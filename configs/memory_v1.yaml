@@ -1,0 +1,112 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# DUBFORGE Memory System Configuration v1.0
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Long-term persistence settings for the DUBFORGE Memory Engine.
+# All timing and thresholds follow phi/Fibonacci doctrine.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+meta:
+  module: memory
+  version: "1.0"
+  doctrine: "Planck x phi Fractal Basscraft"
+  description: >
+    Persistent memory configuration governing session logging,
+    asset cataloging, parameter evolution tracking, insight storage,
+    growth milestones, and phi-weighted recall.
+
+# ─── Storage ──────────────────────────────────────────────────────────────
+storage:
+  root_dir: "output/memory"
+  sessions_dir: "output/memory/sessions"
+  snapshots_dir: "output/memory/snapshots"
+  index_file: "output/memory/index.json"
+  asset_registry: "output/memory/asset_registry.json"
+  evolution_file: "output/memory/evolution.json"
+  insights_file: "output/memory/insights.json"
+  growth_file: "output/memory/growth.json"
+
+# ─── Session Settings ────────────────────────────────────────────────────
+sessions:
+  auto_start: true            # Automatically begin session on run_all.py
+  auto_register_assets: true  # Scan output/ and register new files
+  fibonacci_snapshots: true   # Full state snapshot at Fibonacci session numbers
+  max_session_files: 233      # Fibonacci — oldest pruned beyond this
+
+# ─── Recall Settings ─────────────────────────────────────────────────────
+recall:
+  recency_half_life_s: 86400           # 1 day — phi decay half-life
+  recency_weight: true                  # Apply phi-weighted recency scoring
+  default_limit: 13                     # Fibonacci — default recall results
+  min_relevance_threshold: 0.01        # Floor for recall results
+
+# ─── Phi Scoring ─────────────────────────────────────────────────────────
+phi_scoring:
+  phi: 1.6180339887498948482
+  recency_formula: "1 / (1 + (age / half_life) ^ PHI)"
+  relevance_formula: "recency^(1/φ) × quality^φ × (1 + log_φ(frequency+1))"
+  decay_note: >
+    Golden-ratio decay replaces exponential decay for all
+    temporal scoring. This ensures a natural, fractal forgetting
+    curve aligned with DUBFORGE doctrine.
+
+# ─── Asset Types ─────────────────────────────────────────────────────────
+asset_types:
+  - wavetable        # .wav files in output/wavetables/
+  - analysis         # .json reports in output/analysis/
+  - preset           # Serum 2 patches in output/serum2/
+  - arrangement      # Ableton templates in output/ableton/
+  - methodology      # Dojo outputs in output/dojo/
+  - config           # YAML configs
+
+# ─── Growth / Belt Tracking ──────────────────────────────────────────────
+growth:
+  initial_belt: "White Belt"
+  fibonacci_session_milestones: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
+  asset_count_milestones: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
+  belt_progression:
+    - rank: "White Belt"
+      sessions_required: 1
+      assets_required: 1
+    - rank: "Yellow Belt"
+      sessions_required: 3
+      assets_required: 8
+    - rank: "Green Belt"
+      sessions_required: 8
+      assets_required: 21
+    - rank: "Blue Belt"
+      sessions_required: 13
+      assets_required: 55
+    - rank: "Purple Belt"
+      sessions_required: 21
+      assets_required: 89
+    - rank: "Brown Belt"
+      sessions_required: 55
+      assets_required: 144
+    - rank: "Black Belt"
+      sessions_required: 89
+      assets_required: 233
+
+# ─── Parameter Evolution Tracking ────────────────────────────────────────
+evolution:
+  track_modules:
+    - phi_core
+    - rco
+    - psbs
+    - serum2
+    - trance_arp
+    - growl_resampler
+    - chord_progression
+    - ableton_live
+    - dojo
+  volatility_alert_threshold: 0.618  # Alert if param delta > φ^(-1)
+
+# ─── Insight Categories ─────────────────────────────────────────────────
+insight_categories:
+  - rating           # 0–1 quality score
+  - note             # Free-form text observation
+  - favorite         # Flagged as keeper
+  - lesson           # Something learned
+  - goal             # Future target
+  - experiment       # Recorded experiment result

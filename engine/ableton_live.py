@@ -123,10 +123,7 @@ from enum import IntEnum
 
 # --- DUBFORGE Constants ---------------------------------------------------
 
-PHI = 1.6180339887498948482
-FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
-A4_432 = 432.0
-A4_440 = 440.0
+from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440, load_config
 
 # Ableton color palette (subset — RGB as 0x00RRGGBB)
 ABLETON_COLORS = {
@@ -450,14 +447,8 @@ class ArrangementTemplate:
 
 # --- Utility Functions ----------------------------------------------------
 
-def midi_to_freq(note: int, a4: float = A4_432) -> float:
-    """Convert MIDI note number to frequency."""
-    return a4 * (2.0 ** ((note - 69) / 12.0))
-
-
-def freq_to_midi(freq: float, a4: float = A4_432) -> int:
-    """Convert frequency to nearest MIDI note number."""
-    return round(69 + 12.0 * math.log2(freq / a4))
+# Canonical midi_to_freq / freq_to_midi — imported from phi_core
+from engine.phi_core import midi_to_freq, freq_to_midi
 
 
 def phi_velocity_curve(n_notes: int, base: float = 80.0, peak: float = 120.0) -> list:
@@ -580,7 +571,7 @@ def generate_arp_clip(
     Generate a Fibonacci arpeggiator MIDI clip using phi-timed gates.
     Maps Fibonacci sequence indices onto scale degrees.
     """
-    from engine.phi_core import FIBONACCI as FIB
+    FIB = FIBONACCI
 
     SCALES_MAP = {
         "major": [0, 2, 4, 5, 7, 9, 11],
@@ -691,14 +682,16 @@ def psbs_device_chain() -> list:
     Macro 3: SUB WEIGHT → Chain volume balance
     Macro 4: GRIT → Saturator drive
     """
-    # Phi-ratio crossover frequencies
-    crossovers = {
-        "SUB":   {"low": 20, "high": 89},
-        "LOW":   {"low": 89, "high": 144},
-        "MID":   {"low": 144, "high": 233},
-        "HIGH":  {"low": 233, "high": 377},
-        "CLICK": {"low": 377, "high": 610},
-    }
+    # Import crossovers from PSBS module — single source of truth
+    from engine.psbs import phi_crossovers as _psbs_crossovers
+    xo = _psbs_crossovers(55.0, 5)  # [55, 89, 144, 233, 377, 610]
+    band_names = ["SUB", "LOW", "MID", "HIGH", "CLICK"]
+    crossovers = {}
+    for i, name in enumerate(band_names):
+        crossovers[name] = {
+            "low": 20 if i == 0 else round(xo[i]),
+            "high": round(xo[i + 1]),
+        }
 
     chains = []
     for band_name, freqs in crossovers.items():
@@ -1472,7 +1465,7 @@ def export_template(template, output_dir: Path, prefix: str = ""):
 
 # --- Main -----------------------------------------------------------------
 
-def main():
+def main() -> None:
     """Generate all Ableton Live templates and export them."""
     out_dir = Path(__file__).parent.parent / "output" / "ableton"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1480,6 +1473,17 @@ def main():
     print("  DUBFORGE Ableton Live Engine")
     print("  Doctrine: Planck x phi Fractal Basscraft v1.0")
     print()
+
+    # --- Load arrangement blueprints from config ---
+    blueprint_arrangements = {}
+    try:
+        bp_cfg = load_config("fibonacci_blueprint_pack_v1")
+        for bp_name in ("FIBONACCI_WEAPON", "FIBONACCI_EMOTIVE", "FIBONACCI_HYBRID"):
+            bp = bp_cfg.get(bp_name, {})
+            if isinstance(bp, dict) and "arrangement" in bp:
+                blueprint_arrangements[bp_name] = bp
+    except FileNotFoundError:
+        pass
 
     # --- Session Templates ---
     print("  Session View Templates:")

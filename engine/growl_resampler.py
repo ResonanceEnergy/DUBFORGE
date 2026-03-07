@@ -16,10 +16,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-# Import wavetable writer from phi_core
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from engine.phi_core import write_wav, WAVETABLE_SIZE, PHI, FIBONACCI
+# Import shared constants and wavetable writer
+from engine.config_loader import PHI, FIBONACCI, get_config_value
+from engine.phi_core import write_wav, WAVETABLE_SIZE
 
 
 # --- Processing Steps -----------------------------------------------------
@@ -245,22 +244,40 @@ def generate_fm_source(size: int = WAVETABLE_SIZE,
 
 # --- Main -----------------------------------------------------------------
 
-def main():
+def main() -> None:
     out_dir = Path('output/wavetables')
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load pipeline config from YAML (fallback to defaults)
+    n_frames = 256
+    fm_ratio = PHI
+    try:
+        cfg = get_config_value(
+            "serum2_module_pack_v1", "MIDBASS_GROWL_RESAMPLER_ENGINE", default={})
+        if isinstance(cfg, dict):
+            pipeline = cfg.get("pipeline", [])
+            for step in (pipeline if isinstance(pipeline, list) else []):
+                if isinstance(step, dict) and step.get("step") == "resample_to_wavetable":
+                    n_frames = int(step.get("frames", 256))
+        fm_cfg = get_config_value(
+            "serum2_module_pack_v1", "FM_BASS_ENGINE", "serum_osc_b", default={})
+        if isinstance(fm_cfg, dict):
+            fm_ratio = float(fm_cfg.get("pitch_fine", PHI))
+    except FileNotFoundError:
+        pass
 
     # Generate from saw source
     print("Generating growl wavetable from saw source...")
     saw_source = generate_saw_source()
-    saw_frames = growl_resample_pipeline(saw_source, n_output_frames=256)
+    saw_frames = growl_resample_pipeline(saw_source, n_output_frames=n_frames)
     saw_path = str(out_dir / 'DUBFORGE_GROWL_SAW.wav')
     write_wav(saw_path, saw_frames)
     print(f"  -> {saw_path}")
 
     # Generate from FM source
     print("Generating growl wavetable from FM source...")
-    fm_source = generate_fm_source()
-    fm_frames = growl_resample_pipeline(fm_source, n_output_frames=256)
+    fm_source = generate_fm_source(fm_ratio=fm_ratio)
+    fm_frames = growl_resample_pipeline(fm_source, n_output_frames=n_frames)
     fm_path = str(out_dir / 'DUBFORGE_GROWL_FM.wav')
     write_wav(fm_path, fm_frames)
     print(f"  -> {fm_path}")

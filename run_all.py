@@ -2,95 +2,259 @@
 DUBFORGE — Run All Engines
 
 Master script to generate all wavetables, analysis, and configs.
+Integrated with DUBFORGE Memory System for long-term persistence.
+
+Usage:
+    python3 run_all.py              # Run all modules
+    python3 run_all.py --module rco # Run a single module
+    python3 run_all.py --list       # List available modules
+    python3 run_all.py --no-memory  # Skip memory tracking
+    python3 run_all.py --quiet      # Suppress per-module output
 """
 
+import argparse
 from pathlib import Path
 import sys
+import time
 
 # Ensure engine is importable
 sys.path.insert(0, str(Path(__file__).parent))
 
+from engine.memory import get_memory
+
+
+def _run_module(mem, step_label: str, module_name: str, import_and_run, failures: list):
+    """Run an engine module with memory tracking. Appends to failures on error."""
+    print(f"{step_label}")
+    print("-" * 40)
+    t0 = time.time()
+    try:
+        result = import_and_run()
+        elapsed_ms = (time.time() - t0) * 1000
+        mem.log_event(
+            module=module_name,
+            action="build",
+            params={"step": step_label},
+            result_summary=f"{module_name} build completed",
+            duration_ms=elapsed_ms,
+        )
+        return True
+    except Exception as e:
+        elapsed_ms = (time.time() - t0) * 1000
+        mem.log_event(
+            module=module_name,
+            action="build_error",
+            params={"step": step_label, "error": str(e)},
+            result_summary=f"ERROR: {e}",
+            duration_ms=elapsed_ms,
+        )
+        failures.append((module_name, str(e)))
+        print(f"  ⚠ {module_name} error: {e}")
+        return False
+    finally:
+        print()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MODULE REGISTRY — maps name → (import_path, label)
+# ═══════════════════════════════════════════════════════════════════════════
+
+MODULE_REGISTRY: list[tuple[str, str]] = [
+    ("phi_core",          "PHI CORE Wavetable Generator"),
+    ("rco",               "Rollercoaster Optimizer (RCO)"),
+    ("psbs",              "Phase-Separated Bass System (PSBS)"),
+    ("sb_analyzer",       "Subtronics Analyzer"),
+    ("trance_arp",        "Trance Arp Engine"),
+    ("chord_progression", "Chord Progression Engine"),
+    ("ableton_live",      "Ableton Live Engine"),
+    ("serum2",            "Serum 2 Engine"),
+    ("dojo",              "Producer Dojo Engine"),
+    ("growl_resampler",   "Mid-Bass Growl Resampler"),
+]
+
+MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]
+
+
+def _import_and_run_module(name: str):
+    """Dynamically import and run a module's main()."""
+    import importlib
+    mod = importlib.import_module(f"engine.{name}")
+    mod.main()
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="dubforge",
+        description="DUBFORGE — Planck x phi Fractal Basscraft Engine",
+    )
+    parser.add_argument(
+        "--module", "-m",
+        choices=MODULE_NAMES,
+        help="Run a single engine module instead of all",
+    )
+    parser.add_argument(
+        "--list", "-l",
+        action="store_true",
+        dest="list_modules",
+        help="List available modules and exit",
+    )
+    parser.add_argument(
+        "--no-memory",
+        action="store_true",
+        help="Skip memory tracking",
+    )
+    parser.add_argument(
+        "--quiet", "-q",
+        action="store_true",
+        help="Suppress build banner (modules still print their own output)",
+    )
+    return parser.parse_args()
+
 
 def main():
-    print("=" * 60)
-    print("  DUBFORGE — Full Engine Build")
-    print("  Doctrine: Planck x phi Fractal Basscraft v1.0")
-    print("=" * 60)
-    print()
+    args = _parse_args()
 
-    # 1. PHI CORE wavetables
-    print("[1/5] PHI CORE Wavetable Generator")
-    print("-" * 40)
-    from engine.phi_core import main as phi_main
-    phi_main()
-    print()
+    # --- --list mode ---
+    if args.list_modules:
+        print("Available DUBFORGE modules:")
+        for name, label in MODULE_REGISTRY:
+            print(f"  {name:<22s} {label}")
+        sys.exit(0)
 
-    # 2. Rollercoaster Optimizer
-    print("[2/5] Rollercoaster Optimizer (RCO)")
-    print("-" * 40)
-    from engine.rco import main as rco_main
-    rco_main()
-    print()
+    # --- Banner ---
+    if not args.quiet:
+        use_memory = not args.no_memory
+        print("=" * 60)
+        print("  DUBFORGE — Full Engine Build")
+        print("  Doctrine: Planck x phi Fractal Basscraft v1.0")
+        print(f"  Memory:   {'ACTIVE' if use_memory else 'DISABLED'}")
+        print("=" * 60)
+        print()
 
-    # 3. Phase-Separated Bass System
-    print("[3/5] Phase-Separated Bass System (PSBS)")
-    print("-" * 40)
-    from engine.psbs import main as psbs_main
-    psbs_main()
-    print()
+    # --- Determine which modules to run ---
+    if args.module:
+        modules_to_run = [(n, l) for n, l in MODULE_REGISTRY if n == args.module]
+    else:
+        modules_to_run = list(MODULE_REGISTRY)
 
-    # 4. Subtronics Analyzer
-    print("[4/5] Subtronics Analyzer")
-    print("-" * 40)
-    from engine.sb_analyzer import main as sb_main
-    sb_main()
-    print()
+    total = len(modules_to_run)
 
-    # 5. Trance Arp Engine
-    print("[5/7] Trance Arp Engine")
-    print("-" * 40)
-    from engine.trance_arp import main as arp_main
-    arp_main()
-    print()
+    # --- Memory init ---
+    mem = None
+    if not args.no_memory:
+        mem = get_memory()
+        note = f"{'Single module: ' + args.module if args.module else 'Full engine build'} via run_all.py"
+        mem.begin_session(notes=note)
 
-    # 6. Chord Progression Engine
-    print("[6/7] Chord Progression Engine")
-    print("-" * 40)
-    from engine.chord_progression import main as chord_main
-    chord_main()
-    print()
+        # Show top recalled assets from previous sessions
+        if not args.quiet:
+            try:
+                top = mem.recall(limit=5)
+                if top:
+                    print("[MEMORY] Top recalled assets:")
+                    for asset in top:
+                        name = asset.get("filename", asset.get("asset_type", "?"))
+                        score = asset.get("recall_score", 0)
+                        print(f"  • {name}  (score {score:.3f})")
+                    print()
+            except Exception:
+                pass  # recall is informational, never block the build
+            print()
 
-    # 7. Ableton Live Engine
-    print("[7/8] Ableton Live Engine")
-    print("-" * 40)
-    from engine.ableton_live import main as ableton_main
-    ableton_main()
-    print()
+    failures: list[tuple[str, str]] = []
 
-    # 8. Serum 2 Engine
-    print("[8/8] Serum 2 Engine")
-    print("-" * 40)
-    from engine.serum2 import main as serum2_main
-    serum2_main()
-    print()
+    # --- Run modules ---
+    for idx, (mod_name, label) in enumerate(modules_to_run, 1):
+        step_label = f"[{idx}/{total}] {label}"
+        runner = lambda _n=mod_name: _import_and_run_module(_n)
+        if mem:
+            _run_module(mem, step_label, mod_name, runner, failures)
+        else:
+            # No memory — run directly with basic error handling
+            print(f"{step_label}")
+            print("-" * 40)
+            try:
+                runner()
+            except Exception as e:
+                failures.append((mod_name, str(e)))
+                print(f"  ⚠ {mod_name} error: {e}")
+            print()
 
-    # 9. Growl Resampler (optional — takes longer)
-    print("[BONUS] Mid-Bass Growl Resampler")
-    print("-" * 40)
-    from engine.growl_resampler import main as growl_main
-    growl_main()
-    print()
+    # --- Auto-register generated output assets ---
+    if mem:
+        print("[MEMORY] Scanning output assets...")
+        print("-" * 40)
+        output_root = Path("output")
+        asset_type_map = {
+            "wavetables": "wavetable",
+            "analysis": "analysis",
+            "serum2": "preset",
+            "ableton": "arrangement",
+            "dojo": "methodology",
+            "memory": None,
+        }
+        registered = 0
+        for subdir, asset_type in asset_type_map.items():
+            if asset_type is None:
+                continue
+            scan_dir = output_root / subdir
+            if scan_dir.exists():
+                for f in scan_dir.iterdir():
+                    if f.is_file() and not f.name.startswith("."):
+                        mem.register_asset(
+                            asset_type=asset_type,
+                            filename=str(f),
+                            module=subdir,
+                            params={"auto_registered": True},
+                            tags=[subdir, asset_type],
+                        )
+                        registered += 1
+        print(f"  Registered {registered} output assets")
+        print()
 
-    print("=" * 60)
-    print("  BUILD COMPLETE")
-    print("=" * 60)
-    print()
-    print("Outputs:")
-    print("  output/wavetables/   — Serum-ready .wav files")
-    print("  output/analysis/     — JSON data + PNG charts")
-    print("  output/serum2/       — Serum 2 architecture + patches")
-    print("  configs/             — YAML module packs + blueprints")
-    print()
+        # Evolution summary + end session
+        if not args.quiet:
+            try:
+                evo = mem.get_evolution_summary()
+                if evo:
+                    print("[MEMORY] Evolution summary:")
+                    for key, val in evo.items():
+                        print(f"  {key}: {val}")
+                    print()
+            except Exception:
+                pass  # informational only
+        mem.end_session(notes="Build complete")
+        print()
+
+        # Print memory status
+        mem.print_status()
+
+    # --- Build result ---
+    if failures:
+        print("=" * 60)
+        print(f"  BUILD FINISHED WITH {len(failures)} ERROR(S)")
+        print("=" * 60)
+        for mod, err in failures:
+            print(f"  ✗ {mod}: {err}")
+        print()
+    else:
+        print("=" * 60)
+        print("  BUILD COMPLETE — ALL ENGINES" + (" + MEMORY" if mem else ""))
+        print("=" * 60)
+
+    if not args.quiet:
+        print()
+        print("Outputs:")
+        print("  output/wavetables/   — Serum-ready .wav files")
+        print("  output/analysis/     — JSON data + PNG charts")
+        print("  output/serum2/       — Serum 2 architecture + patches")
+        print("  output/ableton/      — Ableton Live templates")
+        print("  output/dojo/         — Producer Dojo methodology")
+        print("  output/memory/       — Long-term memory persistence")
+        print("  configs/             — YAML module packs + blueprints")
+        print()
+
+    sys.exit(len(failures))
 
 
 if __name__ == '__main__':

@@ -31,26 +31,27 @@
 
 ## Module Architecture
 
-| Module                 | Code              | Purpose                                         |
-|------------------------|-------------------|-------------------------------------------------|
-| PHI CORE               | `phi_core`        | Wavetable generator — phi-spaced partials        |
-| Rollercoaster Optimizer| `rco`             | Arrangement energy curve engine                  |
-| Phase-Separated Bass   | `psbs`            | Multi-layer bass with phase-aligned separation   |
-| VIP Delta Loop         | `vip_delta`       | Version comparison and evolution tracker          |
-| Trance Arp Engine      | `trance_arp`      | Fibonacci-timed arpeggiator                      |
-| Mid-Bass Growl Resampler| `growl_resamp`   | Resample + mangle mid-bass growls                |
-| Subtronics Analyzer    | `sb_analyzer`     | Timestamp/metadata analysis of reference tracks  |
-| Fibonacci Blueprint    | `fib_blueprint`   | Drop structure templates keyed to Fibonacci      |
-| Chord Progression      | `chord_progression` | Music theory + phi voicing + 11 EDM presets    |
-| Ableton Live Engine    | `ableton_live`    | Full LOM integration, session/arrangement gen    |
-| Serum 2 Engine         | `serum2`          | Full synth architecture, patches, mod matrix     |
+| Module                  | Code                | Purpose                                          |
+|-------------------------|---------------------|-------------------------------------------------|
+| PHI CORE                | `phi_core`          | Wavetable generator — phi-spaced partials        |
+| Config Loader           | `config_loader`     | Centralized YAML config reader + PHI constants   |
+| Rollercoaster Optimizer | `rco`               | Arrangement energy curve engine                  |
+| Phase-Separated Bass    | `psbs`              | Multi-layer bass with phase-aligned separation   |
+| Subtronics Analyzer     | `sb_analyzer`       | Corpus analysis + VIP delta evolution tracker     |
+| Trance Arp Engine       | `trance_arp`        | Fibonacci-timed arpeggiator                      |
+| Mid-Bass Growl Resampler| `growl_resampler`   | Resample + mangle mid-bass growls                |
+| Chord Progression       | `chord_progression` | Music theory + phi voicing + 11 EDM presets      |
+| Ableton Live Engine     | `ableton_live`      | Full LOM integration, session/arrangement gen    |
+| Serum 2 Engine          | `serum2`            | Full synth architecture, patches, mod matrix     |
+| Producer Dojo Engine    | `dojo`              | ill.Gates methodology, belt system, 128 Rack     |
+| Memory Engine           | `memory`            | Long-term persistence, recall, growth tracking   |
 
 ---
 
 ## Chord Progression Rules
 
 1. Roman numeral resolution uses **pop/EDM convention** (resolves from key's own scale).
-2. 17 chord qualities supported (major through phi_triad).
+2. 22 chord qualities supported (major through phi_triad).
 3. 5 scale types: major, minor, harmonic_minor, phrygian_dominant, dorian.
 4. Phi-ratio voicing spread applied to chord inversions.
 5. Fibonacci harmonic rhythm for non-uniform chord durations.
@@ -103,6 +104,34 @@
 
 ---
 
+## Producer Dojo / ill.Gates Rules
+
+1. **Belt system** mirrors Producer Dojo martial-arts ranking (White → Black Belt).
+2. Belt progression thresholds use **Fibonacci session/asset counts** linked to Memory Engine growth tracking.
+3. **The Approach** workflow: Collect → Sketch → Finish — phi-timed phase durations.
+4. **128 Rack** technique: 128 samples per Sampler, organized into phi-ratio zone categories.
+5. **Mudpies**: chaotic sound collage → extract gems — fractal discovery process.
+6. **Infinite Drum Rack**: organized macro sample library with Fibonacci category counts.
+7. Clip launching defaults to 1-bar quantization (matches Ableton Integration Rule 11).
+8. DUBFORGE modules mapped to belt levels — progressive complexity mirrors Dojo pedagogy.
+
+---
+
+## Memory System Rules
+
+1. **Persistent session logging** — every engine run is a tracked session with events, outputs, and timing.
+2. **Fibonacci-interval snapshots** — full state snapshots at Fibonacci-numbered sessions (1, 2, 3, 5, 8, 13, 21…).
+3. **Phi-weighted recall** — query past outputs with golden-ratio recency decay: `score = 1 / (1 + (age/half_life)^φ)`.
+4. **Relevance scoring** — `recency^(1/φ) × quality^φ × (1 + log_φ(frequency+1))` ranks results.
+5. **Asset lineage** — every generated file tracked with generation counter and parent lineage (VIP delta support).
+6. **Parameter evolution** — all config changes recorded as time-series with delta magnitude.
+7. **Growth milestones** — Fibonacci session counts and asset counts trigger milestone markers.
+8. **Belt progression** tied to session count and asset output (Fibonacci thresholds).
+9. **Insight storage** — user ratings, notes, favorites, lessons, and goals all persisted.
+10. **Golden ratio forgetting curve** — phi decay replaces exponential decay for all temporal scoring.
+
+---
+
 ## Frequency Ladder (Planck x phi^n reference)
 
 ```
@@ -137,11 +166,14 @@ n=47  ~580.68 Hz         upper-mid
 - All Python engine modules live in `engine/`
 - Wavetable output goes to `output/wavetables/`
 - Analysis output goes to `output/analysis/`
-- Serum presets go to `output/serum_presets/`
+- Serum 2 output goes to `output/serum2/`
+- Ableton Live output goes to `output/ableton/`
+- Producer Dojo output goes to `output/dojo/`
+- Memory persistence goes to `output/memory/`
 
 ---
 
-**Version:** 1.2
+**Version:** 1.3
 **Author:** DUBFORGE
 **Date:** 2026-03-06
-**Modules:** 11 (8 engines + chord progression + Ableton Live + Serum 2)
+**Modules:** 12 (phi_core, config_loader, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory)

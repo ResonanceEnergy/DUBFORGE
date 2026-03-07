@@ -18,9 +18,7 @@ import math
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
-
-PHI = 1.6180339887498948482
-FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
+from engine.config_loader import PHI, FIBONACCI, load_config
 
 
 # --- Data Models ----------------------------------------------------------
@@ -215,6 +213,49 @@ def subtronics_hybrid_preset(bpm: float = 150.0) -> RCOProfile:
     )
 
 
+# --- YAML-driven profile loader -------------------------------------------
+
+def load_rco_profiles_from_config() -> list[RCOProfile]:
+    """
+    Load RCO profiles from rco_psbs_vip_delta_v1.1.yaml.
+    Falls back to hardcoded presets if YAML not available.
+    """
+    try:
+        cfg = load_config("rco_psbs_vip_delta_v1.1")
+    except FileNotFoundError:
+        return []
+
+    profiles_data = cfg.get("rco_profiles", {})
+    if not isinstance(profiles_data, dict):
+        return []
+
+    profiles = []
+    for name, pdata in profiles_data.items():
+        if not isinstance(pdata, dict):
+            continue
+        bpm = float(pdata.get("bpm", 150))
+        sections_raw = pdata.get("sections", [])
+        sections = []
+        for s in sections_raw:
+            if not isinstance(s, dict):
+                continue
+            energy = s.get("energy", [0.0, 0.0])
+            if isinstance(energy, list) and len(energy) >= 2:
+                e_start, e_end = float(energy[0]), float(energy[1])
+            else:
+                e_start, e_end = 0.0, 0.0
+            sections.append(Section(
+                name=s.get("name", "section"),
+                bars=int(s.get("bars", 8)),
+                energy_start=e_start,
+                energy_end=e_end,
+                curve=str(s.get("curve", "phi")),
+                bpm=bpm,
+            ))
+        profiles.append(RCOProfile(name=name, bpm=bpm, sections=sections))
+    return profiles
+
+
 # --- Plotting (optional) -------------------------------------------------
 
 def plot_curve(curve_data: dict, out_path: Optional[str] = None):
@@ -269,15 +310,20 @@ def plot_curve(curve_data: dict, out_path: Optional[str] = None):
 
 import os
 
-def main():
+def main() -> None:
     out_dir = Path('output/analysis')
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    presets = [
-        subtronics_weapon_preset(),
-        subtronics_emotive_preset(),
-        subtronics_hybrid_preset(),
-    ]
+    # Try YAML-driven profiles first, fall back to hardcoded presets
+    yaml_profiles = load_rco_profiles_from_config()
+    if yaml_profiles:
+        presets = yaml_profiles
+    else:
+        presets = [
+            subtronics_weapon_preset(),
+            subtronics_emotive_preset(),
+            subtronics_hybrid_preset(),
+        ]
 
     for profile in presets:
         curve = generate_energy_curve(profile)
