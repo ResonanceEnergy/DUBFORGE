@@ -25,13 +25,15 @@ DUBFORGE/
 │   ├── ableton_live.py                  # Ableton Live integration
 │   ├── serum2.py                        # Serum 2 synthesizer engine
 │   ├── dojo.py                          # Producer Dojo / ill.Gates engine
-│   └── memory.py                        # Long-term memory persistence
+│   ├── memory.py                        # Long-term memory persistence
+│   └── log.py                           # Centralized logging
 │
 ├── configs/                             # YAML configurations
 │   ├── serum2_module_pack_v1.yaml       # Serum 2 module specs
 │   ├── rco_psbs_vip_delta_v1.1.yaml     # RCO + PSBS + VIP delta configs
 │   ├── fibonacci_blueprint_pack_v1.yaml # Drop structure blueprints
-│   └── memory_v1.yaml                   # Memory system configuration
+│   ├── memory_v1.yaml                   # Memory system configuration
+│   └── sb_corpus_v1.yaml               # Subtronics discography corpus
 │
 ├── tools/                               # Utility tools
 │   └── chat_export/                     # Chat transcript exporter
@@ -102,6 +104,17 @@ python3 -m engine.config_loader     # List all configs
 | **RCO/PSBS/VIP Delta v1.1** | Arrangement profiles (WEAPON/EMOTIVE/PACK_WEAPON), bass layer presets, version tracking. |
 | **Fibonacci Blueprint Pack** | Three drop structure templates: WEAPON, EMOTIVE, HYBRID — all Fibonacci-timed. |
 | **Memory v1** | Memory system config — storage paths, recall settings, phi scoring, growth belt thresholds. |
+| **SB Corpus v1** | Subtronics discography metadata — 5 albums, 74 tracks with duration/collab/VIP data. |
+
+## CLI Options
+
+```bash
+python3 run_all.py                   # Run all modules
+python3 run_all.py --module phi_core  # Run a single module
+python3 run_all.py --list             # List available modules
+python3 run_all.py --no-memory        # Skip memory persistence
+python3 run_all.py --quiet            # Suppress per-module banners
+```
 
 ## Doctrine
 
@@ -117,5 +130,5 @@ See [DOCTRINE.md](DOCTRINE.md) for the full DUBFORGE Doctrine v1.0 — the found
 
 ---
 
-**Version:** 1.3  
+**Version:** 1.4  
 **Author:** DUBFORGE

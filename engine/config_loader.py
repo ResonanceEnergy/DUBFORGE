@@ -243,8 +243,8 @@ def list_configs() -> list[str]:
 _REQUIRED_KEYS: dict[str, set[str]] = {
     "fibonacci_blueprint_pack_v1": {"version", "pack"},
     "rco_psbs_vip_delta_v1.1":    {"rco_profiles", "psbs_presets"},
-    "serum2_module_pack_v1":      {"SERUM2_ARCHITECTURE"},
-    "memory_v1":                  {"memory"},
+    "serum2_module_pack_v1":      {"version", "pack"},
+    "memory_v1":                  {"meta", "storage"},
     "sb_corpus_v1":               {"albums"},
 }
 

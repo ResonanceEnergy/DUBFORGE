@@ -312,7 +312,9 @@ def _load_corpus_from_yaml() -> list[Album] | None:
                 platform_url=ad.get("platform_url", ""),
             ))
         return albums if albums else None
-    except Exception:
+    except Exception as exc:
+        import sys
+        print(f"[sb_analyzer] YAML corpus load failed: {exc}", file=sys.stderr)
         return None
 
 

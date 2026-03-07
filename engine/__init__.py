@@ -44,6 +44,7 @@ from engine.sb_analyzer import (
     Album,
     SignatureVector,
     build_corpus,
+    load_corpus,
     analyze_corpus,
     build_signature_vector,
     vip_delta_analysis,
@@ -71,7 +72,6 @@ from engine.growl_resampler import (
 from engine.chord_progression import (
     build_progression,
     build_chord,
-    midi_to_freq,
     ALL_PRESETS as CHORD_PRESETS,
 )
 from engine.ableton_live import (
@@ -136,6 +136,8 @@ __all__ = [
     "phi_harmonic_series",
     "fibonacci_harmonic_series",
     "write_wav",
+    "midi_to_freq",
+    "freq_to_midi",
     # rco
     "Section",
     "RCOProfile",
@@ -163,6 +165,7 @@ __all__ = [
     "Album",
     "SignatureVector",
     "build_corpus",
+    "load_corpus",
     "analyze_corpus",
     "build_signature_vector",
     "vip_delta_analysis",

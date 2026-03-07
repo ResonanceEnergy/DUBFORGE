@@ -21,6 +21,9 @@ import time
 sys.path.insert(0, str(Path(__file__).parent))
 
 from engine.memory import get_memory
+from engine.log import get_logger
+
+_log = get_logger("dubforge.build")
 
 
 def _run_module(mem, step_label: str, module_name: str, import_and_run, failures: list):
@@ -157,8 +160,8 @@ def main():
                         score = asset.get("recall_score", 0)
                         print(f"  • {name}  (score {score:.3f})")
                     print()
-            except Exception:
-                pass  # recall is informational, never block the build
+            except Exception as exc:
+                _log.warning("Recall failed: %s", exc)
             print()
 
     failures: list[tuple[str, str]] = []
@@ -221,8 +224,8 @@ def main():
                     for key, val in evo.items():
                         print(f"  {key}: {val}")
                     print()
-            except Exception:
-                pass  # informational only
+            except Exception as exc:
+                _log.warning("Evolution summary failed: %s", exc)
         mem.end_session(notes="Build complete")
         print()
 

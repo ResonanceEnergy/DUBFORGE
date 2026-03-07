@@ -517,6 +517,10 @@ class MemoryEngine:
         snap.compute_delta()
 
         evolution["changes"].append(asdict(snap))
+        # Cap changes list at Fibonacci-1597 to prevent unbounded growth
+        _MAX_EVOLUTION_ENTRIES = 1597
+        if len(evolution["changes"]) > _MAX_EVOLUTION_ENTRIES:
+            evolution["changes"] = evolution["changes"][-_MAX_EVOLUTION_ENTRIES:]
 
         # Update param history (latest value per key)
         full_key = f"{module}.{param_key}"
@@ -527,6 +531,10 @@ class MemoryEngine:
             "timestamp": snap.timestamp,
             "delta": snap.delta_magnitude,
         })
+        # Cap per-key history at Fibonacci-233
+        _MAX_PARAM_HISTORY = 233
+        if len(evolution["param_history"][full_key]) > _MAX_PARAM_HISTORY:
+            evolution["param_history"][full_key] = evolution["param_history"][full_key][-_MAX_PARAM_HISTORY:]
 
         _save_json(self.evolution_file, evolution)
         return snap

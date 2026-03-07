@@ -15,6 +15,7 @@ Outputs:
 
 import json
 import math
+import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
@@ -308,7 +309,6 @@ def plot_curve(curve_data: dict, out_path: Optional[str] = None):
 
 # --- Main -----------------------------------------------------------------
 
-import os
 
 def main() -> None:
     out_dir = Path('output/analysis')

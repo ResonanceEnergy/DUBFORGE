@@ -1109,7 +1109,7 @@ def build_dubstep_patches() -> list[dict]:
     reese_patch.osc_a.wt_position = 0.5
     reese_patch.osc_a.unison_voices = 8  # Fibonacci 8
     phi_detune = phi_unison_detune(8)
-    reese_patch.osc_a.unison_detune = 0.40
+    reese_patch.osc_a.unison_detune = phi_detune
     reese_patch.osc_a.unison_blend = 0.618
     reese_patch.osc_a.unison_mode = UnisonMode.SUPER.value
     reese_patch.osc_a.warp_1 = WarpMode.BEND_PLUS_MINUS.value
@@ -1495,13 +1495,15 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
 
     # Load module-pack config for reference tuning
-    _tuning_ref = float(get_config_value(
+    tuning_ref = float(get_config_value(
         "serum2_module_pack_v1", "tuning_ref", default=432))
 
     # 1) Full architecture reference
     arch_path = out / "serum2_architecture.json"
+    arch_out = dict(SERUM2_ARCHITECTURE)
+    arch_out["tuning_ref_hz"] = tuning_ref
     with open(arch_path, "w") as f:
-        json.dump(SERUM2_ARCHITECTURE, f, indent=2)
+        json.dump(arch_out, f, indent=2)
     print(f"  ✓ Architecture reference → {arch_path}")
 
     # 2) Wavetable map

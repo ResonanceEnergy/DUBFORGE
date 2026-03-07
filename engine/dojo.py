@@ -1373,7 +1373,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
 
     # Load belt thresholds from memory config if available
-    _belt_cfg = get_config_value(
+    belt_cfg = get_config_value(
         "memory_v1", "growth", "belt_progression", default=None)
 
     # 1) Full methodology reference
@@ -1383,6 +1383,7 @@ def main() -> None:
         "platform": DOJO_PLATFORM,
         "techniques_count": len(DOJO_TECHNIQUES),
         "techniques": DOJO_TECHNIQUES,
+        "belt_config_source": "memory_v1.yaml" if belt_cfg else "hardcoded",
     }
     with open(method_path, "w") as f:
         json.dump(methodology, f, indent=2)

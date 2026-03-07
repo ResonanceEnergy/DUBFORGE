@@ -12,6 +12,7 @@ Outputs:
 import numpy as np
 import struct
 import os
+import math as _math
 from pathlib import Path
 
 from engine.config_loader import PHI, FIBONACCI, A4_432, A4_440
@@ -69,7 +70,6 @@ def morph_frames(frame_a: np.ndarray, frame_b: np.ndarray,
             blended /= peak
         frames.append(blended)
     return frames
-import math as _math
 
 
 # --- Frequency / MIDI utilities -------------------------------------------
