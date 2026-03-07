@@ -70,9 +70,26 @@ from engine.drum_generator import (
     generate_fibonacci_fill,
     generate_halftime_groove,
     generate_intro_minimal,
+    generate_riddim_minimal,
+    generate_snare_roll_32nd,
+    generate_tom_cascade_fill,
+    generate_triplet_hat_groove,
     pattern_to_midi_track,
     write_drum_midi,
     write_full_drum_arrangement,
+)
+from engine.fx_generator import (
+    ALL_FX_BANKS,
+    FXBank,
+    FXPreset,
+    impact_presets,
+    riser_presets,
+    subdrop_presets,
+    synthesize_fx,
+    synthesize_impact,
+    synthesize_riser,
+    synthesize_subdrop,
+    write_fx_manifest,
 )
 from engine.fxp_writer import (
     ALL_PRESETS as FXP_PRESETS,
@@ -223,6 +240,21 @@ from engine.trance_arp import (
 from engine.trance_arp import (
     export_pattern as export_arp_pattern,
 )
+from engine.vocal_chop import (
+    ALL_CHOP_BANKS,
+    VocalChop,
+    VocalChopBank,
+    drop_shout_chops,
+    drop_vowel_chops,
+    stutter_chops,
+    synthesize_chop,
+    write_chop_manifest,
+    write_chop_midi_pattern,
+    write_chop_wav,
+)
+from engine.vocal_chop import (
+    formant_filter as vocal_formant_filter,
+)
 
 __all__ = [
     # phi_core
@@ -353,9 +385,37 @@ __all__ = [
     "generate_fibonacci_fill",
     "generate_breakbeat",
     "generate_intro_minimal",
+    "generate_snare_roll_32nd",
+    "generate_tom_cascade_fill",
+    "generate_riddim_minimal",
+    "generate_triplet_hat_groove",
     "pattern_to_midi_track",
     "write_drum_midi",
     "write_full_drum_arrangement",
+    # vocal_chop
+    "VocalChop",
+    "VocalChopBank",
+    "ALL_CHOP_BANKS",
+    "drop_vowel_chops",
+    "stutter_chops",
+    "drop_shout_chops",
+    "synthesize_chop",
+    "write_chop_wav",
+    "write_chop_midi_pattern",
+    "write_chop_manifest",
+    "vocal_formant_filter",
+    # fx_generator
+    "FXPreset",
+    "FXBank",
+    "ALL_FX_BANKS",
+    "riser_presets",
+    "impact_presets",
+    "subdrop_presets",
+    "synthesize_fx",
+    "synthesize_riser",
+    "synthesize_impact",
+    "synthesize_subdrop",
+    "write_fx_manifest",
     # sample_slicer
     "SlicePoint",
     "SliceSegment",

@@ -292,17 +292,145 @@ def generate_intro_minimal(bars: int = 8) -> DrumPattern:
     return pattern
 
 
+def generate_snare_roll_32nd(bars: int = 2) -> DrumPattern:
+    """
+    32nd-note snare roll with phi-velocity crescendo.
+    Classic Subtronics pre-drop build finisher.
+    Velocity ramps from ghost (40) → full blast (127) using phi curve.
+    """
+    pattern = DrumPattern(name="SNARE_ROLL_32ND", bars=bars)
+    total_beats = pattern.total_beats
+    total_32nds = int(total_beats * 8)  # 8 thirty-second notes per beat
+
+    for i in range(total_32nds):
+        beat = i / 8.0
+        progress = i / max(total_32nds - 1, 1)
+        # Phi-curved velocity crescendo: slow start → explosive finish
+        phi_progress = progress ** (1.0 / PHI)  # ~progress^0.618
+        vel = int(40 + phi_progress * 87)
+        vel = max(1, min(127, vel))
+        pattern.hits.append(DrumHit(GM_DRUMS["snare"], beat, velocity=vel, duration=0.05))
+        # Layer clap on every 4th hit for thickness
+        if i % 4 == 0:
+            clap_vel = int(vel * 0.7)
+            pattern.hits.append(DrumHit(GM_DRUMS["clap"], beat, velocity=max(1, clap_vel), duration=0.05))
+
+    # Crash on final beat
+    pattern.hits.append(DrumHit(GM_DRUMS["crash"], total_beats - 0.125, velocity=127))
+
+    return pattern
+
+
+def generate_tom_cascade_fill(bars: int = 1) -> DrumPattern:
+    """
+    Descending tom cascade fill: high → mid → low.
+    16th note toms with velocity ramp, ending in a kick+crash.
+    Classic Subtronics transition fill.
+    """
+    pattern = DrumPattern(name="TOM_CASCADE_FILL", bars=bars)
+    total_beats = pattern.total_beats
+    total_16ths = int(total_beats * 4)
+    toms = [GM_DRUMS["tom_high"], GM_DRUMS["tom_mid"], GM_DRUMS["tom_low"]]
+
+    for i in range(total_16ths):
+        beat = i * 0.25
+        progress = i / max(total_16ths - 1, 1)
+        # Descend through toms: high (first third) → mid (second) → low (last)
+        tom_idx = min(int(progress * 3), 2)
+        tom = toms[tom_idx]
+        # Velocity builds then drops for each tom group
+        group_progress = (progress * 3) % 1.0
+        vel = int(90 + group_progress * 37)
+        vel = max(60, min(127, vel))
+        pattern.hits.append(DrumHit(tom, beat, velocity=vel, duration=0.1))
+        # Add a kick on beat boundaries
+        if i % 4 == 0:
+            pattern.hits.append(DrumHit(GM_DRUMS["kick"], beat, velocity=110))
+
+    # Big crash + kick on final 16th
+    pattern.hits.append(DrumHit(GM_DRUMS["crash"], total_beats - 0.125, velocity=127))
+    pattern.hits.append(DrumHit(GM_DRUMS["kick"], total_beats - 0.125, velocity=127))
+
+    return pattern
+
+
+def generate_riddim_minimal(bars: int = 4) -> DrumPattern:
+    """
+    Minimal riddim pattern: hypnotic, sparse, half-time.
+    Kick on 1, snare on 3, barely-there hats, cowbell ghost.
+    The space IS the groove — classic Subtronics riddim sections.
+    """
+    pattern = DrumPattern(name="RIDDIM_MINIMAL", bars=bars)
+
+    for bar in range(bars):
+        base = bar * 4
+        # Kick: beat 1 only — heavy
+        pattern.hits.append(DrumHit(GM_DRUMS["kick"], base + 0.0, velocity=127))
+        # Snare: beat 3 — crisp
+        pattern.hits.append(DrumHit(GM_DRUMS["snare"], base + 2.0, velocity=115))
+        # Minimal hats: only on 1 and 3 (quarter notes, very low vel)
+        pattern.hits.append(DrumHit(GM_DRUMS["hat_closed"], base + 0.0, velocity=40, duration=0.04))
+        pattern.hits.append(DrumHit(GM_DRUMS["hat_closed"], base + 2.0, velocity=35, duration=0.04))
+        # Ghost cowbell on "and of 4" — every other bar
+        if bar % 2 == 1:
+            pattern.hits.append(DrumHit(GM_DRUMS["perc_1"], base + 3.5, velocity=30, duration=0.05))
+        # Open hat on "and of 2" — subtle
+        pattern.hits.append(DrumHit(GM_DRUMS["hat_open"], base + 1.5, velocity=45, duration=0.15))
+
+    return pattern
+
+
+def generate_triplet_hat_groove(bars: int = 4) -> DrumPattern:
+    """
+    Triplet hi-hat groove with half-time kick/snare.
+    Creates that bouncy, rolling feel Subtronics uses in
+    breakdowns and build transitions. 12 hats per bar (triplet 8ths).
+    """
+    pattern = DrumPattern(name="TRIPLET_HAT_GROOVE", bars=bars)
+
+    for bar in range(bars):
+        base = bar * 4
+        # Half-time foundation: kick on 1, snare on 3
+        pattern.hits.append(DrumHit(GM_DRUMS["kick"], base + 0.0, velocity=120))
+        pattern.hits.append(DrumHit(GM_DRUMS["snare"], base + 2.0, velocity=110))
+        pattern.hits.append(DrumHit(GM_DRUMS["clap"], base + 2.0, velocity=80))
+        # Triplet 8th note hats: 12 per bar (3 per beat)
+        for i in range(12):
+            beat = base + i * (4.0 / 12.0)  # evenly spaced triplets
+            # Accent pattern: first of each triplet group louder
+            if i % 3 == 0:
+                vel = 90
+                drum = GM_DRUMS["hat_closed"]
+            elif i % 3 == 1:
+                vel = 55
+                drum = GM_DRUMS["hat_closed"]
+            else:
+                vel = 40
+                drum = GM_DRUMS["hat_closed"]
+            # Open hat on every 4th hit for movement
+            if i % 6 == 3:
+                drum = GM_DRUMS["hat_open"]
+                vel = 65
+            pattern.hits.append(DrumHit(drum, beat, velocity=vel, duration=0.04))
+
+    return pattern
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ALL PATTERNS
 # ═══════════════════════════════════════════════════════════════════════════
 
 ALL_DRUM_PATTERNS = {
-    "dubstep_drop":     generate_dubstep_drop,
-    "dubstep_build":    generate_dubstep_build,
-    "halftime_groove":  generate_halftime_groove,
-    "fibonacci_fill":   generate_fibonacci_fill,
-    "breakbeat":        generate_breakbeat,
-    "intro_minimal":    generate_intro_minimal,
+    "dubstep_drop":       generate_dubstep_drop,
+    "dubstep_build":      generate_dubstep_build,
+    "halftime_groove":    generate_halftime_groove,
+    "fibonacci_fill":     generate_fibonacci_fill,
+    "breakbeat":          generate_breakbeat,
+    "intro_minimal":      generate_intro_minimal,
+    "snare_roll_32nd":    generate_snare_roll_32nd,
+    "tom_cascade_fill":   generate_tom_cascade_fill,
+    "riddim_minimal":     generate_riddim_minimal,
+    "triplet_hat_groove": generate_triplet_hat_groove,
 }
 
 
@@ -374,14 +502,18 @@ def write_full_drum_arrangement(patterns: dict[str, DrumPattern],
     tempo_track.append(mido.MetaMessage("end_of_track", time=0))
     mid.tracks.append(tempo_track)
 
-    # Arrangement order
+    # Arrangement order — full dubstep track structure
     arrangement = [
-        ("intro_minimal", 0),
-        ("dubstep_build", 8 * 4),     # starts at bar 9
-        ("dubstep_drop",  16 * 4),    # starts at bar 17
-        ("fibonacci_fill", 20 * 4),   # starts at bar 21
-        ("halftime_groove", 21 * 4),  # starts at bar 22
-        ("breakbeat",      25 * 4),   # starts at bar 26
+        ("intro_minimal",      0),           # bars 1-8:   sparse intro
+        ("dubstep_build",      8 * 4),       # bars 9-16:  build w/ snare accel
+        ("snare_roll_32nd",    14 * 4),       # bars 15-16: 32nd roll finisher
+        ("dubstep_drop",       16 * 4),       # bars 17-20: main drop
+        ("fibonacci_fill",     20 * 4),       # bar 21:     Fibonacci fill
+        ("halftime_groove",    21 * 4),       # bars 22-25: half-time groove
+        ("riddim_minimal",     25 * 4),       # bars 26-29: riddim breakdown
+        ("triplet_hat_groove", 29 * 4),       # bars 30-33: triplet groove
+        ("tom_cascade_fill",   33 * 4),       # bar 34:     tom cascade → drop 2
+        ("breakbeat",          34 * 4),       # bars 35-38: breakbeat section
     ]
 
     for pattern_name, start_beat in arrangement:

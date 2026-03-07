@@ -1,6 +1,6 @@
 [project]
 name = "dubforge"
-version = "1.6.0"
+version = "1.7.0"
 description = "Planck x phi Fractal Basscraft Engine"
 readme = "README.md"
 requires-python = ">=3.10"

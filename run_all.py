@@ -79,6 +79,8 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("mastering_chain",   "Mastering Chain"),
     ("als_generator",     "Ableton Live Set (.als) Generator"),
     ("fxp_writer",        "FXP / VST2 Preset Writer"),
+    ("vocal_chop",        "Vocal Chop Synthesizer"),
+    ("fx_generator",      "FX Generator (Risers/Impacts/Sub Drops)"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]
@@ -257,8 +259,9 @@ def main():
     if not args.quiet:
         print()
         print("Outputs:")
-        print("  output/wavetables/   — Serum-ready .wav files")
-        print("  output/analysis/     — JSON data + PNG charts")
+        print("  output/wavetables/   — Serum-ready .wav + vocal chops + FX")
+        print("  output/analysis/     — JSON data + PNG charts + manifests")
+        print("  output/midi/         — MIDI drum patterns + vocal triggers")
         print("  output/serum2/       — Serum 2 architecture + patches")
         print("  output/ableton/      — Ableton Live templates")
         print("  output/dojo/         — Producer Dojo methodology")

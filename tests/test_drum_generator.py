@@ -20,6 +20,10 @@ from engine.drum_generator import (
     generate_fibonacci_fill,
     generate_halftime_groove,
     generate_intro_minimal,
+    generate_riddim_minimal,
+    generate_snare_roll_32nd,
+    generate_tom_cascade_fill,
+    generate_triplet_hat_groove,
     pattern_to_midi_track,
     phi_velocity,
     write_drum_manifest,
@@ -146,8 +150,53 @@ class TestPatternGenerators(unittest.TestCase):
         self.assertEqual(p.name, "INTRO_MINIMAL")
         self.assertGreater(len(p.hits), 0)
 
+    def test_snare_roll_32nd(self):
+        p = generate_snare_roll_32nd(2)
+        self.assertEqual(p.name, "SNARE_ROLL_32ND")
+        self.assertEqual(p.bars, 2)
+        self.assertGreater(len(p.hits), 0)
+        # Should have many hits (32nd notes = 8 per beat * 8 beats = 64+ snares)
+        snare_hits = [h for h in p.hits if h.note == GM_DRUMS["snare"]]
+        self.assertGreaterEqual(len(snare_hits), 60)
+
+    def test_snare_roll_velocity_crescendo(self):
+        p = generate_snare_roll_32nd(2)
+        snare_hits = [h for h in p.hits if h.note == GM_DRUMS["snare"]]
+        # First hit should be quieter than last
+        self.assertLess(snare_hits[0].velocity, snare_hits[-1].velocity)
+
+    def test_tom_cascade_fill(self):
+        p = generate_tom_cascade_fill(1)
+        self.assertEqual(p.name, "TOM_CASCADE_FILL")
+        self.assertEqual(p.bars, 1)
+        self.assertGreater(len(p.hits), 0)
+        # Should contain all three tom notes
+        notes_used = {h.note for h in p.hits}
+        self.assertIn(GM_DRUMS["tom_high"], notes_used)
+        self.assertIn(GM_DRUMS["tom_mid"], notes_used)
+        self.assertIn(GM_DRUMS["tom_low"], notes_used)
+
+    def test_riddim_minimal(self):
+        p = generate_riddim_minimal(4)
+        self.assertEqual(p.name, "RIDDIM_MINIMAL")
+        self.assertEqual(p.bars, 4)
+        self.assertGreater(len(p.hits), 0)
+        # Should be sparse — fewer hits than dubstep_drop
+        drop = generate_dubstep_drop(4)
+        self.assertLess(len(p.hits), len(drop.hits))
+
+    def test_triplet_hat_groove(self):
+        p = generate_triplet_hat_groove(4)
+        self.assertEqual(p.name, "TRIPLET_HAT_GROOVE")
+        self.assertEqual(p.bars, 4)
+        self.assertGreater(len(p.hits), 0)
+        # Should have triplet hats (12 per bar × 4 bars = 48 + kick/snare)
+        hat_hits = [h for h in p.hits
+                    if h.note in (GM_DRUMS["hat_closed"], GM_DRUMS["hat_open"])]
+        self.assertGreaterEqual(len(hat_hits), 40)
+
     def test_all_patterns_registered(self):
-        self.assertEqual(len(ALL_DRUM_PATTERNS), 6)
+        self.assertEqual(len(ALL_DRUM_PATTERNS), 10)
         for name, fn in ALL_DRUM_PATTERNS.items():
             p = fn()
             self.assertIsInstance(p, DrumPattern)
