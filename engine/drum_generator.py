@@ -417,20 +417,345 @@ def generate_triplet_hat_groove(bars: int = 4) -> DrumPattern:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# BEAT-MAP FACTORY
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _build_from_beat_map(
+    name: str, bars: int,
+    beat_map: dict[str, list[tuple[float, int, float]]],
+) -> DrumPattern:
+    """Build repeating DrumPattern from per-bar beat positions.
+
+    beat_map: {drum_key: [(beat_in_bar, velocity, duration), ...]}
+    """
+    pattern = DrumPattern(name=name, bars=bars)
+    for bar in range(bars):
+        base = bar * 4
+        for drum_key, positions in beat_map.items():
+            note = GM_DRUMS[drum_key]
+            for pos, vel, dur in positions:
+                pattern.hits.append(
+                    DrumHit(note, base + pos, velocity=vel, duration=dur)
+                )
+    return pattern
+
+
+# --- Beat-map patterns (static per-bar repeat) ---------------------------
+
+def generate_double_time_hat(bars: int = 4) -> DrumPattern:
+    """Double-time 16th hi-hats over half-time kick/snare."""
+    return _build_from_beat_map("DOUBLE_TIME_HAT", bars, {
+        "kick": [(0.0, 120, 0.1), (1.5, 85, 0.1)],
+        "snare": [(2.0, 110, 0.1)],
+        "clap": [(2.0, 85, 0.1)],
+        "hat_closed": [(i * 0.25, 80 if i % 4 == 0 else 50 if i % 2 == 0 else 35, 0.04)
+                       for i in range(16)],
+    })
+
+
+def generate_shuffle_groove(bars: int = 4) -> DrumPattern:
+    """Swung shuffle feel with offset ghost notes."""
+    return _build_from_beat_map("SHUFFLE_GROOVE", bars, {
+        "kick": [(0.0, 120, 0.1), (1.67, 80, 0.1)],
+        "snare": [(2.0, 110, 0.1)],
+        "hat_closed": [(0.0, 75, 0.04), (0.67, 45, 0.04), (1.0, 70, 0.04),
+                       (1.67, 45, 0.04), (2.0, 75, 0.04), (2.67, 45, 0.04),
+                       (3.0, 70, 0.04), (3.67, 45, 0.04)],
+    })
+
+
+def generate_four_on_floor(bars: int = 4) -> DrumPattern:
+    """Straight 4/4 kick with snare on 2+4 — festival energy."""
+    return _build_from_beat_map("FOUR_ON_FLOOR", bars, {
+        "kick": [(0.0, 127, 0.1), (1.0, 120, 0.1), (2.0, 120, 0.1), (3.0, 120, 0.1)],
+        "snare": [(1.0, 105, 0.1), (3.0, 110, 0.1)],
+        "hat_closed": [(i * 0.5, 70 if i % 2 == 0 else 45, 0.04) for i in range(8)],
+        "hat_open": [(0.5, 55, 0.15)],
+    })
+
+
+def generate_syncopated_kick(bars: int = 4) -> DrumPattern:
+    """Off-beat syncopated kick pattern for tension and groove."""
+    return _build_from_beat_map("SYNCOPATED_KICK", bars, {
+        "kick": [(0.0, 120, 0.1), (0.75, 95, 0.1), (1.5, 100, 0.1),
+                 (2.75, 110, 0.1), (3.5, 90, 0.1)],
+        "snare": [(2.0, 110, 0.1)],
+        "clap": [(2.0, 80, 0.1)],
+        "hat_closed": [(i * 0.5, 65, 0.04) for i in range(8)],
+    })
+
+
+def generate_ghost_snare_groove(bars: int = 4) -> DrumPattern:
+    """Ghost-note heavy groove — snare weaves between every hit."""
+    return _build_from_beat_map("GHOST_SNARE_GROOVE", bars, {
+        "kick": [(0.0, 120, 0.1), (1.5, 90, 0.1)],
+        "snare": [(2.0, 115, 0.1)],
+        "snare_rim": [(0.75, 35, 0.05), (1.25, 30, 0.05), (2.5, 40, 0.05),
+                      (3.0, 35, 0.05), (3.5, 30, 0.05), (3.75, 25, 0.05)],
+        "hat_closed": [(i * 0.5, 60, 0.04) for i in range(8)],
+    })
+
+
+def generate_cymbal_accent(bars: int = 4) -> DrumPattern:
+    """Crash and ride accent pattern for transitions."""
+    return _build_from_beat_map("CYMBAL_ACCENT", bars, {
+        "kick": [(0.0, 115, 0.1)],
+        "snare": [(2.0, 105, 0.1)],
+        "crash": [(0.0, 110, 0.3)],
+        "ride": [(i, 70 if i % 2 == 0 else 50, 0.1) for i in range(4)],
+        "ride_bell": [(0.0, 65, 0.1), (2.0, 60, 0.1)],
+    })
+
+
+def generate_open_hat_groove(bars: int = 4) -> DrumPattern:
+    """Open hi-hat groove — airy and spacious."""
+    return _build_from_beat_map("OPEN_HAT_GROOVE", bars, {
+        "kick": [(0.0, 120, 0.1), (1.5, 85, 0.1)],
+        "snare": [(2.0, 110, 0.1)],
+        "hat_closed": [(0.0, 70, 0.04), (1.0, 65, 0.04), (2.0, 70, 0.04), (3.0, 65, 0.04)],
+        "hat_open": [(0.5, 60, 0.2), (1.5, 55, 0.2), (2.5, 60, 0.2), (3.5, 55, 0.2)],
+    })
+
+
+def generate_ride_pattern(bars: int = 4) -> DrumPattern:
+    """Ride cymbal-driven groove for breakdown sections."""
+    return _build_from_beat_map("RIDE_PATTERN", bars, {
+        "kick": [(0.0, 115, 0.1), (2.5, 85, 0.1)],
+        "snare": [(2.0, 100, 0.1)],
+        "ride": [(i * 0.5, 75 if i % 2 == 0 else 50, 0.1) for i in range(8)],
+        "ride_bell": [(0.0, 80, 0.1)],
+        "hat_pedal": [(1.0, 40, 0.05), (3.0, 40, 0.05)],
+    })
+
+
+def generate_half_shuffle(bars: int = 4) -> DrumPattern:
+    """Shuffled half-time — swing feel at 150 BPM."""
+    return _build_from_beat_map("HALF_SHUFFLE", bars, {
+        "kick": [(0.0, 127, 0.1), (1.67, 80, 0.1)],
+        "snare": [(2.0, 115, 0.1)],
+        "clap": [(2.0, 85, 0.1)],
+        "hat_closed": [(0.0, 75, 0.04), (0.67, 40, 0.04), (1.0, 70, 0.04),
+                       (1.67, 40, 0.04), (2.0, 75, 0.04), (2.67, 40, 0.04),
+                       (3.0, 70, 0.04), (3.67, 40, 0.04)],
+        "hat_open": [(1.67, 50, 0.15)],
+    })
+
+
+def generate_perc_layer(bars: int = 4) -> DrumPattern:
+    """Percussion-only layer: shaker, tambourine, cowbell."""
+    return _build_from_beat_map("PERC_LAYER", bars, {
+        "shaker": [(i * 0.25, 35 + (i % 4) * 5, 0.04) for i in range(16)],
+        "perc_2": [(i * 0.5, 45 if i % 2 == 0 else 30, 0.05) for i in range(8)],
+        "perc_1": [(1.5, 40, 0.05), (3.5, 35, 0.05)],
+    })
+
+
+# --- Dynamic patterns (per-bar variation) ---------------------------------
+
+def generate_trap_hat_roll(bars: int = 4) -> DrumPattern:
+    """Trap-style hi-hat rolls that accelerate within each bar."""
+    pattern = DrumPattern(name="TRAP_HAT_ROLL", bars=bars)
+    for bar in range(bars):
+        b = bar * 4
+        pattern.hits.append(DrumHit(GM_DRUMS["kick"], b, 120))
+        pattern.hits.append(DrumHit(GM_DRUMS["snare"], b + 2.0, 110))
+        # First half: 8th hats, second half: 32nd rolls
+        for i in range(4):
+            pattern.hits.append(DrumHit(GM_DRUMS["hat_closed"], b + i * 0.5, 70, 0.04))
+        for i in range(16):
+            beat = b + 2.0 + i * 0.125
+            vel = int(50 + (i / 16) * 70)
+            pattern.hits.append(DrumHit(GM_DRUMS["hat_closed"], beat, min(127, vel), 0.03))
+    return pattern
+
+
+def generate_militaristic_snare(bars: int = 4) -> DrumPattern:
+    """Military marching snare — steady 16th doubles with accents."""
+    pattern = DrumPattern(name="MILITARISTIC_SNARE", bars=bars)
+    for bar in range(bars):
+        b = bar * 4
+        for i in range(16):
+            beat = b + i * 0.25
+            vel = 110 if i % 8 == 0 else 85 if i % 4 == 0 else 60
+            pattern.hits.append(DrumHit(GM_DRUMS["snare"], beat, vel, 0.08))
+        pattern.hits.append(DrumHit(GM_DRUMS["kick"], b, 100))
+        pattern.hits.append(DrumHit(GM_DRUMS["kick"], b + 2.0, 95))
+    return pattern
+
+
+def generate_polyrhythm_3v4(bars: int = 4) -> DrumPattern:
+    """3-over-4 polyrhythm — tom triplets against kick quarters."""
+    pattern = DrumPattern(name="POLYRHYTHM_3V4", bars=bars)
+    for bar in range(bars):
+        b = bar * 4
+        for i in range(4):
+            pattern.hits.append(DrumHit(GM_DRUMS["kick"], b + i, 110, 0.1))
+        toms = [GM_DRUMS["tom_high"], GM_DRUMS["tom_mid"], GM_DRUMS["tom_low"]]
+        for i in range(3):
+            beat = b + i * (4.0 / 3.0)
+            pattern.hits.append(DrumHit(toms[i], beat, 95, 0.15))
+        pattern.hits.append(DrumHit(GM_DRUMS["hat_closed"], b + 0.5, 55, 0.04))
+        pattern.hits.append(DrumHit(GM_DRUMS["hat_closed"], b + 2.5, 55, 0.04))
+    return pattern
+
+
+def generate_dnb_crossover(bars: int = 4) -> DrumPattern:
+    """Drum & bass-style breakbeat at dubstep tempo."""
+    pattern = DrumPattern(name="DNB_CROSSOVER", bars=bars)
+    for bar in range(bars):
+        b = bar * 4
+        for k in [0.0, 1.25, 2.5, 3.0]:
+            pattern.hits.append(DrumHit(GM_DRUMS["kick"], b + k, 115, 0.1))
+        pattern.hits.append(DrumHit(GM_DRUMS["snare"], b + 1.0, 110, 0.1))
+        pattern.hits.append(DrumHit(GM_DRUMS["snare"], b + 3.0, 115, 0.1))
+        for i in range(16):
+            v = phi_velocity(65, i * 0.25)
+            pattern.hits.append(DrumHit(GM_DRUMS["hat_closed"], b + i * 0.25, v, 0.03))
+    return pattern
+
+
+def generate_flam_fill(bars: int = 1) -> DrumPattern:
+    """Flam-based fill — double strikes on toms and snare."""
+    pattern = DrumPattern(name="FLAM_FILL", bars=bars)
+    total_beats = pattern.total_beats
+    drums_seq = [GM_DRUMS["snare"], GM_DRUMS["tom_high"],
+                 GM_DRUMS["tom_mid"], GM_DRUMS["tom_low"]]
+    n_hits = int(total_beats * 4)
+    for i in range(n_hits):
+        beat = i * 0.25
+        drum = drums_seq[i % len(drums_seq)]
+        vel = int(100 + (i / max(n_hits, 1)) * 27)
+        pattern.hits.append(DrumHit(drum, max(0, beat - 0.06), int(vel * 0.5), 0.05))
+        pattern.hits.append(DrumHit(drum, beat, min(127, vel), 0.08))
+    pattern.hits.append(DrumHit(GM_DRUMS["crash"], total_beats - 0.125, 127))
+    return pattern
+
+
+def generate_tribal_toms(bars: int = 4) -> DrumPattern:
+    """Tribal tom groove — world-music-influenced pattern."""
+    pattern = DrumPattern(name="TRIBAL_TOMS", bars=bars)
+    tom_hits = [
+        ("tom_low", 0.0, 110), ("tom_mid", 0.75, 80),
+        ("tom_high", 1.0, 95), ("tom_high", 1.5, 70),
+        ("tom_mid", 2.0, 100), ("tom_low", 2.75, 85),
+        ("tom_high", 3.0, 90), ("tom_mid", 3.5, 75),
+    ]
+    for bar in range(bars):
+        b = bar * 4
+        for drum, pos, vel in tom_hits:
+            pattern.hits.append(DrumHit(GM_DRUMS[drum], b + pos, vel, 0.15))
+        pattern.hits.append(DrumHit(GM_DRUMS["kick"], b, 100))
+        pattern.hits.append(DrumHit(GM_DRUMS["kick"], b + 2.0, 95))
+    return pattern
+
+
+def generate_stutter_kick(bars: int = 2) -> DrumPattern:
+    """Glitchy rapid-fire kick stutters with increasing density."""
+    pattern = DrumPattern(name="STUTTER_KICK", bars=bars)
+    for bar in range(bars):
+        b = bar * 4
+        progress = bar / max(bars - 1, 1)
+        n_kicks = 4 + int(progress * 12)
+        for i in range(n_kicks):
+            beat = b + i * (4.0 / n_kicks)
+            vel = int(80 + (i / n_kicks) * 40)
+            pattern.hits.append(DrumHit(GM_DRUMS["kick"], beat, min(127, vel), 0.05))
+        for i in range(4):
+            pattern.hits.append(DrumHit(GM_DRUMS["hat_closed"], b + i, 55, 0.04))
+    return pattern
+
+
+def generate_outro_decay(bars: int = 8) -> DrumPattern:
+    """Gradually decaying pattern — elements drop out over time."""
+    pattern = DrumPattern(name="OUTRO_DECAY", bars=bars)
+    for bar in range(bars):
+        b = bar * 4
+        decay = 1.0 - bar / max(bars - 1, 1)
+        if decay > 0.25:
+            pattern.hits.append(DrumHit(GM_DRUMS["kick"], b, max(30, int(120 * decay))))
+        if decay > 0.5:
+            pattern.hits.append(DrumHit(GM_DRUMS["snare"], b + 2.0, max(30, int(110 * decay))))
+        for i in range(4):
+            vel = int(60 * decay)
+            if vel > 15:
+                pattern.hits.append(DrumHit(GM_DRUMS["hat_closed"], b + i, vel, 0.04))
+        if 0 < decay < 0.3:
+            pattern.hits.append(DrumHit(GM_DRUMS["ride_bell"], b, int(40 * decay), 0.1))
+    return pattern
+
+
+def generate_micro_fill(bars: int = 1) -> DrumPattern:
+    """Quick 1-bar micro-fill — 16th snare/tom combo."""
+    pattern = DrumPattern(name="MICRO_FILL", bars=bars)
+    drums = [GM_DRUMS["snare"], GM_DRUMS["snare"], GM_DRUMS["tom_high"],
+             GM_DRUMS["tom_mid"], GM_DRUMS["snare"], GM_DRUMS["snare"],
+             GM_DRUMS["tom_mid"], GM_DRUMS["tom_low"]] * 2
+    total_16ths = int(pattern.total_beats * 4)
+    for i in range(total_16ths):
+        beat = i * 0.25
+        drum = drums[i % len(drums)]
+        vel = int(85 + (i / max(total_16ths, 1)) * 42)
+        pattern.hits.append(DrumHit(drum, beat, min(127, vel), 0.06))
+    pattern.hits.append(DrumHit(GM_DRUMS["crash"], pattern.total_beats - 0.125, 127))
+    return pattern
+
+
+def generate_triplet_snare_build(bars: int = 4) -> DrumPattern:
+    """Triplet snare build — 3-feel snare ramp with crescendo."""
+    pattern = DrumPattern(name="TRIPLET_SNARE_BUILD", bars=bars)
+    for bar in range(bars):
+        b = bar * 4
+        progress = bar / max(bars - 1, 1)
+        pattern.hits.append(DrumHit(GM_DRUMS["kick"], b, 110))
+        beats_active = 1 + int(progress * 3)
+        for beat_idx in range(beats_active):
+            for triplet in range(3):
+                pos = b + beat_idx + triplet * (1.0 / 3.0)
+                vel = int(60 + progress * 60 + triplet * 5)
+                pattern.hits.append(DrumHit(GM_DRUMS["snare"], pos, min(127, vel), 0.06))
+    pattern.hits.append(DrumHit(GM_DRUMS["crash"], pattern.total_beats - 0.125, 127))
+    return pattern
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ALL PATTERNS
 # ═══════════════════════════════════════════════════════════════════════════
 
 ALL_DRUM_PATTERNS = {
-    "dubstep_drop":       generate_dubstep_drop,
-    "dubstep_build":      generate_dubstep_build,
-    "halftime_groove":    generate_halftime_groove,
-    "fibonacci_fill":     generate_fibonacci_fill,
-    "breakbeat":          generate_breakbeat,
-    "intro_minimal":      generate_intro_minimal,
-    "snare_roll_32nd":    generate_snare_roll_32nd,
-    "tom_cascade_fill":   generate_tom_cascade_fill,
-    "riddim_minimal":     generate_riddim_minimal,
-    "triplet_hat_groove": generate_triplet_hat_groove,
+    # --- Original (6) ---
+    "dubstep_drop":          generate_dubstep_drop,
+    "dubstep_build":         generate_dubstep_build,
+    "halftime_groove":       generate_halftime_groove,
+    "fibonacci_fill":        generate_fibonacci_fill,
+    "breakbeat":             generate_breakbeat,
+    "intro_minimal":         generate_intro_minimal,
+    # --- v1.7 (4) ---
+    "snare_roll_32nd":       generate_snare_roll_32nd,
+    "tom_cascade_fill":      generate_tom_cascade_fill,
+    "riddim_minimal":        generate_riddim_minimal,
+    "triplet_hat_groove":    generate_triplet_hat_groove,
+    # --- v1.8 Beat-map patterns (10) ---
+    "double_time_hat":       generate_double_time_hat,
+    "shuffle_groove":        generate_shuffle_groove,
+    "four_on_floor":         generate_four_on_floor,
+    "syncopated_kick":       generate_syncopated_kick,
+    "ghost_snare_groove":    generate_ghost_snare_groove,
+    "cymbal_accent":         generate_cymbal_accent,
+    "open_hat_groove":       generate_open_hat_groove,
+    "ride_pattern":          generate_ride_pattern,
+    "half_shuffle":          generate_half_shuffle,
+    "perc_layer":            generate_perc_layer,
+    # --- v1.8 Dynamic patterns (10) ---
+    "trap_hat_roll":         generate_trap_hat_roll,
+    "militaristic_snare":    generate_militaristic_snare,
+    "polyrhythm_3v4":        generate_polyrhythm_3v4,
+    "dnb_crossover":         generate_dnb_crossover,
+    "flam_fill":             generate_flam_fill,
+    "tribal_toms":           generate_tribal_toms,
+    "stutter_kick":          generate_stutter_kick,
+    "outro_decay":           generate_outro_decay,
+    "micro_fill":            generate_micro_fill,
+    "triplet_snare_build":   generate_triplet_snare_build,
 }
 
 

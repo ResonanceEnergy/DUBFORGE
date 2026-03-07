@@ -359,10 +359,97 @@ def drop_shout_chops() -> VocalChopBank:
     )
 
 
+def pitched_alt_chops() -> VocalChopBank:
+    """Alternate-pitched vowel chops at different registers."""
+    return VocalChopBank(
+        name="PITCHED_ALT_CHOPS",
+        chops=[
+            VocalChop("vowel_ah_low_E3", "ah", "E3", 0.35, distortion=0.2),
+            VocalChop("vowel_oh_mid_G3", "oh", "G3", 0.25, distortion=0.15),
+            VocalChop("vowel_eh_high_E4", "eh", "E4", 0.2, distortion=0.3,
+                       formant_shift=3.0),
+            VocalChop("vowel_ee_deep_C3", "ee", "C3", 0.3, distortion=0.1,
+                       formant_shift=-4.0),
+            VocalChop("vowel_oo_bright_A3", "oo", "A3", 0.25, distortion=0.2,
+                       formant_shift=5.0),
+            VocalChop("vowel_ah_scream_E4", "ah", "E4", 0.15,
+                       attack_s=0.001, distortion=0.6, formant_shift=7.0),
+        ],
+    )
+
+
+def extreme_stutter_chops() -> VocalChopBank:
+    """Extreme stutter variants — faster, wilder pitch effects."""
+    return VocalChopBank(
+        name="EXTREME_STUTTER_CHOPS",
+        chops=[
+            VocalChop("stutter_oh_x16", "oh", "E3", 0.5,
+                       stutter_count=16, stutter_pitch_drift=-0.2,
+                       distortion=0.4),
+            VocalChop("stutter_ah_x4_up", "ah", "C3", 0.4,
+                       stutter_count=4, stutter_pitch_drift=3.0,
+                       distortion=0.3),
+            VocalChop("stutter_ee_x8_down", "ee", "C4", 0.5,
+                       stutter_count=8, stutter_pitch_drift=-2.0,
+                       distortion=0.5),
+            VocalChop("stutter_oo_x24_micro", "oo", "A3", 0.6,
+                       stutter_count=24, stutter_pitch_drift=-0.1,
+                       distortion=0.7),
+            VocalChop("stutter_eh_x6_wide", "eh", "G3", 0.45,
+                       stutter_count=6, stutter_pitch_drift=5.0,
+                       distortion=0.2),
+        ],
+    )
+
+
+def formant_shifted_chops() -> VocalChopBank:
+    """Extreme formant-shifted vowels — alien/robot vocal textures."""
+    return VocalChopBank(
+        name="FORMANT_SHIFTED_CHOPS",
+        chops=[
+            VocalChop("formant_up_ah", "ah", "C3", 0.3,
+                       formant_shift=8.0, distortion=0.2),
+            VocalChop("formant_down_oh", "oh", "E3", 0.3,
+                       formant_shift=-8.0, distortion=0.3),
+            VocalChop("formant_up_ee", "ee", "A3", 0.25,
+                       formant_shift=12.0, distortion=0.4),
+            VocalChop("formant_down_eh", "eh", "G3", 0.25,
+                       formant_shift=-10.0, distortion=0.5),
+            VocalChop("formant_extreme_oo", "oo", "C4", 0.2,
+                       formant_shift=15.0, distortion=0.6),
+        ],
+    )
+
+
+def breathy_noise_chops() -> VocalChopBank:
+    """Breathy noise-heavy vocal textures — whisper / air sounds."""
+    return VocalChopBank(
+        name="BREATHY_NOISE_CHOPS",
+        chops=[
+            VocalChop("breathy_ah", "ah", "C3", 0.4,
+                       attack_s=0.02, release_s=0.15,
+                       distortion=0.0, formant_shift=1.0),
+            VocalChop("breathy_oh", "oh", "E3", 0.35,
+                       attack_s=0.03, release_s=0.12,
+                       distortion=0.0, formant_shift=-1.0),
+            VocalChop("whisper_ee", "ee", "A3", 0.3,
+                       attack_s=0.04, release_s=0.1,
+                       distortion=0.1, formant_shift=3.0),
+            VocalChop("whisper_eh", "eh", "G3", 0.25,
+                       attack_s=0.03, release_s=0.08,
+                       distortion=0.05, formant_shift=2.0),
+        ],
+    )
+
+
 ALL_CHOP_BANKS: dict[str, callable] = {
-    "drop_vowel":  drop_vowel_chops,
-    "stutter":     stutter_chops,
-    "drop_shout":  drop_shout_chops,
+    "drop_vowel":      drop_vowel_chops,
+    "stutter":         stutter_chops,
+    "drop_shout":      drop_shout_chops,
+    "pitched_alt":     pitched_alt_chops,
+    "extreme_stutter": extreme_stutter_chops,
+    "formant_shifted": formant_shifted_chops,
+    "breathy_noise":   breathy_noise_chops,
 }
 
 

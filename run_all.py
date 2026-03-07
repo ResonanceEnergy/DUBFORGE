@@ -81,6 +81,8 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("fxp_writer",        "FXP / VST2 Preset Writer"),
     ("vocal_chop",        "Vocal Chop Synthesizer"),
     ("fx_generator",      "FX Generator (Risers/Impacts/Sub Drops)"),
+    ("bass_oneshot",      "Bass One-Shot Generator"),
+    ("transition_fx",     "Transition FX Generator"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]

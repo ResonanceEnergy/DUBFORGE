@@ -297,12 +297,148 @@ def synthesize_subdrop(preset: FXPreset, sample_rate: int = SAMPLE_RATE) -> np.n
     return signal
 
 
+def synthesize_downlifter(preset: FXPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Downlifter — high→low filtered noise sweep (reverse riser)."""
+    n = int(preset.duration_s * sample_rate)
+    rng = np.random.default_rng(42)
+    noise = rng.normal(0, 1, n)
+
+    progress = np.linspace(0, 1, n)
+    phi_curve = (1 - progress) ** PHI
+    freq_sweep = preset.end_freq + (preset.start_freq - preset.end_freq) * phi_curve
+
+    signal = np.zeros(n)
+    y1 = 0.0
+    for i in range(n):
+        alpha = min(0.99, max(0.001, freq_sweep[i] / (sample_rate / 2)))
+        y1 = y1 * (1 - alpha) + noise[i] * alpha
+        signal[i] = y1
+
+    signal *= (1 - progress * 0.8) ** (1 / PHI)
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 5))
+
+    peak = np.max(np.abs(signal))
+    if peak > 0:
+        signal = signal / peak * 0.95
+    return signal
+
+
+def synthesize_siren(preset: FXPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Siren — oscillating pitch tone for tension and movement."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    center = preset.start_freq
+    depth = preset.end_freq
+    lfo_rate = PHI
+    freq_mod = center + depth * np.sin(2 * math.pi * lfo_rate * t)
+
+    phase = np.cumsum(2 * math.pi * freq_mod / sample_rate)
+    signal = np.sin(phase)
+    signal += 0.3 * np.sin(phase * 2)
+    signal += 0.15 * np.sin(phase * 3)
+
+    attack = max(1, int(0.05 * n))
+    release = max(1, int(0.15 * n))
+    env = np.ones(n)
+    env[:attack] = np.linspace(0, 1, attack)
+    env[-release:] = np.linspace(1, 0, release)
+    signal *= env
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+
+    peak = np.max(np.abs(signal))
+    if peak > 0:
+        signal = signal / peak * 0.95
+    return signal
+
+
+def synthesize_drone(preset: FXPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Drone — sustained tension tone with slow movement."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    freq1 = preset.start_freq
+    freq2 = freq1 * (1 + 0.005)
+    signal = 0.5 * np.sin(2 * math.pi * freq1 * t)
+    signal += 0.5 * np.sin(2 * math.pi * freq2 * t)
+
+    if preset.sub_freq > 0:
+        signal += 0.3 * np.sin(2 * math.pi * preset.sub_freq * t)
+
+    am = 0.7 + 0.3 * np.sin(2 * math.pi * (1 / PHI) * t)
+    signal *= am
+
+    attack = max(1, int(0.1 * n))
+    release = max(1, int(0.2 * n))
+    env = np.ones(n)
+    env[:attack] = np.linspace(0, 1, attack)
+    env[-release:] = np.linspace(1, 0, release)
+    signal *= env
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+
+    peak = np.max(np.abs(signal))
+    if peak > 0:
+        signal = signal / peak * 0.95
+    return signal
+
+
+def synthesize_texture(preset: FXPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Texture — metallic resonance via comb-filtered noise."""
+    n = int(preset.duration_s * sample_rate)
+    rng = np.random.default_rng(77)
+    noise = rng.normal(0, 1, n)
+
+    delay = max(1, int(sample_rate / max(preset.start_freq, 20)))
+    signal = np.zeros(n)
+    for i in range(n):
+        fb = signal[i - delay] if i >= delay else 0.0
+        signal[i] = noise[i] + 0.7 * fb
+
+    brightness = preset.transient_brightness
+    alpha = min(0.99, brightness * 0.5 + 0.01)
+    y = 0.0
+    for i in range(n):
+        y = y * (1 - alpha) + signal[i] * alpha
+        signal[i] = y
+
+    env_a = max(1, int(0.005 * n))
+    env_d = max(1, int(0.3 * n))
+    env = np.zeros(n)
+    env[:env_a] = np.linspace(0, 1, env_a)
+    tail_start = env_a + env_d
+    if tail_start < n:
+        env[env_a:tail_start] = np.linspace(1, 0.1, env_d)
+        remaining = n - tail_start
+        env[tail_start:] = 0.1 * np.exp(-np.arange(remaining) / max(1, n * 0.2))
+    else:
+        env[env_a:] = np.linspace(1, 0, n - env_a)
+    signal *= env
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 6))
+
+    peak = np.max(np.abs(signal))
+    if peak > 0:
+        signal = signal / peak * 0.95
+    return signal
+
+
 def synthesize_fx(preset: FXPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct synthesizer based on fx_type."""
     synthesizers = {
         "riser": synthesize_riser,
         "impact": synthesize_impact,
         "subdrop": synthesize_subdrop,
+        "downlifter": synthesize_downlifter,
+        "siren": synthesize_siren,
+        "drone": synthesize_drone,
+        "texture": synthesize_texture,
     }
     fn = synthesizers.get(preset.fx_type)
     if fn is None:
@@ -365,10 +501,111 @@ def subdrop_presets() -> FXBank:
     )
 
 
+def downlifter_presets() -> FXBank:
+    """Downlifter variants — high→low sweeps for section endings."""
+    bar_s = 4 * 60 / DEFAULT_BPM
+    return FXBank(
+        name="DOWNLIFTERS",
+        presets=[
+            FXPreset("downlifter_8bar", "downlifter", duration_s=8 * bar_s,
+                     start_freq=14000, end_freq=150, distortion=0.1, reverb_amount=0.2),
+            FXPreset("downlifter_4bar", "downlifter", duration_s=4 * bar_s,
+                     start_freq=12000, end_freq=200, distortion=0.15, reverb_amount=0.25),
+            FXPreset("downlifter_2bar", "downlifter", duration_s=2 * bar_s,
+                     start_freq=10000, end_freq=300, distortion=0.2, reverb_amount=0.15),
+            FXPreset("downlifter_quick", "downlifter", duration_s=bar_s,
+                     start_freq=8000, end_freq=500, distortion=0.3, reverb_amount=0.1),
+        ],
+    )
+
+
+def siren_presets() -> FXBank:
+    """Siren FX — oscillating pitch tones for tension."""
+    bar_s = 4 * 60 / DEFAULT_BPM
+    return FXBank(
+        name="SIRENS",
+        presets=[
+            FXPreset("siren_rise", "siren", duration_s=4 * bar_s,
+                     start_freq=800, end_freq=600, distortion=0.2, reverb_amount=0.3),
+            FXPreset("siren_fast", "siren", duration_s=2 * bar_s,
+                     start_freq=1200, end_freq=800, distortion=0.3, reverb_amount=0.2),
+            FXPreset("siren_low", "siren", duration_s=4 * bar_s,
+                     start_freq=400, end_freq=300, distortion=0.1, reverb_amount=0.4),
+            FXPreset("siren_aggressive", "siren", duration_s=2 * bar_s,
+                     start_freq=1500, end_freq=1000, distortion=0.5, reverb_amount=0.15),
+        ],
+    )
+
+
+def drone_presets() -> FXBank:
+    """Drone variants — sustained tension tones."""
+    bar_s = 4 * 60 / DEFAULT_BPM
+    return FXBank(
+        name="DRONES",
+        presets=[
+            FXPreset("drone_dark", "drone", duration_s=8 * bar_s,
+                     start_freq=80, sub_freq=40, distortion=0.1, reverb_amount=0.5),
+            FXPreset("drone_mid", "drone", duration_s=8 * bar_s,
+                     start_freq=200, sub_freq=100, distortion=0.2, reverb_amount=0.4),
+            FXPreset("drone_high", "drone", duration_s=4 * bar_s,
+                     start_freq=500, sub_freq=250, distortion=0.15, reverb_amount=0.3),
+            FXPreset("drone_menacing", "drone", duration_s=8 * bar_s,
+                     start_freq=60, sub_freq=30, distortion=0.4, reverb_amount=0.6),
+        ],
+    )
+
+
+def texture_presets() -> FXBank:
+    """Texture variants — metallic hits and noise bursts."""
+    return FXBank(
+        name="TEXTURES",
+        presets=[
+            FXPreset("texture_metallic", "texture", duration_s=0.5,
+                     start_freq=2000, transient_brightness=0.9,
+                     distortion=0.2, reverb_amount=0.4),
+            FXPreset("texture_noise_burst", "texture", duration_s=0.3,
+                     start_freq=5000, transient_brightness=0.7,
+                     distortion=0.1, reverb_amount=0.2),
+            FXPreset("texture_bell", "texture", duration_s=1.0,
+                     start_freq=800, transient_brightness=0.5,
+                     distortion=0.0, reverb_amount=0.6),
+            FXPreset("texture_industrial", "texture", duration_s=0.4,
+                     start_freq=3000, transient_brightness=1.0,
+                     distortion=0.5, reverb_amount=0.15),
+        ],
+    )
+
+
+def big_impact_presets() -> FXBank:
+    """Big impact variants — layered heavyweight hits."""
+    return FXBank(
+        name="BIG_IMPACTS",
+        presets=[
+            FXPreset("impact_mega", "impact", duration_s=3.0,
+                     sub_freq=30, transient_brightness=1.0,
+                     distortion=0.5, reverb_amount=0.7),
+            FXPreset("impact_crisp", "impact", duration_s=1.0,
+                     sub_freq=60, transient_brightness=0.9,
+                     distortion=0.3, reverb_amount=0.3),
+            FXPreset("impact_room", "impact", duration_s=2.5,
+                     sub_freq=45, transient_brightness=0.7,
+                     distortion=0.1, reverb_amount=0.8),
+            FXPreset("impact_808", "impact", duration_s=1.5,
+                     sub_freq=35, transient_brightness=0.5,
+                     distortion=0.4, reverb_amount=0.4),
+        ],
+    )
+
+
 ALL_FX_BANKS: dict[str, callable] = {
-    "risers":    riser_presets,
-    "impacts":   impact_presets,
-    "subdrops":  subdrop_presets,
+    "risers":      riser_presets,
+    "impacts":     impact_presets,
+    "subdrops":    subdrop_presets,
+    "downlifters": downlifter_presets,
+    "sirens":      siren_presets,
+    "drones":      drone_presets,
+    "textures":    texture_presets,
+    "big_impacts": big_impact_presets,
 }
 
 

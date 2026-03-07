@@ -189,7 +189,7 @@ class TestFXBankPresets(unittest.TestCase):
             self.assertEqual(p.fx_type, "subdrop")
 
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_FX_BANKS), 3)
+        self.assertEqual(len(ALL_FX_BANKS), 8)
 
     def test_all_banks_synthesize(self):
         for bank_name, gen_fn in ALL_FX_BANKS.items():
@@ -211,7 +211,7 @@ class TestFXManifest(unittest.TestCase):
             with open(path) as f:
                 data = json.load(f)
             self.assertIn("banks", data)
-            self.assertEqual(len(data["banks"]), 3)
+            self.assertEqual(len(data["banks"]), 8)
 
     def test_manifest_structure(self):
         banks = {"risers": riser_presets()}
