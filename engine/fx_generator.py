@@ -597,6 +597,68 @@ def big_impact_presets() -> FXBank:
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# v1.9 — 10 new FX presets (3 banks)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def long_riser_presets() -> FXBank:
+    """Extended risers — 16/32 bar builds with slow filter sweep."""
+    bar_s = 4 * 60 / DEFAULT_BPM
+    return FXBank(
+        name="LONG_RISERS",
+        presets=[
+            FXPreset("riser_16bar_wide", "riser", duration_s=16 * bar_s,
+                     start_freq=80, end_freq=16000, distortion=0.05,
+                     reverb_amount=0.4),
+            FXPreset("riser_32bar_epic", "riser", duration_s=32 * bar_s,
+                     start_freq=60, end_freq=14000, distortion=0.08,
+                     reverb_amount=0.5),
+            FXPreset("riser_16bar_gritty", "riser", duration_s=16 * bar_s,
+                     start_freq=120, end_freq=12000, distortion=0.4,
+                     reverb_amount=0.25),
+        ],
+    )
+
+
+def cinematic_impact_presets() -> FXBank:
+    """Cinematic impacts — deep, boomy, reverb-heavy hits."""
+    return FXBank(
+        name="CINEMATIC_IMPACTS",
+        presets=[
+            FXPreset("cinematic_boom", "impact", duration_s=4.0,
+                     sub_freq=25, transient_brightness=0.6,
+                     distortion=0.2, reverb_amount=0.9),
+            FXPreset("cinematic_crack", "impact", duration_s=2.0,
+                     sub_freq=35, transient_brightness=1.0,
+                     distortion=0.3, reverb_amount=0.7),
+            FXPreset("cinematic_rumble", "impact", duration_s=5.0,
+                     sub_freq=20, transient_brightness=0.3,
+                     distortion=0.1, reverb_amount=0.95),
+            FXPreset("cinematic_punch", "impact", duration_s=1.5,
+                     sub_freq=50, transient_brightness=0.9,
+                     distortion=0.4, reverb_amount=0.5),
+        ],
+    )
+
+
+def dark_drone_presets() -> FXBank:
+    """Dark drone variants — ominous sustained textures."""
+    return FXBank(
+        name="DARK_DRONES",
+        presets=[
+            FXPreset("drone_abyss", "drone", duration_s=8.0,
+                     start_freq=30, end_freq=60, distortion=0.3,
+                     reverb_amount=0.8),
+            FXPreset("drone_void", "drone", duration_s=10.0,
+                     start_freq=40, end_freq=40, distortion=0.5,
+                     reverb_amount=0.9),
+            FXPreset("drone_pressure", "drone", duration_s=6.0,
+                     start_freq=50, end_freq=80, distortion=0.4,
+                     reverb_amount=0.6),
+        ],
+    )
+
+
 ALL_FX_BANKS: dict[str, callable] = {
     "risers":      riser_presets,
     "impacts":     impact_presets,
@@ -606,6 +668,9 @@ ALL_FX_BANKS: dict[str, callable] = {
     "drones":      drone_presets,
     "textures":    texture_presets,
     "big_impacts": big_impact_presets,
+    "long_risers": long_riser_presets,
+    "cinematic_impacts": cinematic_impact_presets,
+    "dark_drones": dark_drone_presets,
 }
 
 

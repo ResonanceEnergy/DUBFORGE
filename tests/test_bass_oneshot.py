@@ -10,17 +10,25 @@ import numpy as np
 from engine.bass_oneshot import (
     ALL_BASS_BANKS,
     BassPreset,
+    acid_bass_bank,
+    donk_bass_bank,
     fm_bass_bank,
     growl_bass_bank,
+    neuro_bass_bank,
     reese_bank,
     square_bass_bank,
     sub_sine_bank,
+    synthesize_acid_bass,
     synthesize_bass,
+    synthesize_donk_bass,
     synthesize_fm_bass,
     synthesize_growl_bass,
+    synthesize_neuro_bass,
     synthesize_reese,
     synthesize_square_bass,
     synthesize_sub_sine,
+    synthesize_wobble_bass,
+    wobble_bass_bank,
     write_bass_manifest,
 )
 
@@ -71,6 +79,24 @@ class TestSynthesizers(unittest.TestCase):
         p = BassPreset("t", "growl", 65.41, duration_s=0.2, distortion=0.6)
         self._assert_valid(synthesize_growl_bass(p))
 
+    def test_wobble(self):
+        p = BassPreset("t", "wobble", 65.41, duration_s=0.2, fm_ratio=3.0)
+        self._assert_valid(synthesize_wobble_bass(p))
+
+    def test_neuro(self):
+        p = BassPreset("t", "neuro", 65.41, duration_s=0.2,
+                        fm_depth=2.5, distortion=0.5)
+        self._assert_valid(synthesize_neuro_bass(p))
+
+    def test_acid(self):
+        p = BassPreset("t", "acid", 65.41, duration_s=0.2,
+                        filter_cutoff=0.9, distortion=0.3)
+        self._assert_valid(synthesize_acid_bass(p))
+
+    def test_donk(self):
+        p = BassPreset("t", "donk", 65.41, duration_s=0.2, distortion=0.3)
+        self._assert_valid(synthesize_donk_bass(p))
+
     def test_router_unknown(self):
         p = BassPreset("t", "laser", 100.0)
         with self.assertRaises(ValueError):
@@ -111,8 +137,30 @@ class TestBanks(unittest.TestCase):
         for p in bank.presets:
             self.assertGreater(p.distortion, 0)
 
+    def test_wobble_bass_bank(self):
+        bank = wobble_bass_bank()
+        self.assertEqual(bank.name, "WOBBLE_BASS")
+        self.assertEqual(len(bank.presets), 4)
+        for p in bank.presets:
+            self.assertEqual(p.bass_type, "wobble")
+
+    def test_neuro_bass_bank(self):
+        bank = neuro_bass_bank()
+        self.assertEqual(bank.name, "NEURO_BASS")
+        self.assertEqual(len(bank.presets), 4)
+
+    def test_acid_bass_bank(self):
+        bank = acid_bass_bank()
+        self.assertEqual(bank.name, "ACID_BASS")
+        self.assertEqual(len(bank.presets), 4)
+
+    def test_donk_bass_bank(self):
+        bank = donk_bass_bank()
+        self.assertEqual(bank.name, "DONK_BASS")
+        self.assertEqual(len(bank.presets), 4)
+
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_BASS_BANKS), 5)
+        self.assertEqual(len(ALL_BASS_BANKS), 9)
 
     def test_all_banks_synthesize(self):
         for bank_name, gen_fn in ALL_BASS_BANKS.items():
@@ -124,7 +172,7 @@ class TestBanks(unittest.TestCase):
 
     def test_total_presets_is_20(self):
         total = sum(len(fn().presets) for fn in ALL_BASS_BANKS.values())
-        self.assertEqual(total, 20)
+        self.assertEqual(total, 36)
 
 
 class TestManifest(unittest.TestCase):
@@ -138,7 +186,7 @@ class TestManifest(unittest.TestCase):
             with open(path) as f:
                 data = json.load(f)
             self.assertIn("banks", data)
-            self.assertEqual(len(data["banks"]), 5)
+            self.assertEqual(len(data["banks"]), 9)
 
 
 if __name__ == "__main__":

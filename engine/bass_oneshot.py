@@ -235,6 +235,109 @@ def synthesize_growl_bass(preset: BassPreset,
     return _apply_bass_envelope(signal, preset_copy, sample_rate)
 
 
+def synthesize_wobble_bass(preset: BassPreset,
+                           sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Wobble bass — LFO-modulated amplitude for classic dubstep wobble."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Rich saw source
+    signal = np.zeros(n)
+    for h in range(1, 8):
+        if preset.frequency * h > sample_rate / 2:
+            break
+        signal += ((-1) ** h / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+
+    # Wobble LFO — rate controlled by fm_ratio (reusing field)
+    wobble_rate = preset.fm_ratio if preset.fm_ratio > 0 else PHI * 3
+    wobble = 0.5 + 0.5 * np.sin(2 * math.pi * wobble_rate * t)
+    signal *= wobble
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_neuro_bass(preset: BassPreset,
+                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Neuro bass — phase-distorted complex tone for aggressive neurofunk."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Phase distortion: modulate phase of carrier
+    carrier_phase = 2 * math.pi * preset.frequency * t
+    pd_amount = preset.fm_depth if preset.fm_depth > 0 else 2.0
+    phase_mod = pd_amount * np.sin(carrier_phase * 0.5)
+    signal = np.sin(carrier_phase + phase_mod)
+    signal += 0.5 * np.sin(carrier_phase * 2 + phase_mod * 1.5)
+
+    # Aggressive distortion
+    drive = max(preset.distortion, 0.4)
+    signal = np.tanh(signal * (1 + drive * 5))
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_acid_bass(preset: BassPreset,
+                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Acid bass — 303-style resonant filter sweep."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Square source
+    signal = np.zeros(n)
+    for h in range(1, 10, 2):
+        if preset.frequency * h > sample_rate / 2:
+            break
+        signal += (1.0 / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+
+    # Decaying resonant filter
+    progress = np.linspace(0, 1, n)
+    cutoff_env = preset.filter_cutoff * np.exp(-progress * 3)
+    y1, y2 = 0.0, 0.0
+    for i in range(n):
+        a = max(0.01, cutoff_env[i] * 0.5 + 0.05)
+        y1 = y1 + a * (signal[i] - y1)
+        y2 = y2 + a * (y1 - y2)
+        signal[i] = y1 + 0.6 * (y1 - y2)  # resonance boost
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_donk_bass(preset: BassPreset,
+                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Donk bass — pitch-bending percussive hit."""
+    n = int(preset.duration_s * sample_rate)
+
+    # Rapid pitch descent
+    progress = np.linspace(0, 1, n)
+    freq_env = preset.frequency * (1 + 3 * np.exp(-progress * 20))
+    phase = np.cumsum(2 * math.pi * freq_env / sample_rate)
+    signal = np.sin(phase)
+
+    # Percussive envelope — override attack/release
+    attack = max(1, int(0.002 * sample_rate))
+    release = max(1, int(0.1 * sample_rate))
+    env = np.zeros(n)
+    env[:attack] = np.linspace(0, 1, attack)
+    body = min(n - attack, int(0.05 * sample_rate))
+    env[attack:attack + body] = 1.0
+    tail_start = attack + body
+    if tail_start < n:
+        remaining = n - tail_start
+        env[tail_start:] = np.exp(-np.arange(remaining) / max(1, release))
+    signal *= env
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+
+    peak = np.max(np.abs(signal))
+    if peak > 0:
+        signal = signal / peak * 0.95
+    return signal
+
+
 def synthesize_bass(preset: BassPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct bass synthesizer."""
@@ -244,6 +347,10 @@ def synthesize_bass(preset: BassPreset,
         "fm": synthesize_fm_bass,
         "square": synthesize_square_bass,
         "growl": synthesize_growl_bass,
+        "wobble": synthesize_wobble_bass,
+        "neuro": synthesize_neuro_bass,
+        "acid": synthesize_acid_bass,
+        "donk": synthesize_donk_bass,
     }
     fn = synthesizers.get(preset.bass_type)
     if fn is None:
@@ -332,12 +439,76 @@ def growl_bass_bank() -> BassBank:
     )
 
 
+def wobble_bass_bank() -> BassBank:
+    """Wobble bass — LFO-modulated dubstep classic."""
+    return BassBank(
+        name="WOBBLE_BASS",
+        presets=[
+            BassPreset("wobble_C2", "wobble", NOTE_C2, fm_ratio=3.0, distortion=0.2),
+            BassPreset("wobble_D2", "wobble", NOTE_D2, fm_ratio=4.0, distortion=0.3),
+            BassPreset("wobble_E2", "wobble", NOTE_E2, fm_ratio=2.0, distortion=0.15),
+            BassPreset("wobble_F2", "wobble", NOTE_F2, fm_ratio=5.0, distortion=0.25),
+        ],
+    )
+
+
+def neuro_bass_bank() -> BassBank:
+    """Neuro bass — phase-distorted aggressive neurofunk."""
+    return BassBank(
+        name="NEURO_BASS",
+        presets=[
+            BassPreset("neuro_C2", "neuro", NOTE_C2,
+                       fm_depth=2.5, distortion=0.5),
+            BassPreset("neuro_D2", "neuro", NOTE_D2,
+                       fm_depth=3.0, distortion=0.6),
+            BassPreset("neuro_E2", "neuro", NOTE_E2,
+                       fm_depth=2.0, distortion=0.4),
+            BassPreset("neuro_F2", "neuro", NOTE_F2,
+                       fm_depth=3.5, distortion=0.7),
+        ],
+    )
+
+
+def acid_bass_bank() -> BassBank:
+    """Acid bass — 303-style resonant filter sweeps."""
+    return BassBank(
+        name="ACID_BASS",
+        presets=[
+            BassPreset("acid_C2", "acid", NOTE_C2,
+                       filter_cutoff=0.9, distortion=0.3),
+            BassPreset("acid_D2", "acid", NOTE_D2,
+                       filter_cutoff=0.8, distortion=0.25),
+            BassPreset("acid_E2", "acid", NOTE_E2,
+                       filter_cutoff=0.95, distortion=0.4),
+            BassPreset("acid_F2", "acid", NOTE_F2,
+                       filter_cutoff=0.85, distortion=0.2),
+        ],
+    )
+
+
+def donk_bass_bank() -> BassBank:
+    """Donk bass — pitch-bending percussive bass hits."""
+    return BassBank(
+        name="DONK_BASS",
+        presets=[
+            BassPreset("donk_C2", "donk", NOTE_C2, duration_s=0.3, distortion=0.3),
+            BassPreset("donk_D2", "donk", NOTE_D2, duration_s=0.3, distortion=0.4),
+            BassPreset("donk_E2", "donk", NOTE_E2, duration_s=0.3, distortion=0.2),
+            BassPreset("donk_F2", "donk", NOTE_F2, duration_s=0.3, distortion=0.35),
+        ],
+    )
+
+
 ALL_BASS_BANKS: dict[str, callable] = {
     "sub_sine":    sub_sine_bank,
     "reese":       reese_bank,
     "fm_bass":     fm_bass_bank,
     "square_bass": square_bass_bank,
     "growl_bass":  growl_bass_bank,
+    "wobble_bass": wobble_bass_bank,
+    "neuro_bass":  neuro_bass_bank,
+    "acid_bass":   acid_bass_bank,
+    "donk_bass":   donk_bass_bank,
 }
 
 

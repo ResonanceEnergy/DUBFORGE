@@ -436,6 +436,57 @@ def vinyl_fx_bank() -> TransitionBank:
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# v1.9 — 10 new transition presets (3 banks)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def long_tape_stop_bank() -> TransitionBank:
+    """Extended tape stops — dramatic slow-motion brakes."""
+    return TransitionBank(
+        name="LONG_TAPE_STOPS",
+        presets=[
+            TransitionPreset("tape_stop_4bar", "tape_stop", duration_s=4.0,
+                             start_freq=350, distortion=0.1),
+            TransitionPreset("tape_stop_8bar", "tape_stop", duration_s=8.0,
+                             start_freq=400, distortion=0.2),
+            TransitionPreset("tape_stop_drag", "tape_stop", duration_s=6.0,
+                             start_freq=280, distortion=0.15),
+        ],
+    )
+
+
+def extreme_dive_bank() -> TransitionBank:
+    """Extreme pitch dives — wide range, heavy distortion."""
+    return TransitionBank(
+        name="EXTREME_DIVES",
+        presets=[
+            TransitionPreset("dive_screamer", "pitch_dive", duration_s=0.5,
+                             start_freq=2000, end_freq=20, distortion=0.5),
+            TransitionPreset("dive_canyon", "pitch_dive", duration_s=1.5,
+                             start_freq=1500, end_freq=15, distortion=0.4),
+            TransitionPreset("dive_zap", "pitch_dive", duration_s=0.15,
+                             start_freq=3000, end_freq=50, distortion=0.6),
+            TransitionPreset("dive_rumble", "pitch_dive", duration_s=2.0,
+                             start_freq=800, end_freq=10, distortion=0.3),
+        ],
+    )
+
+
+def chaos_glitch_bank() -> TransitionBank:
+    """Chaos glitch — extreme stutter/gate combinations."""
+    return TransitionBank(
+        name="CHAOS_GLITCH",
+        presets=[
+            TransitionPreset("glitch_x32", "glitch_stutter", duration_s=0.5,
+                             start_freq=500, stutter_repeats=32, distortion=0.5),
+            TransitionPreset("glitch_overdrive", "glitch_stutter", duration_s=1.0,
+                             start_freq=800, stutter_repeats=24, distortion=0.7),
+            TransitionPreset("glitch_micro", "glitch_stutter", duration_s=0.25,
+                             start_freq=1000, stutter_repeats=64, distortion=0.4),
+        ],
+    )
+
+
 ALL_TRANSITION_BANKS: dict[str, callable] = {
     "tape_stops":      tape_stop_bank,
     "tape_starts":     tape_start_bank,
@@ -444,6 +495,9 @@ ALL_TRANSITION_BANKS: dict[str, callable] = {
     "pitch_dives":     pitch_dive_bank,
     "glitch_stutters": glitch_stutter_bank,
     "vinyl_fx":        vinyl_fx_bank,
+    "long_tape_stops": long_tape_stop_bank,
+    "extreme_dives":   extreme_dive_bank,
+    "chaos_glitch":    chaos_glitch_bank,
 }
 
 
