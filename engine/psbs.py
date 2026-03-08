@@ -13,6 +13,9 @@ Layers:
     CLICK    — Transient layer for attack definition
 
 All crossover frequencies derived from phi-ratio ladder.
+
+v2.8.0 — real audio output: multi-frame wavetables, per-layer stems,
+         phi-ladder root sweeps. Every preset → Serum-ready 256-frame .wav.
 """
 
 import json
@@ -231,42 +234,73 @@ def calculate_phase_coherence(layers: list[BassLayer],
 
 # --- Audio Render (single cycle preview) ----------------------------------
 
-def render_psbs_cycle(preset: PSBSPreset, n_samples: int = 2048) -> np.ndarray:
+# --- Audio Render ---------------------------------------------------------
+
+def _render_layer(layer: BassLayer, root_hz: float, n_samples: int,
+                  morph: float = 0.0) -> np.ndarray:
     """
-    Render one single-cycle of the full PSBS stack (preview).
-    Each layer generates its waveform within its frequency band.
+    Render a single layer as one cycle.
+
+    Args:
+        layer: BassLayer config
+        root_hz: preset root frequency
+        n_samples: samples per frame
+        morph: 0.0–1.0 morphing parameter (affects distortion & FM depth)
     """
     t = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
+    center_hz = (layer.freq_low + layer.freq_high) / 2
+    ratio = center_hz / root_hz
+    phase = math.radians(layer.phase_offset_deg)
+    gain = 10 ** (layer.gain_db / 20.0)
+
+    # Morph drives distortion and FM depth across frames
+    dist = layer.distortion * (1.0 + morph * PHI)
+
+    if layer.waveform == "sine":
+        wave = np.sin(ratio * t + phase)
+    elif layer.waveform == "saw":
+        wave = 2.0 * (((ratio * t + phase) / (2 * np.pi)) % 1.0) - 1.0
+    elif layer.waveform == "square":
+        wave = np.sign(np.sin(ratio * t + phase))
+    elif layer.waveform == "triangle":
+        wave = (2.0 * np.abs(
+            2.0 * (((ratio * t + phase) / (2 * np.pi)) % 1.0) - 1.0
+        ) - 1.0)
+    elif layer.waveform == "noise":
+        base = np.sin(ratio * t + phase)
+        rng = np.random.RandomState(int(abs(ratio * 1000 + morph * 100)))
+        noise = rng.uniform(-1, 1, n_samples)
+        mix = 0.5 + morph * 0.3  # more noise as morph increases
+        wave = base * (1.0 - mix) + noise * mix
+    elif layer.waveform in ("fm", "wavetable"):
+        mod_depth = dist * 5
+        mod = np.sin(ratio * PHI * t)
+        wave = np.sin(ratio * t + phase + mod_depth * mod)
+    else:
+        wave = np.sin(ratio * t + phase)
+
+    # Apply distortion (tanh saturation) — morphed
+    if dist > 0:
+        drive = 1.0 + dist * 5.0
+        wave = np.tanh(wave * drive)
+
+    return wave * gain
+
+
+def render_psbs_cycle(preset: PSBSPreset, n_samples: int = 2048,
+                      morph: float = 0.0) -> np.ndarray:
+    """
+    Render one single-cycle of the full PSBS stack.
+
+    Args:
+        preset: PSBS preset to render
+        n_samples: samples per frame (default 2048 = Serum standard)
+        morph: 0.0–1.0 morphing parameter for evolving sound
+    """
     output = np.zeros(n_samples, dtype=np.float64)
 
     for layer in preset.layers:
-        center_hz = (layer.freq_low + layer.freq_high) / 2
-        ratio = center_hz / preset.root_hz
-        phase = math.radians(layer.phase_offset_deg)
-        gain = 10 ** (layer.gain_db / 20.0)
-
-        if layer.waveform == "sine":
-            wave = np.sin(ratio * t + phase)
-        elif layer.waveform == "saw":
-            wave = 2.0 * (((ratio * t + phase) / (2 * np.pi)) % 1.0) - 1.0
-        elif layer.waveform == "square":
-            wave = np.sign(np.sin(ratio * t + phase))
-        elif layer.waveform == "noise":
-            base = np.sin(ratio * t + phase)
-            noise = np.random.uniform(-1, 1, n_samples)
-            wave = base * 0.5 + noise * 0.5
-        elif layer.waveform in ("fm", "wavetable"):
-            mod = np.sin(ratio * PHI * t)
-            wave = np.sin(ratio * t + phase + layer.distortion * 5 * mod)
-        else:
-            wave = np.sin(ratio * t + phase)
-
-        # Apply distortion (tanh saturation)
-        if layer.distortion > 0:
-            drive = 1.0 + layer.distortion * 5.0
-            wave = np.tanh(wave * drive)
-
-        output += wave * gain
+        output += _render_layer(layer, preset.root_hz, n_samples, morph)
 
     # Normalize
     peak = np.max(np.abs(output))
@@ -274,6 +308,56 @@ def render_psbs_cycle(preset: PSBSPreset, n_samples: int = 2048) -> np.ndarray:
         output /= peak
 
     return output
+
+
+def render_psbs_multiframe(preset: PSBSPreset, n_frames: int = 256,
+                           n_samples: int = 2048) -> list[np.ndarray]:
+    """
+    Render a full multi-frame wavetable from a PSBS preset.
+    Each frame morphs the sound via phi-curve interpolation.
+
+    Frame 0 = clean/minimal distortion.
+    Frame 255 = full morph (maximum distortion/FM depth).
+    Morph curve follows x^(1/phi) for natural evolution.
+
+    Returns list of n_frames numpy arrays, each n_samples long.
+    """
+    frames = []
+    for i in range(n_frames):
+        linear = i / max(n_frames - 1, 1)
+        # Phi-curve morph: gentler buildup, aggressive tail
+        morph = linear ** (1.0 / PHI)
+        frame = render_psbs_cycle(preset, n_samples=n_samples, morph=morph)
+        frames.append(frame)
+    return frames
+
+
+def render_psbs_layer_stem(preset: PSBSPreset, layer_name: str,
+                           n_frames: int = 256,
+                           n_samples: int = 2048) -> list[np.ndarray]:
+    """
+    Render a single layer from the PSBS stack as a multi-frame wavetable.
+    Useful for per-layer stems that can be loaded into separate Serum oscillators.
+    """
+    target_layer = None
+    for layer in preset.layers:
+        if layer.name == layer_name:
+            target_layer = layer
+            break
+
+    if target_layer is None:
+        raise ValueError(f"Layer '{layer_name}' not found in preset '{preset.name}'")
+
+    frames = []
+    for i in range(n_frames):
+        linear = i / max(n_frames - 1, 1)
+        morph = linear ** (1.0 / PHI)
+        raw = _render_layer(target_layer, preset.root_hz, n_samples, morph)
+        peak = np.max(np.abs(raw))
+        if peak > 0:
+            raw /= peak
+        frames.append(raw)
+    return frames
 
 
 # --- YAML-driven preset loader --------------------------------------------
@@ -349,25 +433,72 @@ def export_preset(preset: PSBSPreset, out_dir: str = "output/analysis"):
     return json_path
 
 
-# --- Main -----------------------------------------------------------------
-
 def export_wavetable(preset: PSBSPreset, out_dir: str = "output/wavetables",
-                     n_samples: int = 2048) -> str:
-    """Render a PSBS preset to a single-cycle WAV wavetable file."""
+                     n_samples: int = 2048, n_frames: int = 256) -> str:
+    """
+    Render a PSBS preset to a multi-frame WAV wavetable file (Serum-ready).
+
+    256 frames × 2048 samples. Phi-curve morph from clean → full saturation.
+    """
     from engine.phi_core import write_wav
 
-    cycle = render_psbs_cycle(preset, n_samples=n_samples)
-    # Stack as single frame (Serum-compatible single-cycle)
-    frames = cycle.reshape(1, -1)
+    frames = render_psbs_multiframe(preset, n_frames=n_frames,
+                                    n_samples=n_samples)
 
     wt_dir = Path(out_dir)
     wt_dir.mkdir(parents=True, exist_ok=True)
-    wav_name = f"PSBS_{preset.name.upper()}.wav"
+    hz_tag = f"_{int(preset.root_hz)}hz" if preset.root_hz != 55.0 else ""
+    wav_name = f"PSBS_{preset.name.upper()}{hz_tag}.wav"
     wav_path = str(wt_dir / wav_name)
     write_wav(wav_path, frames)
-    print(f"  PSBS wavetable: {wav_name}")
+    print(f"  PSBS wavetable ({n_frames} frames): {wav_name}")
     return wav_path
 
+
+def export_layer_stems(preset: PSBSPreset, out_dir: str = "output/wavetables",
+                       n_samples: int = 2048,
+                       n_frames: int = 256) -> list[str]:
+    """
+    Export each layer of a PSBS preset as a separate multi-frame wavetable.
+    Load SUB into Osc A, MID into Osc B, HIGH into Osc C, etc.
+    """
+    from engine.phi_core import write_wav
+
+    wt_dir = Path(out_dir)
+    wt_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+
+    for layer in preset.layers:
+        frames = render_psbs_layer_stem(
+            preset, layer.name, n_frames=n_frames, n_samples=n_samples
+        )
+        wav_name = f"PSBS_{preset.name.upper()}_{layer.name}.wav"
+        wav_path = str(wt_dir / wav_name)
+        write_wav(wav_path, frames)
+        print(f"  PSBS stem ({layer.name}, {n_frames} frames): {wav_name}")
+        paths.append(wav_path)
+
+    return paths
+
+
+def export_phi_ladder(preset_fn, out_dir: str = "output/wavetables",
+                      n_frames: int = 256) -> list[str]:
+    """
+    Render a PSBS preset at multiple root frequencies on the phi ladder.
+    Frequencies: root * phi^(n/12) for n in 0..7.
+
+    Produces wavetables at different bass fundamentals for variety.
+    """
+    roots = [55.0 * (PHI ** (n / 12.0)) for n in range(8)]
+    paths = []
+    for root in roots:
+        preset = preset_fn(root_hz=round(root, 2))
+        path = export_wavetable(preset, out_dir=out_dir, n_frames=n_frames)
+        paths.append(path)
+    return paths
+
+
+# --- Main -----------------------------------------------------------------
 
 def main() -> None:
     # Try YAML-driven presets first, fall back to hardcoded
@@ -382,8 +513,16 @@ def main() -> None:
         ]
 
     for preset in presets:
+        # JSON analysis
         export_preset(preset)
+        # Multi-frame wavetable (256 frames)
         export_wavetable(preset)
+        # Per-layer stems
+        export_layer_stems(preset)
+
+    # Phi-ladder renders for the default preset
+    print("\n  Phi-ladder wavetables:")
+    export_phi_ladder(default_psbs)
 
     print("PSBS engine complete.")
 
