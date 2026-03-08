@@ -1,4 +1,4 @@
-# DUBFORGE DOCTRINE v1.0 — Planck x phi Fractal Basscraft
+# DUBFORGE DOCTRINE v2.5 — Planck x phi Fractal Basscraft
 
 ## Standing Principles
 
@@ -29,7 +29,9 @@
 
 ---
 
-## Module Architecture
+## Module Architecture (47 modules)
+
+### Core & Analysis
 
 | Module                  | Code                | Purpose                                          |
 |-------------------------|---------------------|-------------------------------------------------|
@@ -37,15 +39,79 @@
 | Config Loader           | `config_loader`     | Centralized YAML config reader + PHI constants   |
 | Rollercoaster Optimizer | `rco`               | Arrangement energy curve engine                  |
 | Phase-Separated Bass    | `psbs`              | Multi-layer bass with phase-aligned separation   |
-| Subtronics Analyzer     | `sb_analyzer`       | Corpus analysis + VIP delta evolution tracker     |
-| Trance Arp Engine       | `trance_arp`        | Fibonacci-timed arpeggiator                      |
-| Mid-Bass Growl Resampler| `growl_resampler`   | Resample + mangle mid-bass growls                |
-| Chord Progression       | `chord_progression` | Music theory + phi voicing + 11 EDM presets      |
+| Subtronics Analyzer     | `sb_analyzer`       | Corpus analysis + VIP delta + spectral profile   |
+
+### Synthesizers
+
+| Module                  | Code                | Purpose                                          |
+|-------------------------|---------------------|-------------------------------------------------|
+| Lead Synth              | `lead_synth`        | Lead sounds with phi-tuned envelopes             |
+| Pad Synth               | `pad_synth`         | Pad & atmosphere with layered harmonics          |
+| Sub Bass                | `sub_bass`          | Sub-bass one-shots with phi-ratio envelopes      |
+| Bass One-Shot           | `bass_oneshot`      | Mid-range bass one-shots                         |
+| Wobble Bass             | `wobble_bass`       | LFO-modulated wobble bass                        |
+| Pluck Synth             | `pluck_synth`       | Karplus-Strong–style pluck one-shots              |
+| Arp Synth               | `arp_synth`         | Arp synth pattern generator                      |
+| Drone Synth             | `drone_synth`       | Sustained evolving drone textures                |
+| Formant Synth           | `formant_synth`     | Vowel-shaped resonant filtering                  |
+| Granular Synth          | `granular_synth`    | Grain cloud engine, phi-spaced onsets            |
+| Chord Pad               | `chord_pad`         | Rich harmonic chord stacks                       |
+| Vocal Chop              | `vocal_chop`        | Formant-shifted vocal fragments                  |
+| Ambient Texture         | `ambient_texture`   | Noise + filtered ambient layers                  |
+| Noise Generator         | `noise_generator`   | White/pink/brown noise with shaping              |
+
+### Percussion & FX
+
+| Module                  | Code                | Purpose                                          |
+|-------------------------|---------------------|-------------------------------------------------|
+| Drum Generator          | `drum_generator`    | Kick, snare, hat, clap, perc synthesis           |
+| Perc Synth              | `perc_synth`        | Tuned metallic & tonal percussion hits           |
+| Impact Hit              | `impact_hit`        | Transient-heavy impact hits for drops            |
+| Riser Synth             | `riser_synth`       | Filtered sweeps and noise risers                 |
+| Transition FX           | `transition_fx`     | Sweeps, fills, downlifters                       |
+| FX Generator            | `fx_generator`      | Multi-type FX (risers/impacts/sub drops)         |
+
+### DSP & Processing
+
+| Module                  | Code                    | Purpose                                      |
+|-------------------------|-------------------------|----------------------------------------------|
+| Sidechain Engine        | `sidechain`             | 5 shapes × 4 presets (pump/hard/smooth/bounce/phi) |
+| Riddim Engine           | `riddim_engine`         | 5 types × 4 presets (minimal/heavy/bounce/stutter/triplet) |
+| Pitch Automation        | `pitch_automation`      | 5 types × 4 presets (dive/rise/wobble/staircase/glide) |
+| LFO Matrix              | `lfo_matrix`            | 5 waveforms × 4 presets (sin/tri/saw/sq/S&H)  |
+| Stereo Imager           | `stereo_imager`         | 5 types × 4 presets (Haas/M-S/freq split/phase/psycho) |
+| Multiband Distortion    | `multiband_distortion`  | 5 algos × 4 presets (warm/aggressive/digital/tube/tape) |
+| Mastering Chain         | `mastering_chain`       | EQ, compression, limiting, phi crossovers    |
+| Mid-Bass Growl Resampler| `growl_resampler`       | Resample + mangle mid-bass growls            |
+
+### Structure & Arrangement
+
+| Module                  | Code                    | Purpose                                      |
+|-------------------------|-------------------------|----------------------------------------------|
+| Chord Progression       | `chord_progression`     | Music theory + phi voicing + 11 EDM presets  |
+| Trance Arp Engine       | `trance_arp`            | Fibonacci-timed arpeggiator                  |
+| Arrangement Sequencer   | `arrangement_sequencer` | 4 types × 4 templates (weapon/emotive/hybrid/fib) |
+| Song Templates          | `song_templates`        | 4 categories × 5 templates (20 total)         |
+
+### DAW Integration
+
+| Module                  | Code                | Purpose                                          |
+|-------------------------|---------------------|-------------------------------------------------|
 | Ableton Live Engine     | `ableton_live`      | Full LOM integration, session/arrangement gen    |
+| ALS Generator           | `als_generator`     | Ableton Live Set (.als) file generation          |
 | Serum 2 Engine          | `serum2`            | Full synth architecture, patches, mod matrix     |
+| FXP Writer              | `fxp_writer`        | FXP / VST2 preset export                        |
+| MIDI Export Engine      | `midi_export`       | .mid file generation from all note data sources  |
+
+### Infrastructure
+
+| Module                  | Code                | Purpose                                          |
+|-------------------------|---------------------|-------------------------------------------------|
 | Producer Dojo Engine    | `dojo`              | ill.Gates methodology, belt system, 128 Rack     |
 | Memory Engine           | `memory`            | Long-term persistence, recall, growth tracking   |
-| MIDI Export Engine      | `midi_export`       | .mid file generation from all note data sources  |
+| Sample Slicer           | `sample_slicer`     | Beat-aligned slicing with Fibonacci boundaries   |
+| Glitch Engine           | `glitch_engine`     | Stutter, reverse, bit-reduce, granular scatter   |
+| Log                     | `log`               | Centralized logging for all engine modules       |
 
 ---
 
@@ -165,6 +231,7 @@ n=47  ~580.68 Hz         upper-mid
 
 - All YAML configs live in `configs/`
 - All Python engine modules live in `engine/`
+- All tests live in `tests/`
 - Wavetable output goes to `output/wavetables/`
 - Analysis output goes to `output/analysis/`
 - Serum 2 output goes to `output/serum2/`
@@ -172,18 +239,21 @@ n=47  ~580.68 Hz         upper-mid
 - Producer Dojo output goes to `output/dojo/`
 - All MIDI output goes to `output/midi/`
 - Memory persistence goes to `output/memory/`
+- Mastering chain output goes to `output/masters/`
+- FXP preset output goes to `output/presets/`
+- Sample slicer output goes to `output/slices/`
 
 ---
 
 ### Roadmap (Future Features)
 
-- **L1: Serum 2 .fxp Export** — Generate native Serum preset files from `serum2.py` patch definitions
-- ~~**L2: MIDI File Export**~~ — ✅ DONE (v1.5) — `midi_export.py` generates 19 .mid files from chord progressions, arp patterns, Ableton clips, and full arrangements
-- **L3: Ableton .als Generation** — Produce Ableton Live Set files from session/arrangement templates
+- ~~**L1: Serum 2 .fxp Export**~~ — ✅ DONE (v2.0) — `fxp_writer.py` exports native Serum preset files
+- ~~**L2: MIDI File Export**~~ — ✅ DONE (v1.5) — `midi_export.py` generates 19+ .mid files
+- ~~**L3: Ableton .als Generation**~~ — ✅ DONE (v2.0) — `als_generator.py` produces Ableton Live Set files
 
 ---
 
-**Version:** 1.5
+**Version:** 2.5.0
 **Author:** DUBFORGE
 **Date:** 2026-03-07
-**Modules:** 14 (phi_core, config_loader, log, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory, midi_export)
+**Modules:** 47 (phi_core, config_loader, log, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory, midi_export, drum_generator, sample_slicer, mastering_chain, als_generator, fxp_writer, vocal_chop, fx_generator, bass_oneshot, transition_fx, pad_synth, lead_synth, perc_synth, ambient_texture, sub_bass, noise_generator, arp_synth, pluck_synth, granular_synth, chord_pad, riser_synth, impact_hit, wobble_bass, formant_synth, glitch_engine, drone_synth, sidechain, riddim_engine, pitch_automation, lfo_matrix, stereo_imager, multiband_distortion, arrangement_sequencer, song_templates)
