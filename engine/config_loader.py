@@ -239,6 +239,63 @@ def list_configs() -> list[str]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# HOT-RELOAD (Session 131) — watch configs for changes
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Modification timestamps for change detection
+_config_mtimes: dict[str, float] = {}
+
+
+def _config_path(name: str) -> Optional[Path]:
+    """Resolve a config name to its file path."""
+    for ext in (".yaml", ".yml"):
+        p = CONFIGS_DIR / f"{name}{ext}"
+        if p.exists():
+            return p
+    return None
+
+
+def reload_if_changed(name: str) -> bool:
+    """Reload a config if its file has been modified since last load.
+
+    Returns True if the config was reloaded.
+    """
+    path = _config_path(name)
+    if path is None:
+        return False
+
+    current_mtime = path.stat().st_mtime
+    prev_mtime = _config_mtimes.get(name, 0.0)
+
+    if current_mtime > prev_mtime:
+        load_config(name, reload=True)
+        _config_mtimes[name] = current_mtime
+        _log.info("Hot-reloaded config: %s (mtime %.0f → %.0f)", name, prev_mtime, current_mtime)
+        return True
+    return False
+
+
+def reload_all_changed() -> list[str]:
+    """Check all known configs for changes and reload any that were modified.
+
+    Returns list of config names that were reloaded.
+    """
+    reloaded: list[str] = []
+    for name in list_configs():
+        if reload_if_changed(name):
+            reloaded.append(name)
+    return reloaded
+
+
+def watch_configs_once() -> list[str]:
+    """Single-pass config watcher.  Call periodically for hot-reload behavior.
+
+    Returns list of reloaded config names.
+    """
+    return reload_all_changed()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Config Validation
 # ═══════════════════════════════════════════════════════════════════════════
 

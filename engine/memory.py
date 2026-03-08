@@ -704,6 +704,41 @@ class MemoryEngine:
 
         return events
 
+    def recall_phi_weighted(self, module: str = "", limit: int = 13,
+                            phi_decay: float = 0.0) -> list[dict]:
+        """Recall assets weighted by 1/phi per rank position (Session 127).
+
+        Items are sorted by quality, then each item's relevance is multiplied
+        by ``(1/phi)^rank`` so the highest-rated item gets full weight and
+        successive items decay by the golden ratio.
+
+        Parameters
+        ----------
+        phi_decay : float, optional
+            Override the decay base.  Defaults to 1/PHI (≈0.618).
+        """
+        if phi_decay <= 0:
+            phi_decay = 1.0 / PHI
+
+        registry = _load_json(self.asset_file, {"assets": []})
+        assets = registry.get("assets", [])
+
+        if module:
+            assets = [a for a in assets if a.get("module") == module]
+
+        # Sort by quality score descending
+        assets.sort(key=lambda a: a.get("score", 0), reverse=True)
+
+        results = []
+        for rank, asset in enumerate(assets[:limit]):
+            weight = phi_decay ** rank
+            results.append({
+                **asset,
+                "_phi_weight": round(weight, 6),
+                "_rank": rank,
+            })
+        return results
+
     def recall_sessions(self, last_n: int = 10) -> list[dict]:
         """Get summaries of the last N sessions."""
         session_files = sorted(

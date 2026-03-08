@@ -1361,6 +1361,57 @@ def phi_mudpie_recipe(num_sources: int = 8) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# QUALITY METRICS — phi_analyzer integration (Session 128)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def rate_output_quality(wav_path: str = "") -> dict:
+    """Rate an output file using phi_analyzer and map to belt progression.
+
+    If *wav_path* is empty, returns a template with zero scores.
+    """
+    try:
+        from engine.phi_analyzer import analyze_wav_phi
+    except ImportError:
+        analyze_wav_phi = None
+
+    score = 0.0
+    phi_score_dict: dict = {}
+
+    if wav_path and analyze_wav_phi is not None:
+        from pathlib import Path as _P
+        if _P(wav_path).exists():
+            try:
+                result = analyze_wav_phi(wav_path)
+                score = result.composite
+                phi_score_dict = result.as_dict()
+            except Exception:
+                pass
+
+    # Map score to belt rank
+    belt_thresholds = [
+        (0.85, "Black Belt"),
+        (0.70, "Brown Belt"),
+        (0.55, "Purple Belt"),
+        (0.40, "Blue Belt"),
+        (0.25, "Green Belt"),
+        (0.10, "Yellow Belt"),
+        (0.0,  "White Belt"),
+    ]
+    assigned_belt = "White Belt"
+    for threshold, belt in belt_thresholds:
+        if score >= threshold:
+            assigned_belt = belt
+            break
+
+    return {
+        "phi_coherence_score": round(score, 4),
+        "phi_details": phi_score_dict,
+        "assigned_quality_belt": assigned_belt,
+        "wav_path": wav_path,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # MAIN — Generate all Dojo engine outputs
 # ═══════════════════════════════════════════════════════════════════════════
 

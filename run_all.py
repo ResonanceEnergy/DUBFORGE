@@ -118,6 +118,12 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("preset_pack_builder", "Preset Pack Builder"),
     ("wavetable_morph",   "Wavetable Morph Engine"),
     ("spectral_resynthesis", "Spectral Resynthesis"),
+    ("phi_analyzer",       "Phi Coherence Analyzer"),
+    ("evolution_engine",   "Evolution Engine"),
+    ("preset_mutator",     "Preset Mutator"),
+    ("ab_tester",          "A/B Tester"),
+    ("template_generator", "Template Generator"),
+    ("sound_palette",      "Sound Palette"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]
