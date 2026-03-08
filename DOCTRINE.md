@@ -254,10 +254,137 @@ n=47  ~580.68 Hz         upper-mid
 - ~~**L1: Serum 2 .fxp Export**~~ — ✅ DONE (v2.0) — `fxp_writer.py` exports native Serum preset files
 - ~~**L2: MIDI File Export**~~ — ✅ DONE (v1.5) — `midi_export.py` generates 19+ .mid files
 - ~~**L3: Ableton .als Generation**~~ — ✅ DONE (v2.0) — `als_generator.py` produces Ableton Live Set files
+- ~~**L4: Serum 2 v2.0.18 Rewrite**~~ — ✅ DONE (v2.7.0) — 58 warp modes, 80 filters, 16 FX, 3 oscs, 10 LFOs, 8 macros
 
 ---
 
-**Version:** 2.5.0
+## Roadmap to 144 — Black Belt → Grandmaster
+
+**Current:** Session 91 · Black Belt · v2.7.0 · 52 modules · 1121 tests · 6,610 output files
+**Target:** Session 144 (Fibonacci) · 53 sessions · Grandmaster promotion
+
+---
+
+### Phase 1 — REAL AUDIO EXPANSION (Sessions 92–102 · v2.8–v2.10)
+
+_Goal: Every synth module writes .wav — move from "JSON spec generator" to "actual sound engine."_
+
+| Session | Version | Deliverable |
+|---------|---------|-------------|
+| 92 | v2.8.0 | **psbs.py → real audio** — `render_psbs_cycle()` already does DSP but discards the result. Wire it to `write_wav()`. 5-layer bass wavetables. |
+| 93 | | **drum_generator.py → real audio** — synthesize kick, snare, hat, clap as .wav one-shots using phi-timed transients + noise envelopes. |
+| 94 | | **sub_bass.py → real audio** — render sub-bass one-shots (.wav) with phi-ratio envelopes. Serum-loadable single-cycle subs. |
+| 95 | v2.9.0 | **bass_oneshot.py → real audio** — mid-range bass one-shots as .wav. FM + waveshaping pipeline. |
+| 96 | | **impact_hit.py → real audio** — transient-heavy impact hits for drops. Layered noise burst + pitched sine. |
+| 97 | | **riser_synth.py → real audio** — filtered noise sweeps + pitch risers as .wav. |
+| 98 | v2.10.0 | **perc_synth.py → real audio** — tuned metallic percussion hits. FM synthesis + ring mod. |
+| 99 | | **noise_generator.py → real audio** — white/pink/brown/Geiger noise textures as .wav files. |
+| 100 | | **lead_synth.py → real audio** — lead one-shots with phi-tuned envelopes. Saw/square + unison + detuning. |
+| 101 | | **pad_synth.py → real audio** — evolving pad textures as multi-frame wavetables. |
+| 102 | | **wobble_bass.py → real audio** — LFO-modulated wobble bass rendered as wavetable morphs. |
+
+### Phase 2 — DSP HARDENING (Sessions 103–112 · v3.0–v3.2)
+
+_Goal: Production-grade DSP. Replace placeholder math with real algorithms._
+
+| Session | Version | Deliverable |
+|---------|---------|-------------|
+| 103 | v3.0.0 | **mastering_chain.py → real audio** — EQ, multiband compression, limiting applied to .wav files. scipy.signal filters. |
+| 104 | | **multiband_distortion.py → real audio** — 5 distortion algorithms (warm/aggressive/digital/tube/tape) processing real audio. |
+| 105 | | **sidechain.py → real audio** — apply sidechain envelope curves to .wav files. Ducking/pumping on rendered audio. |
+| 106 | v3.1.0 | **stereo_imager.py → real audio** — Haas delay, M-S processing, frequency-split widening on .wav. |
+| 107 | | **convolution.py → real audio** — generate IRs (room/cab/plate) as .wav. Apply convolution reverb to audio files. |
+| 108 | | **reverb_delay.py → real audio** — algorithmic reverb + phi-spaced delay taps rendered to .wav. |
+| 109 | v3.2.0 | **formant_synth.py → real audio** — vowel-shaped resonant filtering on rendered audio. Real formant banks. |
+| 110 | | **granular_synth.py → real audio** — grain cloud engine reading .wav sources, outputting textured .wav. |
+| 111 | | **vocal_chop.py → real audio** — formant-shifted vocal fragments rendered from source material. |
+| 112 | | **glitch_engine.py → real audio** — stutter, reverse, bit-reduce, granular scatter on .wav files. |
+
+### Phase 3 — INTEGRATION & PIPELINE (Sessions 113–122 · v3.3–v3.5)
+
+_Goal: Modules talk to each other. End-to-end render pipeline from idea to mixdown._
+
+| Session | Version | Deliverable |
+|---------|---------|-------------|
+| 113 | v3.3.0 | **render_pipeline.py** — new module. Chain: synth → FX → sidechain → stereo → master. One call renders a full stem. |
+| 114 | | **batch_renderer.py** — new module. Render all patches from `build_dubstep_patches()` to .wav stems automatically. |
+| 115 | | **stem_mixer.py** — new module. Mix multiple rendered stems with phi-weighted gain staging. Output stereo mixdown. |
+| 116 | v3.4.0 | **sample_pack_builder.py** — new module. Package all rendered .wav into organized sample pack folders (kicks/, snares/, basses/, etc.). |
+| 117 | | **preset_pack_builder.py** — new module. Batch-export Serum 2 .fxp presets from all patches. Organized category folders. |
+| 118 | | **als_generator.py upgrade** — auto-populate .als projects with rendered stems + MIDI + sidechain. Full arrangement from templates. |
+| 119 | v3.5.0 | **wavetable_morph.py** — new module. Fractal interpolation between wavetable frames (not linear crossfade). Phi-curve morphing. |
+| 120 | | **spectral_resynthesis.py** — new module. FFT analysis → phi-filtered reconstruction. Import any .wav → DUBFORGE wavetable. |
+| 121 | | **harmonic_analysis.py upgrade** — real FFT spectral analysis on rendered .wav files. Visualize phi-ratio presence in produced audio. |
+| 122 | | **CLI tool** — `dubforge render`, `dubforge export`, `dubforge analyze` commands via entry_points. |
+
+### Phase 4 — INTELLIGENCE & EVOLUTION (Sessions 123–132 · v3.6–v3.8)
+
+_Goal: DUBFORGE learns from its own output. Phi-weighted feedback loops._
+
+| Session | Version | Deliverable |
+|---------|---------|-------------|
+| 123 | v3.6.0 | **phi_analyzer.py** — new module. Measure phi-ratio presence in any .wav. Score 0.0–1.0 "fractal coherence." |
+| 124 | | **evolution_engine.py** — new module. Track parameter changes across sessions. Identify which phi-tunings produce highest-rated output. |
+| 125 | | **preset_mutator.py** — new module. Take a Serum2Patch, apply phi-weighted random mutations, breed new patches. Genetic algorithm. |
+| 126 | v3.7.0 | **ab_tester.py** — new module. Render two patch variants, compare spectral profiles, pick the more phi-coherent one. |
+| 127 | | **memory.py upgrade** — phi-weighted recall. When querying past sessions, weight recent + high-rated results by 1/phi. |
+| 128 | | **dojo.py upgrade** — connect belt progression to actual output quality metrics. Auto-assign ratings based on phi_analyzer scores. |
+| 129 | v3.8.0 | **template_generator.py** — new module. Given a genre tag + energy profile, auto-generate a complete Serum2Patch + arrangement + FX chain. |
+| 130 | | **sound_palette.py** — new module. Define a "palette" of timbres (warm, cold, metallic, organic) mapped to phi-harmonic profiles. |
+| 131 | | **config_loader.py upgrade** — hot-reload YAML configs. Watch for changes, re-render affected outputs. |
+| 132 | | **Documentation overhaul** — auto-generated module docs from docstrings. Architecture diagrams. API reference. |
+
+### Phase 5 — POLISH & GRANDMASTER (Sessions 133–144 · v3.9–v4.0)
+
+_Goal: Ship-ready. Everything tested, documented, integrated. Hit 144._
+
+| Session | Version | Deliverable |
+|---------|---------|-------------|
+| 133 | v3.9.0 | **Full test coverage audit** — every module has ≥20 tests. Target: 2000+ total tests. |
+| 134 | | **Performance profiling** — benchmark every render pipeline. Optimize hot paths with numpy vectorization. |
+| 135 | | **Error handling hardening** — graceful failures, retry logic, input validation on every public function. |
+| 136 | v3.10.0 | **Plugin scaffold** — architecture for user-contributed modules. Plugin interface, discovery, registration. |
+| 137 | | **Web preview** — simple Flask/FastAPI endpoint. Upload .wav → get phi-analysis JSON + spectrogram PNG. |
+| 138 | | **Notebook tutorials** — 5 Jupyter notebooks walking through phi_core → growl → patch → render → master. |
+| 139 | v3.11.0 | **PSBS real-time monitor** — live phase coherence display during playback (prototype). |
+| 140 | | **Cross-platform CI** — GitHub Actions: lint + test on macOS/Linux/Windows. Badge in README. |
+| 141 | | **PyPI publish** — `pip install dubforge`. Clean package, entry points, version pinning. |
+| 142 | v4.0.0 | **DUBFORGE v4.0** — full integration test: one command renders complete EP (5 tracks × stems × masters). |
+| 143 | | **Final audit** — comprehensive technical audit v2. Compare to v1.4 audit. Measure real-audio percentage. |
+| 144 | **v4.0.1** | **🏆 FIBONACCI 144 — GRANDMASTER** — full snapshot, belt promotion, retrospective document. |
+
+---
+
+### Metrics at 144
+
+| Metric | Now (Session 91) | Target (Session 144) |
+|--------|-------------------|----------------------|
+| Modules | 52 | ~65 |
+| Tests | 1,121 | 2,000+ |
+| Real audio modules | ~4 (phi_core, growl, sample_slicer, mastering) | 30+ |
+| Output .wav files | 6,354 | 15,000+ |
+| Serum presets (.fxp) | 6 | 50+ |
+| MIDI files | 176 | 300+ |
+| .als projects | 3 | 10+ |
+| Version | v2.7.0 | v4.0.1 |
+| Belt | Black Belt | Grandmaster |
+
+### Fibonacci Sessions on the Path
+
+| # | Type | Milestone |
+|---|------|-----------|
+| **89** | ✅ Done | Black Belt promotion |
+| 91 | Current | — |
+| **144** | 🎯 Target | Grandmaster promotion |
+
+_55 sessions between Fibonacci markers. Every session ships code._
+
+---
+
+**Version:** 2.7.0
 **Author:** DUBFORGE
-**Date:** 2026-03-07
-**Modules:** 47 (phi_core, config_loader, log, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory, midi_export, drum_generator, sample_slicer, mastering_chain, als_generator, fxp_writer, vocal_chop, fx_generator, bass_oneshot, transition_fx, pad_synth, lead_synth, perc_synth, ambient_texture, sub_bass, noise_generator, arp_synth, pluck_synth, granular_synth, chord_pad, riser_synth, impact_hit, wobble_bass, formant_synth, glitch_engine, drone_synth, sidechain, riddim_engine, pitch_automation, lfo_matrix, stereo_imager, multiband_distortion, arrangement_sequencer, song_templates, vocal_processor, reverb_delay, convolution, harmonic_analysis)
+**Date:** 2026-03-08
+**Modules:** 52
+**Tests:** 1,121
+**Belt:** Black Belt (Session 89 → 144)
+**Next Fibonacci:** 144
