@@ -695,7 +695,7 @@ def spectral_profile(corpus: list[Album]) -> dict:
             all_centroids.append(c)
             all_bandwidths.append(b)
 
-        album_profiles[album.name] = {
+        album_profiles[album.title] = {
             "avg_centroid_hz": round(sum(centroids) / max(1, len(centroids)), 1),
             "avg_bandwidth_hz": round(sum(bandwidths) / max(1, len(bandwidths)), 1),
             "track_count": len(centroids),

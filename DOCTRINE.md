@@ -29,7 +29,7 @@
 
 ---
 
-## Module Architecture (47 modules)
+## Module Architecture (51 modules)
 
 ### Core & Analysis
 
@@ -92,6 +92,10 @@
 | Trance Arp Engine       | `trance_arp`            | Fibonacci-timed arpeggiator                  |
 | Arrangement Sequencer   | `arrangement_sequencer` | 4 types × 4 templates (weapon/emotive/hybrid/fib) |
 | Song Templates          | `song_templates`        | 4 categories × 5 templates (20 total)         |
+| Vocal Processor         | `vocal_processor`       | 5 types × 4 presets — pitch, vocoder, formant |
+| Reverb & Delay          | `reverb_delay`          | 5 types × 4 presets — phi-spaced reflections  |
+| Convolution             | `convolution`           | 5 IR types × 4 presets — room/cab/plate       |
+| Harmonic Analysis       | `harmonic_analysis`     | 5 types × 4 presets — FFT spectral analysis   |
 
 ### DAW Integration
 
@@ -256,4 +260,4 @@ n=47  ~580.68 Hz         upper-mid
 **Version:** 2.5.0
 **Author:** DUBFORGE
 **Date:** 2026-03-07
-**Modules:** 47 (phi_core, config_loader, log, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory, midi_export, drum_generator, sample_slicer, mastering_chain, als_generator, fxp_writer, vocal_chop, fx_generator, bass_oneshot, transition_fx, pad_synth, lead_synth, perc_synth, ambient_texture, sub_bass, noise_generator, arp_synth, pluck_synth, granular_synth, chord_pad, riser_synth, impact_hit, wobble_bass, formant_synth, glitch_engine, drone_synth, sidechain, riddim_engine, pitch_automation, lfo_matrix, stereo_imager, multiband_distortion, arrangement_sequencer, song_templates)
+**Modules:** 47 (phi_core, config_loader, log, rco, psbs, sb_analyzer, trance_arp, growl_resampler, chord_progression, ableton_live, serum2, dojo, memory, midi_export, drum_generator, sample_slicer, mastering_chain, als_generator, fxp_writer, vocal_chop, fx_generator, bass_oneshot, transition_fx, pad_synth, lead_synth, perc_synth, ambient_texture, sub_bass, noise_generator, arp_synth, pluck_synth, granular_synth, chord_pad, riser_synth, impact_hit, wobble_bass, formant_synth, glitch_engine, drone_synth, sidechain, riddim_engine, pitch_automation, lfo_matrix, stereo_imager, multiband_distortion, arrangement_sequencer, song_templates, vocal_processor, reverb_delay, convolution, harmonic_analysis)

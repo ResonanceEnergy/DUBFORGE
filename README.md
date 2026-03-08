@@ -4,7 +4,7 @@
 
 A Python-powered sound design engine built on Dan Winter's Planck x phi fractal mathematics. Every module — wavetable generation, arrangement optimization, bass layering, analysis, DSP processing — is keyed to the golden ratio, Fibonacci sequence, and fractal self-similarity.
 
-**47 engine modules · 922 tests · v2.5.0**
+**51 engine modules · 1021 tests · v2.6.0**
 
 ## Project Structure
 
@@ -63,9 +63,13 @@ DUBFORGE/
 │   ├── stereo_imager.py               # Stereo imaging processor
 │   ├── multiband_distortion.py        # Multiband distortion (5 algorithms)
 │   ├── arrangement_sequencer.py       # Arrangement sequencer + templates
-│   └── song_templates.py              # Song structure templates (20 templates)
+│   ├── song_templates.py              # Song structure templates (20 templates)
+│   ├── vocal_processor.py             # Vocal processing (5 types, 20 presets)
+│   ├── reverb_delay.py                # Reverb & delay (5 types, 20 presets)
+│   ├── convolution.py                 # Convolution engine (5 IR types, 20 presets)
+│   └── harmonic_analysis.py           # FFT harmonic analysis (5 types, 20 presets)
 │
-├── tests/                               # Test suite (922 tests)
+├── tests/                               # Test suite (1021 tests)
 │
 ├── configs/                             # YAML configurations
 │   ├── serum2_module_pack_v1.yaml       # Serum 2 module specs
@@ -159,6 +163,10 @@ python3 -m engine.dojo                  # Producer Dojo methodology
 python3 -m engine.trance_arp            # Fibonacci arp patterns
 python3 -m engine.arrangement_sequencer # Arrangement templates
 python3 -m engine.song_templates        # Song structure templates
+python3 -m engine.vocal_processor       # Vocal processing engine
+python3 -m engine.reverb_delay          # Reverb & delay engine
+python3 -m engine.convolution           # Convolution engine
+python3 -m engine.harmonic_analysis     # Harmonic analysis engine
 
 # Infrastructure
 python3 -m engine.memory                # Memory system diagnostics

@@ -107,6 +107,10 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("multiband_distortion", "Multiband Distortion"),
     ("arrangement_sequencer", "Arrangement Sequencer"),
     ("song_templates",    "Song Templates"),
+    ("vocal_processor",  "Vocal Processor"),
+    ("reverb_delay",     "Reverb & Delay"),
+    ("convolution",      "Convolution Engine"),
+    ("harmonic_analysis", "Harmonic Analysis"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]

@@ -896,7 +896,8 @@ def generate_march_snare(bars: int = 4) -> DrumPattern:
             vel = 100 if mp % 1 == 0 else 70
             pattern.hits.append(DrumHit(GM_DRUMS["snare"], b + mp, vel, 0.08))
             if mp % 2 == 0:
-                pattern.hits.append(DrumHit(GM_DRUMS["snare_rim"], b + mp - 0.03,
+                flam_pos = max(0.0, b + mp - 0.03)
+                pattern.hits.append(DrumHit(GM_DRUMS["snare_rim"], flam_pos,
                                             50, 0.03))
     return pattern
 
