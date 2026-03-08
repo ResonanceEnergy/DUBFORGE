@@ -6,12 +6,12 @@ filters, modulation matrix, effects rack, macros, unison, arpeggiator,
 clip sequencer, and preset generation — all governed by phi/Fibonacci doctrine.
 
 Xfer Records Serum 2 — "Advanced Hybrid Synthesizer"
-Version modelled: 2.0.x (2024-2025 release)
+Version modelled: 2.0.18 (Manual Version 1.0.3, April 27, 2025)
 
 Reference:
+    Serum 2 User Guide (Official PDF, v1.0.3)
+    Serum 2 What's New (Official PDF, v1.0.0, March 17, 2025)
     https://xferrecords.com/products/serum-2
-    Serum 2 What's New PDF
-    Official support docs
 
 Outputs:
     output/serum2/serum2_architecture.json
@@ -35,7 +35,7 @@ from typing import Optional
 from engine.config_loader import A4_432, FIBONACCI, PHI, get_config_value
 
 # Serum wavetable specs
-SERUM_FRAME_SIZE = 2048          # samples per frame
+SERUM_FRAME_SIZE = 2048          # samples per frame (internal resolution)
 SERUM_MAX_FRAMES = 256           # max wavetable frames
 SERUM_SAMPLE_RATE = 44100        # default sample rate
 SERUM_BIT_DEPTH = 16             # 16-bit PCM for .wav wavetables
@@ -46,12 +46,12 @@ SERUM2_PRESET_EXT = '.fxp'       # VST preset format
 SERUM2_BANK_EXT = '.fxb'         # VST bank format
 
 # ═══════════════════════════════════════════════════════════════════════════
-# OSCILLATOR TYPES — Serum 2 has 5 oscillator types per slot (A/B)
+# OSCILLATOR TYPES — Serum 2: 5 modes per slot (A / B / C)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 class OscillatorType(Enum):
-    """Serum 2 oscillator types — each slot A/B can be any of these."""
+    """Serum 2 oscillator types — each slot A/B/C can be any of these."""
     WAVETABLE = "wavetable"
     MULTISAMPLE = "multisample"
     SAMPLE = "sample"
@@ -59,15 +59,25 @@ class OscillatorType(Enum):
     SPECTRAL = "spectral"
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# WARP MODES — Complete Serum 2 warp catalogue (dual warp per osc)
+# Organised by menu category as shown in the Serum 2 UI.
+# ═══════════════════════════════════════════════════════════════════════════
+
+
 class WarpMode(Enum):
     """
     Serum 2 wavetable warp modes — dual warp slots per oscillator.
-    Each oscillator can apply TWO warps simultaneously.
+    Each oscillator can apply TWO warps simultaneously (Warp 1 + Warp 2).
+    Categories: Off, Sync, Alt Warp, Filter, Distortion, FM, PD, AM, RM.
     """
-    NONE = "None"
-    # Classic Serum warps
-    SYNC = "Sync"
-    SYNC_WINDOW = "Sync (Window)"
+    # ── Off ──────────────────────────────────────────────────────────
+    OFF = "Off"
+
+    # ── Sync ─────────────────────────────────────────────────────────
+    SYNC = "Sync"                        # WARP Var fader: hard-to-soft sync
+
+    # ── Alt Warp ─────────────────────────────────────────────────────
     BEND_PLUS = "Bend +"
     BEND_MINUS = "Bend -"
     BEND_PLUS_MINUS = "Bend +/-"
@@ -82,155 +92,342 @@ class WarpMode(Enum):
     REMAP_3 = "Remap 3"
     REMAP_4 = "Remap 4"
     QUANTIZE = "Quantize"
-    # FM / Ring Mod modes
-    FM_FROM_B = "FM (from B)"
-    FM_FROM_A = "FM (from A)"
-    RM_FROM_B = "RM (from B)"
-    RM_FROM_A = "RM (from A)"
-    AM_FROM_B = "AM (from B)"
-    AM_FROM_A = "AM (from A)"
-    # Phase Distortion
-    PD = "Phase Distortion"
-    # Serum 2 additions
-    FOLD = "Fold"
-    WRAP = "Wrap"
-    DRIVE = "Drive"
-    FILTER = "Filter"
+    ODD_EVEN = "Odd/Even"
+
+    # ── Filter (warp-slot filter) ────────────────────────────────────
+    WARP_LPF = "LPF"
+    WARP_HPF = "HPF"
+
+    # ── Distortion (oscillator-level) ────────────────────────────────
+    DIST_TUBE = "Tube"
+    DIST_SOFT_CLIP = "Soft Clip"
+    DIST_HARD_CLIP = "Hard Clip"
+    DIST_DIODE_1 = "Diode 1"
+    DIST_DIODE_2 = "Diode 2"
+    DIST_LINEAR_FOLD = "Linear Fold"
+    DIST_SINE_FOLD = "Sine Fold"
+    DIST_ZERO_SQUARE = "Zero-Square"
+    DIST_ASYM = "Asym"
+    DIST_RECTIFY = "Rectify"
+    DIST_SINE_SHAPER = "Sine Shaper"
+    DIST_STOMP_BOX = "Stomp Box"
+    DIST_TAPE_SAT = "Tape Sat."
+    DIST_SOFT_SAT = "Soft Sat."
+
+    # ── FM (Frequency Modulation) ────────────────────────────────────
+    # Source variants — each can use sub-modes: Thru-Zero, Exp, Linear
+    FM_B = "FM (B)"
+    FM_C = "FM (C)"
+    FM_NOISE = "FM (Noise)"
+    FM_SUB = "FM (Sub)"
+    FM_FILTER_1 = "FM (Filter 1)"
+    FM_FILTER_2 = "FM (Filter 2)"
+
+    # ── PD (Phase Distortion) ────────────────────────────────────────
+    PD_B = "PD (B)"
+    PD_C = "PD (C)"
+    PD_NOISE = "PD (Noise)"
+    PD_SUB = "PD (Sub)"
+    PD_FILTER_1 = "PD (Filter 1)"
+    PD_FILTER_2 = "PD (Filter 2)"
+    PD_SELF = "PD (Self)"
+
+    # ── AM (Amplitude Modulation) ────────────────────────────────────
+    AM_B = "AM (B)"
+    AM_C = "AM (C)"
+    AM_NOISE = "AM (Noise)"
+    AM_SUB = "AM (Sub)"
+    AM_FILTER_1 = "AM (Filter 1)"
+    AM_FILTER_2 = "AM (Filter 2)"
+
+    # ── RM (Ring Modulation) ─────────────────────────────────────────
+    RM_B = "RM (B)"
+    RM_C = "RM (C)"
+    RM_NOISE = "RM (Noise)"
+    RM_SUB = "RM (Sub)"
+    RM_FILTER_1 = "RM (Filter 1)"
+    RM_FILTER_2 = "RM (Filter 2)"
+
+
+class FMSubMode(Enum):
+    """FM warp sub-modes (selectable when an FM warp is active)."""
+    THRU_ZERO = "Thru-Zero"
+    EXP = "Exp"
+    LINEAR = "Linear"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FILTER TYPES — Complete Serum 2 filter catalogue
+# 5 categories: Normal, Multi, Flanges, Misc, New (Serum 2)
+# ═══════════════════════════════════════════════════════════════════════════
 
 
 class FilterType(Enum):
     """
-    Serum 2 filter types — significantly expanded from Serum 1.
-    Organized by filter family.
+    Serum 2 filter types — massively expanded from Serum 1.
+    Each filter has: CUTOFF, RES, DRIVE, VAR, PAN, MIX.
+    Organised by UI menu category.
     """
-    # Normal (multi-mode)
+    # ── Normal (with slope variants 6/12/18/24 dB) ──────────────────
+    MG_LOW_6 = "MG Low 6"
     MG_LOW_12 = "MG Low 12"
+    MG_LOW_18 = "MG Low 18"
     MG_LOW_24 = "MG Low 24"
-    MG_HIGH_12 = "MG High 12"
-    MG_HIGH_24 = "MG High 24"
-    MG_BAND_12 = "MG Band 12"
-    MG_BAND_24 = "MG Band 24"
-    MG_NOTCH_12 = "MG Notch 12"
-    MG_NOTCH_24 = "MG Notch 24"
-    # Low-pass variants
-    LP_12 = "Low 12"
-    LP_24 = "Low 24"
-    LP_48 = "Low 48"
-    LP_GERMAN = "German LP"
-    LP_ACID = "Acid"
-    # High-pass
-    HP_12 = "High 12"
-    HP_24 = "High 24"
-    HP_48 = "High 48"
-    # Band-pass / Notch
-    BP_12 = "Band 12"
-    BP_24 = "Band 24"
+    LOW_6 = "Low 6"
+    LOW_12 = "Low 12"
+    LOW_18 = "Low 18"
+    LOW_24 = "Low 24"
+    HIGH_6 = "High 6"
+    HIGH_12 = "High 12"
+    HIGH_18 = "High 18"
+    HIGH_24 = "High 24"
+    BAND_12 = "Band 12"
+    BAND_24 = "Band 24"
+    PEAK_12 = "Peak 12"
+    PEAK_24 = "Peak 24"
     NOTCH_12 = "Notch 12"
     NOTCH_24 = "Notch 24"
-    # Comb / Phaser / Formant
-    COMB_PLUS = "Comb +"
-    COMB_MINUS = "Comb -"
-    COMB_PM = "Comb +/-"
-    PHASER = "Phaser"
-    FLANGER = "Flanger"
-    FORMANT_VOWEL = "Formant (Vowel)"
-    FORMANT_I = "Formant I"
-    FORMANT_II = "Formant II"
-    # Special
-    SAMPLE_HOLD = "Sample & Hold"
+
+    # ── Multi (dual SVF combinations) ───────────────────────────────
+    MULTI_LH = "LH"
+    MULTI_LB = "LB"
+    MULTI_LP = "LP"
+    MULTI_LN = "LN"
+    MULTI_HB = "HB"
+    MULTI_HP = "HP"
+    MULTI_HN = "HN"
+    MULTI_BP = "BP"
+    MULTI_BN = "BN"
+    MULTI_PP = "PP"
+    MULTI_PN = "PN"
+    MULTI_NN = "NN"
+    MULTI_LBH = "LBH"
+    MULTI_LPH = "LPH"
+    MULTI_LNH = "LNH"
+    MULTI_BPN = "BPN"
+
+    # ── Flanges (Comb / Flanger / Phaser with LP/HP/HL variants) ────
+    CMB_L = "Cmb L"
+    CMB_H = "Cmb H"
+    CMB_HL = "Cmb HL"
+    FLG_L = "Flg L"
+    FLG_H = "Flg H"
+    FLG_HL = "Flg HL"
+    PHS_L = "Phs L"
+    PHS_H = "Phs H"
+    PHS_HL = "Phs HL"
+
+    # ── Misc ─────────────────────────────────────────────────────────
+    LOW_EQ_6 = "Low EQ 6"
+    LOW_EQ_12 = "Low EQ 12"
+    BAND_EQ_6 = "Band EQ 6"
+    BAND_EQ_12 = "Band EQ 12"
+    HIGH_EQ_6 = "High EQ 6"
+    HIGH_EQ_12 = "High EQ 12"
     RING_MOD = "Ring Mod"
-    LOW_EQ = "Low EQ Shelf"
-    HIGH_EQ = "High EQ Shelf"
-    # Serum 2 additions
+    RING_MOD_X2 = "Ring Mod x2"
+    SAMPLE_HOLD = "SampHold"
+    SAMPLE_HOLD_NEG = "SampHold-"
+    COMBS = "Combs"
+    ALLPASSES = "Allpasses"
     REVERB = "Reverb"
-    LADDER = "Ladder"
-    SVF_LP = "SVF LP"
-    SVF_HP = "SVF HP"
-    SVF_BP = "SVF BP"
+    FRENCH_LP = "French LP"
+    GERMAN_LP = "German LP"
+    ADD_BASS = "Add Bass"
+    FORMANT_I = "Formant-I"
+    FORMANT_II = "Formant-II"
+    FORMANT_III = "Formant-III"
+    BANDREJECT = "Bandreject"
+    DIST_COMB_1_LP = "Dist.Comb 1 LP"
+    DIST_COMB_1_BP = "Dist.Comb 1 BP"
+    DIST_COMB_2_LP = "Dist.Comb 2 LP"
+    DIST_COMB_2_BP = "Dist.Comb 2 BP"
+    SCREAM_LP = "Scream LP"
+    SCREAM_BP = "Scream BP"
+
+    # ── New (Serum 2) ────────────────────────────────────────────────
+    WSP = "Wsp"
+    DJ_MIXER = "DJ Mixer"
+    DIFFUSOR = "Diffusor"
+    MG_LADDER = "MG Ladder"
+    ACID_LADDER = "Acid Ladder"
+    EMS_LADDER = "EMS Ladder"
+    MG_DIRTY = "MG Dirty"
+    PZ_SVF = "PZ SVF"
+    COMB_2 = "Comb 2"
+    EXP_MM = "Exp MM"
+    EXP_BPF = "Exp BPF"
 
 
 class FilterRouting(Enum):
     """Filter routing options for dual-filter configuration."""
-    SERIAL = "Serial"              # Osc → Filter1 → Filter2
-    PARALLEL = "Parallel"          # Osc → Filter1 + Filter2 → Mix
-    SPLIT_AB = "Split A/B"         # OscA → Filter1, OscB → Filter2
+    SERIAL = "Serial"              # Filter 1 → Filter 2
+    PARALLEL = "Parallel"          # Filter 1 + Filter 2 → Mix
+
+    # Per-oscillator routing targets (set per osc in the mixer)
+    FILTER_1 = "Filter 1"
+    FILTER_2 = "Filter 2"
+    BOTH = "Filter 1 + Filter 2"
+    MAIN = "Main"                  # bypass filters (ENV 1 toggle)
+    DIRECT = "Direct"              # bypass filters + FX
+    NONE = "None"                  # disabled
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EFFECTS — 13 FX modules + 3 splitters + Utility
+# 3 independent FX racks: MAIN, BUS 1, BUS 2
+# ═══════════════════════════════════════════════════════════════════════════
 
 
 class EffectType(Enum):
     """
-    Serum 2 built-in effects — 10 FX slots available.
-    Can be reordered via drag and drop in the FX rack.
+    Serum 2 built-in effects — 13 FX modules + 3 splitters + Utility.
+    Unlimited instances per rack. 3 racks: MAIN, BUS 1, BUS 2.
     """
-    DISTORTION = "Distortion"
-    DELAY = "Delay"
-    COMPRESSOR = "Compressor"
+    BODE = "Bode"                      # frequency shifter (new in S2)
     CHORUS = "Chorus"
+    COMPRESSOR = "Compressor"          # single + multiband modes
+    CONVOLVE = "Convolve"              # convolution reverb (new in S2)
+    DELAY = "Delay"                    # HQ mode default (new in S2)
+    DISTORTION = "Distortion"          # Overdrive mode + DC bias (new in S2)
+    EQUALIZER = "Equalizer"            # 2-band parametric
+    FILTER = "Filter"                  # same types as synth filters
     FLANGER = "Flanger"
-    PHASER = "Phaser"
-    EQ = "EQ"
-    FILTER = "Filter"
-    REVERB = "Reverb"
     HYPER_DIMENSION = "Hyper/Dimension"
-    # Serum 2 additions
-    MULTIBAND_COMPRESSOR = "Multiband Compressor"
-    OTT = "OTT"
-    PITCH_SHIFT = "Pitch Shift"
-    FREQUENCY_SHIFT = "Frequency Shift"
-    BITCRUSHER = "Bitcrusher"
-    WAVEFOLDER = "Wavefolder"
-    TAPE_SATURATOR = "Tape Saturator"
+    PHASER = "Phaser"
+    REVERB = "Reverb"                  # 5 types: Plate/Hall/Vintage/Nitrous/Basin
+    UTILITY = "Utility"                # polarity, mono bass, width (new in S2)
+    # Splitters
+    SPLITTER_LH = "Splitter L/H"      # Lows/Highs
+    SPLITTER_LMH = "Splitter L/M/H"   # Lows/Mids/Highs
+    SPLITTER_MS = "Splitter M/S"       # Mid/Side
+
+
+class FXRack(Enum):
+    """Serum 2 FX rack targets."""
+    MAIN = "Main"
+    BUS_1 = "Bus 1"
+    BUS_2 = "Bus 2"
 
 
 class DistortionMode(Enum):
-    """Distortion sub-modes within the Distortion FX."""
+    """Distortion FX sub-modes (15 types)."""
     TUBE = "Tube"
     SOFT_CLIP = "Soft Clip"
     HARD_CLIP = "Hard Clip"
     DIODE_1 = "Diode 1"
     DIODE_2 = "Diode 2"
-    LIN_FOLD = "Lin Fold"
-    SIN_FOLD = "Sin Fold"
-    ZERO_SQZ = "Zero Sqz"
-    SQR = "Sqr"
-    DOWNSAMPLE = "Downsample"
+    LINEAR_FOLD = "Linear Fold"
+    SINE_FOLD = "Sine Fold"
+    ZERO_SQUARE = "Zero-Square"
     ASYM = "Asym"
     RECTIFY = "Rectify"
-    XOR = "Xor"
+    SINE_SHAPER = "Sine Shaper"
+    DOWNSAMPLE = "Downsample"
+    X_SHAPER = "X-Shaper"
+    X_SHAPER_ASYM = "X-Shaper (Asym)"
+    OVERDRIVE = "Overdrive"            # new in Serum 2
+
+
+class ReverbType(Enum):
+    """Reverb FX sub-types (5 algorithms)."""
+    PLATE = "Plate"
+    HALL = "Hall"
+    VINTAGE = "Vintage"                # new in Serum 2
+    NITROUS = "Nitrous"                # new in S2 — 5 sub-modes
+    BASIN = "Basin"                    # new in Serum 2
+
+
+class NitrousMode(Enum):
+    """Nitrous reverb sub-modes."""
+    SPACE = "Space"
+    MARBLE = "Marble"
+    RECTANGLE = "Rectangle"
+    HEXAGON = "Hexagon"
+    BOX = "Box"
+
+
+class CompressorMode(Enum):
+    """Compressor FX modes."""
+    SINGLE = "Single"
+    MULTIBAND = "Multiband"
+
+
+class DelayMode(Enum):
+    """Delay FX modes."""
+    NORMAL = "Normal"
+    PING_PONG = "Ping-Pong"
+    TAP_DELAY = "Tap->Delay"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UNISON — 5 distribution modes + stack options
+# ═══════════════════════════════════════════════════════════════════════════
 
 
 class UnisonMode(Enum):
-    """Serum 2 unison voice distribution modes."""
-    NONE = "None"
-    CLASSIC = "Classic"
-    SUPER = "Super"
-    LINEAR = "Linear"
-    CHORD = "Chord"
-    MAJOR = "Major"
-    MINOR = "Minor"
-    # Serum 2 additions
-    STACK = "Stack"
-    SPREAD = "Spread"
-    INV_SAW = "Inv Saw"
-    RANDOM = "Random"
+    """Serum 2 unison voice distribution modes (1–16 voices per osc)."""
+    LINEAR = "Linear"                  # even pitch spacing
+    SUPER = "Super"                    # dense/powerful detuning emphasis
+    EXP = "Exp"                        # exponential detuning spread
+    INV = "Inv"                        # inverted (lower voices more detuned)
+    RANDOM = "Random"                  # random detuning per voice
+
+
+class UnisonStack(Enum):
+    """Unison stack transposition options."""
+    OFF = "Off"
+    OCT_1X = "12 (1x)"
+    OCT_2X = "12 (2x)"
+    OCT_3X = "12 (3x)"
+    FIFTH_1X = "12+7 (1x)"
+    FIFTH_2X = "12+7 (2x)"
+    FIFTH_3X = "12+7 (3x)"
+    CENTER_12 = "Center-12"
+    CENTER_24 = "Center-24"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LFO — 10 LFOs, 5 types, 3 modes, 3 directions
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class LFOType(Enum):
+    """LFO oscillator types."""
+    NORMAL = "Normal"                  # standard drawable LFO
+    PATH = "Path"                      # path-based movement
+    CHAOS_LORENZ = "Chaos: Lorenz"     # chaotic attractor (new in S2)
+    CHAOS_ROSSLER = "Chaos: Rossler"   # chaotic attractor (new in S2)
+    SAMPLE_AND_HOLD = "S&H"            # sample & hold
 
 
 class LFOShape(Enum):
-    """LFO built-in shapes — Serum also allows custom-drawn shapes."""
+    """LFO preset shapes (for Normal type)."""
     SINE = "Sine"
     TRIANGLE = "Triangle"
     SAW_UP = "Saw Up"
     SAW_DOWN = "Saw Down"
     SQUARE = "Square"
-    S_AND_H = "Sample & Hold"
-    SMOOTH_RANDOM = "Smooth Random"
-    CUSTOM = "Custom"
+    CUSTOM = "Custom"                  # user-drawn
+
 
 class LFOMode(Enum):
-    """LFO trigger / playback modes."""
-    FREE = "Free"              # Free-running (no retrigger)
-    SYNC = "Sync"              # BPM-synced
-    TRIGGER = "Trigger"        # Retrigger on note
-    ENVELOPE = "Envelope"      # One-shot (LFO as envelope)
+    """LFO retrigger modes."""
+    FREE = "Free"                      # follows host clock, ignores note timing
+    RETRIG = "Retrig"                  # restarts on new note
+    ENVELOPE = "Envelope"              # single cycle then stops (loopback optional)
+
+
+class LFODirection(Enum):
+    """LFO playback direction."""
+    FORWARD = "Forward"
+    REVERSE = "Reverse"
+    PING_PONG = "Ping Pong"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VOICING — Mono / Legato / Poly
+# ═══════════════════════════════════════════════════════════════════════════
 
 
 class VoicingMode(Enum):
@@ -238,17 +435,83 @@ class VoicingMode(Enum):
     POLY = "Poly"
     MONO = "Mono"
     LEGATO = "Legato"
-    MONO_RETRIG = "Mono Retrigger"
 
 
-class ArpDirection(Enum):
-    """Built-in arpeggiator direction modes."""
+class VoiceStealPriority(Enum):
+    """Voice steal priority when polyphony is exhausted."""
+    NEWEST = "Newest"
+    OLDEST = "Oldest"
+    HIGHEST = "Highest"
+    LOWEST = "Lowest"
+    VELOCITY = "Velocity"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ARPEGGIATOR — 12 slots per bank, 20+ shapes, pattern editor
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class ArpShape(Enum):
+    """Arpeggiator transpose range shapes."""
     UP = "Up"
     DOWN = "Down"
     UP_DOWN = "Up/Down"
     DOWN_UP = "Down/Up"
+    UP_PLUS_DOWN = "Up+Down"
+    DOWN_PLUS_UP = "Down+Up"
+    THUMB_UP = "Thumb Up"
+    THUMB_UD = "Thumb UD"
+    PINKY_UP = "Pinky Up"
+    PINKY_UD = "Pinky UD"
+    CONVERGE = "Converge"
+    DIVERGE = "Diverge"
+    CON_DIVERGE = "Con+Diverge"
+    CHORD = "Chord"
     RANDOM = "Random"
-    ORDER = "Order"
+    RND_NO_DUP = "Rnd.NoDup"
+    RND_DRIFT = "Rnd.Drift"
+    RND_ONCE = "Rnd.Once"
+    PATTERN = "Pattern"                # custom pattern editor
+
+
+class ArpPatternMode(Enum):
+    """ARP pattern editor playback modes."""
+    NORMAL = "Normal"
+    REVERSE = "Reverse"
+    PENDULUM = "Pendulum"
+    RANDOM = "Random"
+    RAND_START = "Rand Start"
+    RAND_END = "Rand End"
+    ONE_SHOT = "One Shot"
+    STATIC = "Static"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SUB OSCILLATOR — 6 waveforms
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class SubOscWaveform(Enum):
+    """Sub oscillator waveform types."""
+    SINE = "Sine"
+    ROUNDED_RECT = "Rounded Rect"
+    TRIANGLE = "Triangle"
+    SAW = "Saw"
+    SQUARE = "Square"
+    PULSE = "Pulse"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NOISE OSCILLATOR — colour modes
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class NoiseColor(Enum):
+    """Noise oscillator colour noise modes."""
+    WHITE = "White"
+    PINK = "Pink"
+    BROWN = "Brown"
+    GEIGER = "Geiger"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -268,7 +531,7 @@ class WavetableSlot:
 
 @dataclass
 class OscillatorConfig:
-    """Configuration for one Serum 2 oscillator slot (A or B)."""
+    """Configuration for one Serum 2 oscillator slot (A, B, or C)."""
     enabled: bool = True
     osc_type: str = OscillatorType.WAVETABLE.value
     wavetable: Optional[WavetableSlot] = None
@@ -281,26 +544,36 @@ class OscillatorConfig:
     octave: int = 0                    # -4 to +4
     semi: int = 0                      # -24 to +24
     fine: float = 0.0                  # -100 to +100 cents
-    coarse: float = 0.0               # Hz offset
-    # Unison
-    unison_voices: int = 1             # 1-16
+    coarse: float = 0.0               # CRS — continuous semitone offset
+    # Unison (1–16 voices)
+    unison_voices: int = 1
     unison_detune: float = 0.0         # 0.0–1.0
-    unison_blend: float = 0.0          # 0.0–1.0
-    unison_mode: str = UnisonMode.CLASSIC.value
+    unison_blend: float = 0.75         # 0.0–1.0 (Serum 2 default 75%)
+    unison_mode: str = UnisonMode.SUPER.value
+    unison_width: float = 1.0          # stereo spread
+    unison_wt_pos: float = 0.0         # WT POS spread per voice
+    unison_warp1: float = 0.0          # WARP 1 spread per voice
+    unison_warp2: float = 0.0          # WARP 2 spread per voice
+    unison_stack: str = UnisonStack.OFF.value
     # Warp modes (Serum 2: dual warp)
-    warp_1: str = WarpMode.NONE.value
+    warp_1: str = WarpMode.OFF.value
     warp_1_amount: float = 0.0
-    warp_2: str = WarpMode.NONE.value
+    warp_2: str = WarpMode.OFF.value
     warp_2_amount: float = 0.0
+    # FM sub-mode (only relevant when warp is FM)
+    fm_sub_mode: str = FMSubMode.THRU_ZERO.value
     # Phase
     phase: float = 0.0                 # 0.0–1.0
     random_phase: bool = True
-    # Sub-oscillator (basic waveform)
-    sub_enabled: bool = False
-    sub_shape: str = "Sine"            # Sine, Triangle, Saw, Square, Pulse
-    sub_level: float = 0.5
-    sub_octave: int = -1               # relative to main osc
-    sub_direct_out: bool = False       # bypass filters
+    phase_memory: bool = False         # Serum 2: remember phase across notes
+    contiguous_phase: bool = False     # Serum 2: contiguous phase mode
+    # Pitch tracking
+    pitch_tracking: bool = True
+    # Routing target (per-osc)
+    routing: str = FilterRouting.FILTER_1.value
+    # Bus sends
+    bus_1_send: float = 0.0
+    bus_2_send: float = 0.0
 
     def __post_init__(self):
         if self.wavetable is None:
@@ -308,39 +581,68 @@ class OscillatorConfig:
 
 
 @dataclass
+class SubOscillator:
+    """Serum 2 dedicated sub oscillator."""
+    enabled: bool = False
+    waveform: str = SubOscWaveform.SINE.value
+    level: float = 0.5
+    pan: float = 0.5
+    octave: int = -1                   # relative to root
+    coarse: float = 0.0                # CRS — continuous semitone offset
+    phase: float = 0.0
+    contiguous_phase: bool = False
+    routing: str = FilterRouting.FILTER_1.value
+    direct_out: bool = False           # bypass filters
+
+
+@dataclass
 class NoiseOscillator:
-    """Serum 2 noise oscillator — one-shot samples or noise textures."""
+    """Serum 2 noise oscillator — samples or colour noise."""
     enabled: bool = False
     sample: str = "White Noise"
     level: float = 0.25
     pan: float = 0.5
-    pitch_tracking: bool = False
-    phase: float = 0.0
-    random_phase: bool = True
+    # Colour noise mode (alternative to sample)
+    color_mode: Optional[str] = None   # None = use sample; or NoiseColor value
+    # Sample controls
+    start: float = 0.0                 # START position
+    start_rand: float = 0.0            # RAND start randomisation
+    pitch: float = 0.0
+    fine: float = 0.0
+    key_tracking: bool = False
     one_shot: bool = False
-    direct_out: bool = False           # bypass filters
-    filter_routing: str = "Filter 1"   # Filter 1, Filter 2, Both, None
+    # Routing
+    routing: str = FilterRouting.FILTER_1.value
+    direct_out: bool = False
+    bus_1_send: float = 0.0
+    bus_2_send: float = 0.0
 
 
 @dataclass
 class FilterConfig:
-    """Configuration for one Serum 2 filter."""
+    """Configuration for one Serum 2 filter (Filter 1 or Filter 2)."""
     enabled: bool = True
     filter_type: str = FilterType.MG_LOW_24.value
     cutoff: float = 1000.0             # Hz (20–20000)
     resonance: float = 0.0             # 0.0–1.0
     drive: float = 0.0                 # 0.0–1.0
-    fat: bool = False                  # analog-style filter fattening
+    drive_clean: bool = False          # Serum 2: clean mode for drive
+    var: float = 0.0                   # VAR parameter (function depends on type)
+    pan: float = 0.5                   # PAN 0.0=L, 0.5=C, 1.0=R
+    mix: float = 1.0                   # MIX dry/wet
+    fat: bool = False                  # FAT — saturation on resonance (Normal types)
     key_tracking: float = 0.0          # 0.0–1.0
-    # Serum 2: filter can blend between types
-    morph: float = 0.0                 # 0.0–1.0 blend to second type
-    morph_target: str = FilterType.MG_HIGH_24.value
+    # Filter output routing
+    output_routing: str = "Main"       # Main, Direct, None
+    bus_1_send: float = 0.0
+    bus_2_send: float = 0.0
 
 
 @dataclass
 class EnvelopeConfig:
-    """ADSR envelope — Serum 2 has 3 assignable envelopes."""
+    """AHDSR envelope — Serum 2 has 4 envelopes with HOLD segment."""
     attack_ms: float = 1.0             # milliseconds
+    hold_ms: float = 0.0               # HOLD — Serum 2: between attack & decay
     decay_ms: float = 200.0
     sustain: float = 0.75              # 0.0–1.0
     release_ms: float = 100.0
@@ -348,64 +650,89 @@ class EnvelopeConfig:
     attack_curve: float = 0.0          # -1.0 (log) to +1.0 (exp)
     decay_curve: float = 0.0
     release_curve: float = 0.0
+    # Time mode
+    bpm_sync: bool = False             # Serum 2: BPM tempo-sync option
+    # Legato
+    legato_inverted: bool = False      # Serum 2: force trigger even in legato
 
 
 @dataclass
 class LFOConfig:
-    """LFO configuration — Serum 2 has 4 LFOs with custom shape drawing."""
+    """LFO configuration — Serum 2 has 10 LFOs."""
     enabled: bool = True
-    shape: str = LFOShape.SINE.value
-    mode: str = LFOMode.SYNC.value
-    rate_hz: float = 1.0               # free-running rate
+    lfo_type: str = LFOType.NORMAL.value
+    shape: str = LFOShape.SINE.value   # preset shape (Normal type)
+    mode: str = LFOMode.RETRIG.value
+    direction: str = LFODirection.FORWARD.value
+    rate_hz: float = 1.0               # free-running rate (up to 1000 Hz w/ 10x)
     rate_sync: str = "1/4"             # BPM-synced rate
+    bpm_sync: bool = True              # BPM or Hz mode
     phase: float = 0.0                 # start phase 0–360°
+    # Mono/Poly
+    mono: bool = False                 # default polyphonic
+    # HOST sync
+    host_sync: bool = False            # sync to global song position
+    # Timing options
+    triplet: bool = False              # TRIP
+    dotted: bool = False               # DOT
+    rate_10x: bool = False             # 10x rate multiplier (up to 1000 Hz)
+    swing: float = 0.0                 # Serum 2: LFO swing
     # Custom shape data (list of (x, y) if shape == CUSTOM)
     custom_points: list = field(default_factory=list)
     # LFO envelope (rise/delay)
     rise_ms: float = 0.0
     delay_ms: float = 0.0
-    smooth: float = 0.0                # smoothing amount
-    # One-shot mode (acts as complex envelope)
-    one_shot: bool = False
-    loop: bool = True
+    smooth: float = 0.0                # output smoothing
 
 
 @dataclass
 class ModulationRoute:
     """
-    A single modulation assignment in the mod matrix.
+    A single modulation assignment in the 64-slot mod matrix.
     Serum's drag-and-drop system + matrix view.
     """
-    source: str = "LFO 1"             # Env 1-3, LFO 1-4, Velocity, Note, etc.
+    source: str = "LFO 1"             # from 49 sources
     destination: str = "Osc A WT Pos"  # any modulatable parameter
-    amount: float = 0.0                # -1.0 to +1.0
+    amount: float = 0.0                # -1.0 to +1.0 (bidirectional)
+    curve: float = 0.0                 # CRV — source response curve
+    polarity_bipolar: bool = True      # POL — bipolar or unipolar
     # Aux source for modulating the modulation depth
-    aux_source: Optional[str] = None   # e.g., "Mod Wheel" to control depth
-    aux_amount: float = 1.0
-    bipolar: bool = True
+    aux_source: Optional[str] = None   # e.g., "Mod Wheel"
+    aux_inverted: bool = False         # INV
+    aux_curve: float = 0.0             # aux CRV
+    # Output
+    output_scale: float = 1.0          # OUTPUT — final scaling
 
 
 @dataclass
 class EffectSlot:
-    """A single effect in the Serum 2 FX rack (up to 10 slots)."""
+    """A single effect in a Serum 2 FX rack."""
     enabled: bool = True
     fx_type: str = EffectType.DISTORTION.value
+    rack: str = FXRack.MAIN.value      # which rack (Main, Bus 1, Bus 2)
     mix: float = 0.5                   # dry/wet 0.0–1.0
+    level: float = 1.0                 # output level
     # Common parameters (specifics depend on fx_type)
     param_a: float = 0.5              # Primary parameter
     param_b: float = 0.5              # Secondary parameter
     param_c: float = 0.5              # Tertiary parameter
     # Distortion sub-mode
     distortion_mode: Optional[str] = None
-    # Pre/post filter position
-    pre_filter: bool = False
+    # Reverb sub-type
+    reverb_type: Optional[str] = None
+    nitrous_mode: Optional[str] = None
+    # Compressor mode
+    compressor_mode: Optional[str] = None
+    # Delay mode
+    delay_mode: Optional[str] = None
+    delay_hq: bool = True              # Serum 2: HQ mode default
 
 
 @dataclass
 class MacroConfig:
     """
-    Serum 2 macro knob — 4 macros available (Serum 2 adds up to 8).
-    Each macro can control multiple destinations.
+    Serum 2 macro knob — 8 macros available.
+    Each macro can control multiple destinations AND be a mod destination.
     """
     label: str = "Macro 1"
     value: float = 0.0                 # 0.0–1.0
@@ -415,23 +742,53 @@ class MacroConfig:
 @dataclass
 class ArpeggiatorConfig:
     """
-    Serum 2 arpeggiator + clip sequencer.
-    Serum 2 adds a clip-based step sequencer alongside the classic arp.
+    Serum 2 arpeggiator — 12 slots per bank, advanced shapes, pattern editor.
     """
     enabled: bool = False
-    direction: str = ArpDirection.UP.value
+    shape: str = ArpShape.UP.value
     octave_range: int = 2              # 1–8
     tempo_sync: bool = True
     rate: str = "1/8"                  # note rate
+    triplet: bool = False
+    dotted: bool = False
     gate: float = 0.5                  # 0.0–1.0
-    # Swing
-    swing: float = 0.0                 # 0.0–1.0
-    # Sequence
-    steps: int = 16                    # number of steps
-    step_pattern: list = field(default_factory=list)  # vel per step
-    # Clip sequencer (Serum 2 new)
-    clip_sequencer_enabled: bool = False
-    clips: list = field(default_factory=list)  # list of clip patterns
+    swing: float = 0.0
+    # Transpose
+    shift: int = 0                     # semitones
+    transpose_range: int = 12          # range in semitones
+    # Playback
+    offset: int = 0
+    repeats: int = 1
+    chance: float = 1.0                # note probability
+    latch: bool = False
+    thru: bool = False
+    # Velocity
+    velocity_retrig: bool = False
+    velocity_decay: float = 0.0
+    velocity_target: float = 1.0
+    # Retrigger
+    retrig_launch: bool = False
+    retrig_rate: str = "1/4"
+    retrig_note: bool = False
+    retrig_first: bool = False
+    # Sequencer pattern (when shape == Pattern)
+    pattern_mode: str = ArpPatternMode.NORMAL.value
+    pattern_steps: list = field(default_factory=list)
+    # Slots (12 per bank)
+    active_slot: int = 1               # 1–12
+
+
+@dataclass
+class ClipSequencerConfig:
+    """Serum 2 CLIP module — 12 clip slots per bank with piano roll editor."""
+    enabled: bool = False
+    active_slot: int = 1               # 1–12
+    key: str = "C"
+    scale: str = "Chromatic"
+    transpose: int = 0
+    record_mode: str = "Overdub"       # Overdub, Extend
+    midi_out: bool = False
+    clips: list = field(default_factory=list)
 
 
 @dataclass
@@ -439,26 +796,50 @@ class VoicingConfig:
     """Global voicing settings."""
     mode: str = VoicingMode.POLY.value
     max_voices: int = 8
+    # Portamento
     portamento_ms: float = 0.0
-    portamento_mode: str = "Always"    # Always, Legato
+    portamento_curve: float = 0.0      # convex/concave contour
+    portamento_always: bool = False    # even without held note
+    portamento_scaled: bool = False    # rate scales with interval distance
+    # Voice stealing
+    steal_priority: str = VoiceStealPriority.NEWEST.value
+    limit_same_note: bool = False      # limit same note poly to 1
+    # Pitch bend
     pitch_bend_range: int = 2          # semitones
-    mpe_enabled: bool = False          # Serum 2: MPE support
+    # MPE
+    mpe_enabled: bool = False
+    mpe_pitch_maps_to_x: bool = False
+    mpe_y_bidirectional: bool = False
+    # Voice control (per-voice randomisation)
+    voice_pan_rand: float = 0.0
+    voice_detune_rand: float = 0.0     # cents
+    voice_cutoff_rand: float = 0.0     # %
+    voice_env_rand: float = 0.0        # %
 
 
 @dataclass
 class Serum2Patch:
     """
     Complete Serum 2 patch — the full state of the synthesizer.
-    This mirrors the internal data structure of a .fxp preset.
+    Mirrors the Serum 2 preset structure.
+    3 oscillators (A/B/C), sub, noise, 2 filters, 4 envs, 10 LFOs,
+    64-slot mod matrix, 3 FX racks, 8 macros, arp, clip sequencer.
     """
     name: str = "DUBFORGE Init"
     author: str = "DUBFORGE"
     category: str = "Bass"
+    description: str = ""              # DESC field
     tags: list = field(default_factory=lambda: ["dubstep", "phi", "fractal"])
 
-    # Oscillators
+    # Oscillators — A, B, C (Serum 2: three primary oscillators)
     osc_a: OscillatorConfig = field(default_factory=OscillatorConfig)
     osc_b: OscillatorConfig = field(default_factory=lambda: OscillatorConfig(enabled=False))
+    osc_c: OscillatorConfig = field(default_factory=lambda: OscillatorConfig(enabled=False))
+
+    # Sub oscillator (dedicated)
+    sub: SubOscillator = field(default_factory=SubOscillator)
+
+    # Noise oscillator
     noise: NoiseOscillator = field(default_factory=NoiseOscillator)
 
     # Filters
@@ -466,35 +847,51 @@ class Serum2Patch:
     filter_2: FilterConfig = field(default_factory=lambda: FilterConfig(enabled=False))
     filter_routing: str = FilterRouting.SERIAL.value
 
-    # Envelopes (Env 1 = amp by default)
-    env_1: EnvelopeConfig = field(default_factory=EnvelopeConfig)           # Amp
-    env_2: EnvelopeConfig = field(default_factory=lambda: EnvelopeConfig(   # Filter
+    # Envelopes (4 — ENV 1 = amp, always active)
+    env_1: EnvelopeConfig = field(default_factory=EnvelopeConfig)
+    env_2: EnvelopeConfig = field(default_factory=lambda: EnvelopeConfig(
         attack_ms=5.0, decay_ms=300.0, sustain=0.3, release_ms=200.0
     ))
-    env_3: EnvelopeConfig = field(default_factory=lambda: EnvelopeConfig(   # Aux
+    env_3: EnvelopeConfig = field(default_factory=lambda: EnvelopeConfig(
+        attack_ms=0.0, decay_ms=100.0, sustain=0.0, release_ms=50.0
+    ))
+    env_4: EnvelopeConfig = field(default_factory=lambda: EnvelopeConfig(
         attack_ms=0.0, decay_ms=100.0, sustain=0.0, release_ms=50.0
     ))
 
-    # LFOs
+    # LFOs (10 — LFO 7–10 appear after LFO 6 is assigned)
     lfo_1: LFOConfig = field(default_factory=LFOConfig)
     lfo_2: LFOConfig = field(default_factory=lambda: LFOConfig(enabled=False))
     lfo_3: LFOConfig = field(default_factory=lambda: LFOConfig(enabled=False))
     lfo_4: LFOConfig = field(default_factory=lambda: LFOConfig(enabled=False))
+    lfo_5: LFOConfig = field(default_factory=lambda: LFOConfig(enabled=False))
+    lfo_6: LFOConfig = field(default_factory=lambda: LFOConfig(enabled=False))
+    lfo_7: LFOConfig = field(default_factory=lambda: LFOConfig(enabled=False))
+    lfo_8: LFOConfig = field(default_factory=lambda: LFOConfig(enabled=False))
+    lfo_9: LFOConfig = field(default_factory=lambda: LFOConfig(enabled=False))
+    lfo_10: LFOConfig = field(default_factory=lambda: LFOConfig(enabled=False))
 
-    # Modulation matrix
+    # Modulation matrix (64 slots max)
     mod_matrix: list = field(default_factory=list)  # list of ModulationRoute
 
-    # Effects rack (up to 10)
+    # Effects — 3 racks (Main, Bus 1, Bus 2)
     effects: list = field(default_factory=list)  # list of EffectSlot
 
-    # Macros (4 standard, up to 8 in Serum 2)
+    # Macros (8)
     macro_1: MacroConfig = field(default_factory=lambda: MacroConfig(label="PHI MORPH"))
     macro_2: MacroConfig = field(default_factory=lambda: MacroConfig(label="FM DEPTH"))
     macro_3: MacroConfig = field(default_factory=lambda: MacroConfig(label="SUB WEIGHT"))
     macro_4: MacroConfig = field(default_factory=lambda: MacroConfig(label="GRIT"))
+    macro_5: MacroConfig = field(default_factory=lambda: MacroConfig(label="Macro 5"))
+    macro_6: MacroConfig = field(default_factory=lambda: MacroConfig(label="Macro 6"))
+    macro_7: MacroConfig = field(default_factory=lambda: MacroConfig(label="Macro 7"))
+    macro_8: MacroConfig = field(default_factory=lambda: MacroConfig(label="Macro 8"))
 
     # Arpeggiator
     arp: ArpeggiatorConfig = field(default_factory=ArpeggiatorConfig)
+
+    # Clip sequencer (Serum 2 new)
+    clip: ClipSequencerConfig = field(default_factory=ClipSequencerConfig)
 
     # Voicing
     voicing: VoicingConfig = field(default_factory=VoicingConfig)
@@ -502,7 +899,8 @@ class Serum2Patch:
     # Global
     master_volume: float = 0.80
     master_tune: float = A4_432        # DUBFORGE default: 432 Hz
-    quality: str = "2x"                # oversampling: 1x, 2x, 4x, Draft
+    quality: str = "2x"                # Draft (1x), High (2x), Ultra (4x)
+    s1_compatibility: bool = False     # Serum 1 compat mode
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -513,7 +911,8 @@ SERUM2_ARCHITECTURE = {
     "product": "Serum 2",
     "developer": "Xfer Records (Steve Duda)",
     "type": "Advanced Hybrid Synthesizer",
-    "version": "2.0.x",
+    "version": "2.0.18",
+    "manual_version": "1.0.3 (April 27, 2025)",
     "price_usd": 249.00,
     "lifetime_free_updates": True,
     "free_upgrade_from_serum_1": True,
@@ -528,177 +927,259 @@ SERUM2_ARCHITECTURE = {
         "presets": 626,
         "wavetables": 288,
     },
-    "oscillator_types": {
-        "wavetable": {
-            "description": "Legendary wavetable engine with smooth interpolation",
-            "frame_size": SERUM_FRAME_SIZE,
-            "max_frames": SERUM_MAX_FRAMES,
-            "features": [
-                "Smooth Interpolation (near-infinite frame positions)",
-                "Dual warp modes",
-                "FM, PD, Ring Mod, Distortion within oscillator",
-                "Built-in wavetable editor",
-                "Import audio / draw / FFT / morph",
-                "Serum clm marker for identification",
-            ],
-            "warp_modes": [w.value for w in WarpMode],
-            "morph_modes": ["Crossfade", "Spectral", "Spectral (HD)"],
+    "oscillators": {
+        "primary_count": 3,
+        "slots": ["OSC A", "OSC B", "OSC C"],
+        "types": [t.value for t in OscillatorType],
+        "features": [
+            "Smooth Interpolation (near-infinite frame positions)",
+            "Dual warp modes (WARP 1 + WARP 2)",
+            "FM, PD, AM, RM from any oscillator/filter/sub/noise",
+            "Phase Memory and Contiguous phase modes",
+            "Copy/paste oscillators with or without modulations",
+            "Hover preset navigation with mouse wheel",
+        ],
+        "warp_categories": {
+            "Off": 1,
+            "Sync": 1,
+            "Alt Warp": 16,
+            "Filter": 2,
+            "Distortion": 14,
+            "FM": 6,
+            "PD": 7,
+            "AM": 6,
+            "RM": 6,
         },
-        "multisample": {
-            "description": "Real instrument replication via SFZ format",
-            "features": [
-                "Massive exclusive library (orchestra, choir, piano, guitar, etc.)",
-                "Open standard SFZ file format (human-readable)",
-                "Create/import your own multisamples",
-                "Round-robin and velocity layering",
-                "Key-split and crossfade zones",
-            ],
-        },
-        "sample": {
-            "description": "Advanced sample playback with loop modulation",
-            "features": [
-                "FM/PD/Distortion processing",
-                "Snap loop detection with flexible loop modulation",
-                "Rate control for tape-stop effects",
-                "Sample slicing with score extraction",
-                "Tails mode for natural decay",
-                "Realtime score playback",
-            ],
-        },
+        "total_warp_modes": len(WarpMode),
+        "morph_modes": ["Crossfade", "Spectral", "Spectral (HD)"],
         "granular": {
-            "description": "Granular synthesis for new textures from samples",
-            "features": [
-                "Position, size, rate controls",
-                "Random spray/scatter",
-                "Grain density modulation",
-                "Pitch-independent time stretching",
-                "Reverse and freeze modes",
-            ],
+            "max_grains": 256,
+            "params": ["SCAN", "DENSITY", "LENGTH", "OFFSET", "DIR",
+                        "PITCH", "RAND", "Window Amount"],
         },
         "spectral": {
-            "description": "Realtime harmonic resynthesis with transient detection",
-            "features": [
-                "FFT-based harmonic resynthesis",
-                "Transient detection for timestretching",
-                "Shape time and frequencies independently",
-                "Spectral filtering and morphing",
-                "Harmonic shifting and stretching",
-            ],
+            "params": ["SCAN", "CUT", "FILTER", "MIX",
+                        "High/Low freq markers", "Smooth", "Post Warp"],
+        },
+        "multisample": {
+            "format": "SFZ",
+            "features": ["Round-robin", "Velocity layering",
+                          "Key-split and crossfade zones"],
+        },
+        "sample": {
+            "features": ["Start/end/loop points", "Crossfade loops",
+                          "Auto/manual slicing", "Forward-reverse looping",
+                          "Rate control (tape-stop)"],
         },
     },
+    "sub_oscillator": {
+        "waveforms": [w.value for w in SubOscWaveform],
+        "controls": ["OCT", "CRS", "PHASE", "PAN", "LEVEL"],
+        "features": ["Contiguous phase", "Routable to Filter 1/2/Direct",
+                      "FM/PD/AM/RM source for main oscillators"],
+    },
+    "noise_oscillator": {
+        "color_modes": [c.value for c in NoiseColor],
+        "controls": ["START", "RAND", "PITCH", "FINE", "PAN", "LEVEL"],
+        "features": ["Stereo sample player", "Color noise modes",
+                      "One Shot/Looping", "Key Track", "Embed in preset",
+                      "FM/PD/AM/RM source"],
+    },
     "filters": {
+        "count": 2,
         "total_types": len(FilterType),
-        "families": [
-            "MG (Moog-style ladder)",
-            "Standard LP/HP/BP/Notch (6/12/24/48 dB)",
-            "German LP (MS-20 style)",
-            "Acid (303-style resonance)",
-            "Comb (+/-/±)",
-            "Phaser / Flanger",
-            "Formant (Vowel / I / II)",
-            "Sample & Hold",
-            "Ring Mod",
-            "EQ Shelf (Low/High)",
-            "Reverb (filter slot)",
-            "Ladder",
-            "SVF (LP/HP/BP)",
-        ],
+        "categories": {
+            "Normal": "MG Low/High 6-24, Low/High 6-24, Band/Peak/Notch 12-24",
+            "Multi": "LH, LB, LP, LN, HB, HP, HN, BP, BN, PP, PN, NN, LBH, LPH, LNH, BPN",
+            "Flanges": "Cmb L/H/HL, Flg L/H/HL, Phs L/H/HL",
+            "Misc": "EQ, Ring Mod, SampHold, Combs, Allpasses, Reverb, "
+                    "French LP, German LP, Add Bass, Formant I/II/III, "
+                    "Bandreject, Dist.Comb, Scream",
+            "New (Serum 2)": "Wsp, DJ Mixer, Diffusor, MG Ladder, Acid Ladder, "
+                             "EMS Ladder, MG Dirty, PZ SVF, Comb 2, Exp MM, Exp BPF",
+        },
+        "per_filter_controls": ["CUTOFF", "RES", "DRIVE", "VAR", "PAN", "MIX"],
         "routing_options": [r.value for r in FilterRouting],
         "features": [
-            "Drive per filter",
-            "Fat mode (analog warmth)",
+            "Drive with Clean mode (new in Serum 2)",
+            "FAT mode (analog saturation on resonance)",
             "Key tracking",
-            "Morph between filter types",
-            "Serial / Parallel / Split routing",
+            "Per-filter PAN and MIX",
+            "Serial / Parallel routing",
+            "Per-oscillator routing to Filter 1/2/Both/Main/Direct",
+            "Bus 1/Bus 2 send knobs",
         ],
     },
     "modulation": {
         "envelopes": {
-            "count": 3,
-            "default_assignment": "Env 1 → Amp",
-            "type": "ADSR with curvature control per segment",
-            "features": ["Drag-and-drop assignment", "Visual feedback"],
+            "count": 4,
+            "segments": "AHDSR (Attack, Hold, Decay, Sustain, Release)",
+            "default_assignment": "ENV 1 → Amp (always active)",
+            "features": ["Graphical curve editing", "BPM tempo sync",
+                          "Legato Inverted per envelope",
+                          "MS or BPM time mode"],
         },
         "lfos": {
-            "count": 4,
+            "count": 10,
+            "note": "LFO 7–10 appear after LFO 6 is assigned",
+            "types": [t.value for t in LFOType],
             "shapes": [s.value for s in LFOShape],
             "modes": [m.value for m in LFOMode],
+            "directions": [d.value for d in LFODirection],
             "features": [
-                "Custom shape drawing",
-                "BPM sync with note divisions",
-                "One-shot (envelope) mode",
+                "Custom shape drawing with dedicated editor",
+                "BPM sync with note divisions (Trip/Dot)",
+                "Envelope mode (single cycle, optional loopback)",
                 "Smooth/slew control",
-                "Phase offset",
-                "Rise time / delay",
+                "Phase offset with snap-to-grid",
+                "Rise time + delay",
+                "10x rate (up to 1000 Hz)",
+                "Swing (new in Serum 2)",
+                "Mono/Poly toggle",
+                "HOST sync to global song position",
+                "Directional playback (Forward/Reverse/Ping Pong)",
+                "Chaos modes: Lorenz, Rossler (new in Serum 2)",
+                "LFO point modulation via LFO Busses",
             ],
         },
         "matrix": {
-            "description": "Drag source → destination with depth control",
+            "max_slots": 64,
+            "per_slot": ["SOURCE", "CRV", "AMOUNT", "POL", "DESTINATION",
+                          "AUX SOURCE", "INV", "CRV (aux)", "OUTPUT"],
             "features": [
-                "Drag-and-drop from any source to any parameter",
-                "Aux source for modulating modulation depth",
-                "Visual routing indicators",
-                "Per-route bipolar/unipolar",
-                "Matrix view for overview",
+                "Drag-and-drop assignment",
+                "Custom editable curves on any source",
+                "Bypass individual modulations (new in Serum 2)",
+                "Reorder modulations via drag-and-drop",
+                "Dynamic matrix visualisations",
+                "Expanded matrix view",
             ],
             "sources": [
-                "Env 1", "Env 2", "Env 3",
+                "ENV 1", "ENV 2", "ENV 3", "ENV 4",
                 "LFO 1", "LFO 2", "LFO 3", "LFO 4",
-                "Velocity", "Note (Pitch)", "Aftertouch",
-                "Mod Wheel", "Pitch Bend",
-                "Macro 1-4 (up to 8)",
-                "Random", "Alternate",
-                "MPE Slide", "MPE Pressure",
+                "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10",
+                "Velocity", "Note",
+                "Macro 1", "Macro 2", "Macro 3", "Macro 4",
+                "Macro 5", "Macro 6", "Macro 7", "Macro 8",
+                "Mod Wheel", "Aftertouch", "Poly Aftertouch",
+                "Pitch Bend",
+                "Note-On Alt. 1", "Note-On Alt. 2",
+                "Note-On Rand 1", "Note-On Rand 2",
+                "Note-On Rand (Discrete)",
+                "Active Voices", "Release Velocity",
+                "Voice Index", "Voice Mod 1", "Voice Mod 2",
+                "Expression", "MPE X", "MPE Y", "MPE Z",
+                "OSC A", "OSC B", "OSC C", "SUB", "NOISE",
+                "Filter 1", "Filter 2",
+                "Fixed",
             ],
+            "total_sources": 49,
         },
     },
     "effects_rack": {
-        "max_slots": 10,
+        "rack_count": 3,
+        "racks": ["Main", "Bus 1", "Bus 2"],
+        "instances_per_rack": "unlimited",
         "drag_reorder": True,
-        "available_effects": [e.value for e in EffectType],
+        "modules": [e.value for e in EffectType if "Splitter" not in e.value],
+        "splitters": [e.value for e in EffectType if "Splitter" in e.value],
         "distortion_modes": [d.value for d in DistortionMode],
+        "reverb_types": [r.value for r in ReverbType],
+        "nitrous_modes": [n.value for n in NitrousMode],
+        "compressor_modes": [c.value for c in CompressorMode],
+        "delay_modes": [d.value for d in DelayMode],
+        "new_in_serum2": [
+            "Bode (frequency shifter)",
+            "Convolve (convolution reverb)",
+            "Utility (polarity, mono bass, width)",
+            "Splitter L/H, L/M/H, M/S",
+            "Reverb: Vintage, Nitrous (5 modes), Basin",
+            "Delay: HQ mode (now default)",
+            "Distortion: Overdrive mode + DC bias control",
+        ],
     },
     "macros": {
-        "standard_count": 4,
-        "extended_count": 8,
-        "description": "Assignable knobs controlling multiple destinations",
+        "count": 8,
+        "description": "Assignable knobs — each can be both source AND destination",
+        "features": ["Apply and Delete macro (bake offsets into preset)",
+                      "Swappable (drag one onto another)"],
     },
     "unison": {
         "max_voices": 16,
         "modes": [u.value for u in UnisonMode],
-        "params": ["Detune", "Blend", "Width (stereo spread)"],
+        "stack_options": [s.value for s in UnisonStack],
+        "params": ["DETUNE", "BLEND", "WIDTH", "RANGE",
+                    "WT POS", "WARP 1", "WARP 2"],
     },
     "voicing": {
         "modes": [v.value for v in VoicingMode],
-        "features": ["Portamento with legato mode", "Adjustable voice count", "MPE support"],
+        "steal_priorities": [p.value for p in VoiceStealPriority],
+        "features": [
+            "Portamento with CURVE, ALWAYS, SCALED options",
+            "Voice Control panel (per-voice step sequencer)",
+            "Voice Mod 1/2 (usable as mod sources)",
+            "Per-voice randomisation: PAN, DETUNE, CUTOFF, ENVS",
+            "MPE support (Expression, MPE X/Y/Z)",
+        ],
     },
     "arpeggiator": {
-        "directions": [a.value for a in ArpDirection],
+        "slots_per_bank": 12,
+        "shapes": [a.value for a in ArpShape],
+        "pattern_modes": [p.value for p in ArpPatternMode],
         "features": [
-            "BPM sync with rate divisions",
-            "Swing control",
-            "Gate length",
-            "Octave range 1-8",
-            "Step sequencer (velocity per step)",
-            "Clip sequencer (Serum 2 new)",
+            "BPM sync with Trip/Dot",
+            "Transpose: SHIFT, RANGE, range shape",
+            "Playback: OFFSET, REPEATS, GATE, CHANCE, LATCH, THRU",
+            "Retrigger: LAUNCH, RATE, NOTE, FIRST",
+            "Velocity: RETRIG, DECAY, TARGET",
+            "Pattern editor (advanced, when shape = Pattern)",
+            "MIDI Out",
+        ],
+    },
+    "clip_sequencer": {
+        "slots_per_bank": 12,
+        "features": [
+            "Full piano roll MIDI clip editor",
+            "Record: Overdub or Extend mode",
+            "Automation lanes",
+            "Key/Scale quantisation",
+            "MIDI Out",
         ],
     },
     "wavetable_editor": {
         "features": [
-            "Draw waveforms by hand",
-            "Import audio files",
+            "Up to 256 frames, 2048 samples per frame",
+            "12 drawing tools",
             "FFT additive editor",
-            "Morph between frames",
-            "Process: Normalize, Fade, Crossfade, Invert, etc.",
-            "Generate from formula",
-            "Export as .wav with clm marker",
+            "Morph: Crossfade, Spectral, Spectral (Zero All Phases)",
+            "Formula Parser for math-generated waveforms",
+            "Import audio (.wav) with multiple detection modes",
+            "Drag-and-drop from Finder/Explorer/DAW",
         ],
     },
     "preset_format": {
         "extension": ".fxp",
         "bank_extension": ".fxb",
-        "serum1_compatibility": "Serum 1 presets load in Serum 2, not vice versa",
-        "organization": "Category / Tags / Ratings / Favorites",
+        "serum1_compatibility": "S1 presets load in S2 (S1 Compat Mode auto-enabled)",
+        "metadata": ["ARTIST", "DESC"],
+        "wavetable_embedded": True,
+        "samples_embeddable": True,
+        "organisation": "Category / Tags / Ratings / Favorites / Folders / Packs",
+    },
+    "global": {
+        "quality_modes": ["Draft (1x)", "High (2x)", "Ultra (4x)"],
+        "tuning": {
+            "default": "A4=440 Hz",
+            "dubforge_default": "A4=432 Hz",
+            "tun_file": True,
+            "mts_esp": True,
+        },
+        "features": [
+            "Comprehensive undo/redo",
+            "S1 Compatibility Mode",
+            "Disable Smoothing (sample-accurate automation)",
+            "Use Ultra quality when rendering",
+        ],
     },
 }
 
@@ -733,13 +1214,14 @@ def phi_unison_detune(voices: int) -> list[float]:
 def phi_envelope(base_attack_ms: float = 5.0, base_decay_ms: float = 200.0,
                  base_release_ms: float = 100.0) -> EnvelopeConfig:
     """
-    Generate an ADSR envelope with phi-ratio timing.
+    Generate an AHDSR envelope with phi-ratio timing.
     Attack : Decay : Release = 1 : phi : phi²
-
+    Hold = 0 (instant transition).
     Sustain set to 1/phi ≈ 0.618.
     """
     return EnvelopeConfig(
         attack_ms=base_attack_ms,
+        hold_ms=0.0,
         decay_ms=base_attack_ms * PHI,
         sustain=1.0 / PHI,  # ≈ 0.618
         release_ms=base_attack_ms * (PHI ** 2),
@@ -765,7 +1247,6 @@ def fibonacci_lfo_rates() -> list[str]:
     Generate LFO sync rates at Fibonacci divisions.
     Maps to Serum's BPM sync notation.
     """
-    # Fibonacci bar/beat fractions
     return [
         "1/1",     # 1 bar
         "1/2",     # half note (1)
@@ -783,7 +1264,7 @@ def phi_macro_scaling(macro_value: float) -> float:
     """
     Apply phi-curve scaling to a macro value (0–1).
     Creates a golden-ratio response curve instead of linear.
-    Result: value^(1/phi) — emphasizes the 0.618 sweet spot.
+    Result: value^(1/phi) — emphasises the 0.618 sweet spot.
     """
     return macro_value ** (1.0 / PHI)
 
@@ -802,7 +1283,7 @@ def phi_fm_ratio(fundamental: float) -> float:
 def fibonacci_wavetable_frames() -> list[int]:
     """
     Valid frame counts for DUBFORGE wavetables.
-    Fibonacci numbers up to Serum's 256parcela max.
+    Fibonacci numbers up to Serum's 256 max.
     """
     return [f for f in FIBONACCI if f <= SERUM_MAX_FRAMES] + [SERUM_MAX_FRAMES]
 
@@ -873,7 +1354,6 @@ def _build_phi_modulation_matrix() -> list[dict]:
             destination="Osc A WT Pos",
             amount=1.0,
             aux_source="Velocity",
-            aux_amount=0.618,
         )),
         asdict(ModulationRoute(
             source="Macro 2",
@@ -881,7 +1361,7 @@ def _build_phi_modulation_matrix() -> list[dict]:
             amount=PHI - 1,  # 0.618
         )),
         asdict(ModulationRoute(
-            source="Env 2",
+            source="ENV 2",
             destination="Filter 1 Cutoff",
             amount=0.75,
         )),
@@ -890,14 +1370,12 @@ def _build_phi_modulation_matrix() -> list[dict]:
             destination="Osc A WT Pos",
             amount=0.382,  # 1 - 1/phi
             aux_source="Macro 1",
-            aux_amount=1.0,
         )),
         asdict(ModulationRoute(
             source="LFO 2",
             destination="Filter 1 Cutoff",
             amount=0.25,
             aux_source="Mod Wheel",
-            aux_amount=1.0,
         )),
         asdict(ModulationRoute(
             source="Velocity",
@@ -905,7 +1383,7 @@ def _build_phi_modulation_matrix() -> list[dict]:
             amount=0.3,
         )),
         asdict(ModulationRoute(
-            source="Note (Pitch)",
+            source="Note",
             destination="Filter 1 Cutoff",
             amount=0.2,
         )),
@@ -919,17 +1397,17 @@ def _build_dubstep_fx_rack() -> list[dict]:
             fx_type=EffectType.DISTORTION.value,
             mix=phi_effect_mix(0.382),
             param_a=0.618,            # drive
-            distortion_mode=DistortionMode.LIN_FOLD.value,
+            distortion_mode=DistortionMode.LINEAR_FOLD.value,
         )),
         asdict(EffectSlot(
-            fx_type=EffectType.OTT.value,
+            fx_type=EffectType.COMPRESSOR.value,
             mix=phi_effect_mix(0.5),
-            param_a=0.618,            # depth
-            param_b=0.5,              # upward
-            param_c=0.382,            # downward
+            param_a=0.618,            # threshold
+            param_b=0.5,              # ratio
+            compressor_mode=CompressorMode.MULTIBAND.value,
         )),
         asdict(EffectSlot(
-            fx_type=EffectType.EQ.value,
+            fx_type=EffectType.EQUALIZER.value,
             mix=1.0,
             param_a=0.3,              # low shelf boost
             param_b=0.5,              # mid scoop
@@ -940,6 +1418,7 @@ def _build_dubstep_fx_rack() -> list[dict]:
             mix=phi_effect_mix(0.618),
             param_a=0.6,              # threshold
             param_b=0.4,              # ratio
+            compressor_mode=CompressorMode.SINGLE.value,
         )),
         asdict(EffectSlot(
             fx_type=EffectType.REVERB.value,
@@ -947,6 +1426,7 @@ def _build_dubstep_fx_rack() -> list[dict]:
             param_a=0.3,              # size
             param_b=0.618,            # decay
             param_c=0.5,              # damping
+            reverb_type=ReverbType.PLATE.value,
         )),
     ]
 
@@ -970,19 +1450,20 @@ def build_dubstep_patches() -> list[dict]:
     sub_patch.osc_a.octave = -1
     sub_patch.osc_a.level = 0.9
     sub_patch.osc_a.unison_voices = 1
-    sub_patch.osc_a.sub_enabled = True
-    sub_patch.osc_a.sub_shape = "Sine"
-    sub_patch.osc_a.sub_level = 0.8
-    sub_patch.osc_a.sub_octave = -1
+    sub_patch.sub.enabled = True
+    sub_patch.sub.waveform = SubOscWaveform.SINE.value
+    sub_patch.sub.level = 0.8
+    sub_patch.sub.octave = -1
     sub_patch.osc_b.enabled = False
-    sub_patch.filter_1.filter_type = FilterType.LP_24.value
+    sub_patch.osc_c.enabled = False
+    sub_patch.filter_1.filter_type = FilterType.LOW_24.value
     sub_patch.filter_1.cutoff = phi_filter_cutoff(55.0)[2]  # ~144 Hz
     sub_patch.filter_1.resonance = 0.1
     sub_patch.env_1 = phi_envelope(1.0)
     sub_patch.env_2 = phi_envelope(3.0)
     sub_patch.voicing.mode = VoicingMode.MONO.value
     sub_patch.voicing.portamento_ms = 30.0
-    sub_patch.voicing.portamento_mode = "Legato"
+    sub_patch.voicing.portamento_always = False
     sub_patch.master_tune = A4_432
     patches.append(asdict(sub_patch))
 
@@ -997,31 +1478,31 @@ def build_dubstep_patches() -> list[dict]:
     growl_patch.osc_a.unison_voices = 5  # Fibonacci
     growl_patch.osc_a.unison_detune = 0.35
     growl_patch.osc_a.unison_mode = UnisonMode.SUPER.value
-    growl_patch.osc_a.warp_1 = WarpMode.FM_FROM_B.value
+    growl_patch.osc_a.warp_1 = WarpMode.FM_B.value
     growl_patch.osc_a.warp_1_amount = 0.618
-    growl_patch.osc_a.warp_2 = WarpMode.FOLD.value
+    growl_patch.osc_a.warp_2 = WarpMode.DIST_LINEAR_FOLD.value
     growl_patch.osc_a.warp_2_amount = 0.382
 
     growl_patch.osc_b.enabled = True
     growl_patch.osc_b.wavetable = WavetableSlot(name="DUBFORGE_PHI_CORE_v2_WOOK", frames=256)
     growl_patch.osc_b.wt_position = 0.618
     growl_patch.osc_b.semi = 0
-    growl_patch.osc_b.fine = 0.0  # exact phi ratio achieved via FM warp
+    growl_patch.osc_b.fine = 0.0
 
-    growl_patch.filter_1.filter_type = FilterType.LP_ACID.value
+    growl_patch.filter_1.filter_type = FilterType.ACID_LADDER.value
     growl_patch.filter_1.cutoff = phi_filter_cutoff(55.0)[4]  # ~377 Hz
     growl_patch.filter_1.resonance = 0.618
     growl_patch.filter_1.drive = 0.5
 
     growl_patch.filter_2.enabled = True
-    growl_patch.filter_2.filter_type = FilterType.FORMANT_VOWEL.value
+    growl_patch.filter_2.filter_type = FilterType.FORMANT_I.value
     growl_patch.filter_2.cutoff = phi_filter_cutoff(55.0)[5]  # ~610 Hz
     growl_patch.filter_routing = FilterRouting.SERIAL.value
 
     growl_patch.env_2 = phi_envelope(2.0)
     growl_patch.lfo_1.shape = LFOShape.CUSTOM.value
     growl_patch.lfo_1.rate_sync = "1/8"
-    growl_patch.lfo_1.mode = LFOMode.SYNC.value
+    growl_patch.lfo_1.mode = LFOMode.RETRIG.value
 
     growl_patch.mod_matrix = _build_phi_modulation_matrix()
     growl_patch.effects = _build_dubstep_fx_rack()
@@ -1047,7 +1528,7 @@ def build_dubstep_patches() -> list[dict]:
     screech_patch.osc_a.unison_voices = 3  # Fibonacci
     screech_patch.osc_a.unison_detune = 0.25
     screech_patch.osc_a.unison_mode = UnisonMode.SUPER.value
-    screech_patch.osc_a.warp_1 = WarpMode.FM_FROM_B.value
+    screech_patch.osc_a.warp_1 = WarpMode.FM_B.value
     screech_patch.osc_a.warp_1_amount = 0.85
     screech_patch.osc_a.warp_2 = WarpMode.SYNC.value
     screech_patch.osc_a.warp_2_amount = 0.5
@@ -1059,16 +1540,16 @@ def build_dubstep_patches() -> list[dict]:
     screech_patch.osc_b.semi = 7           # Perfect 5th up
     screech_patch.osc_b.level = 0.0        # FM carrier only — not heard directly
 
-    screech_patch.filter_1.filter_type = FilterType.BP_24.value
+    screech_patch.filter_1.filter_type = FilterType.BAND_24.value
     screech_patch.filter_1.cutoff = phi_filter_cutoff(55.0)[5]  # ~610 Hz
     screech_patch.filter_1.resonance = 0.5
     screech_patch.filter_1.drive = 0.7
 
     screech_patch.env_2 = EnvelopeConfig(
         attack_ms=0.5,
-        decay_ms=0.5 * PHI,  # ~0.81 ms
+        decay_ms=0.5 * PHI,
         sustain=0.382,
-        release_ms=0.5 * (PHI ** 2),  # ~1.31 ms
+        release_ms=0.5 * (PHI ** 2),
     )
 
     screech_patch.lfo_1.shape = LFOShape.SAW_DOWN.value
@@ -1076,7 +1557,7 @@ def build_dubstep_patches() -> list[dict]:
 
     screech_patch.mod_matrix = [
         asdict(ModulationRoute(source="LFO 1", destination="Osc A WT Pos", amount=1.0)),
-        asdict(ModulationRoute(source="Env 2", destination="Filter 1 Cutoff", amount=0.8)),
+        asdict(ModulationRoute(source="ENV 2", destination="Filter 1 Cutoff", amount=0.8)),
         asdict(ModulationRoute(source="LFO 2", destination="Osc A Warp 1", amount=0.618)),
         asdict(ModulationRoute(source="Macro 4", destination="FX Distortion Drive", amount=1.0)),
     ]
@@ -1084,13 +1565,17 @@ def build_dubstep_patches() -> list[dict]:
     screech_patch.effects = [
         asdict(EffectSlot(
             fx_type=EffectType.DISTORTION.value, mix=0.7,
-            param_a=0.8, distortion_mode=DistortionMode.SIN_FOLD.value
+            param_a=0.8, distortion_mode=DistortionMode.SINE_FOLD.value
         )),
         asdict(EffectSlot(
-            fx_type=EffectType.WAVEFOLDER.value, mix=0.5, param_a=0.618
+            fx_type=EffectType.DISTORTION.value, mix=0.5,
+            param_a=0.618, distortion_mode=DistortionMode.X_SHAPER.value
         )),
-        asdict(EffectSlot(fx_type=EffectType.OTT.value, mix=0.6, param_a=0.7)),
-        asdict(EffectSlot(fx_type=EffectType.EQ.value, mix=1.0)),
+        asdict(EffectSlot(
+            fx_type=EffectType.COMPRESSOR.value, mix=0.6,
+            param_a=0.7, compressor_mode=CompressorMode.MULTIBAND.value
+        )),
+        asdict(EffectSlot(fx_type=EffectType.EQUALIZER.value, mix=1.0)),
     ]
 
     screech_patch.voicing.mode = VoicingMode.MONO.value
@@ -1135,7 +1620,7 @@ def build_dubstep_patches() -> list[dict]:
     reese_patch.mod_matrix = [
         asdict(ModulationRoute(source="LFO 1", destination="Osc A Fine", amount=0.1)),
         asdict(ModulationRoute(source="LFO 1", destination="Osc B Fine", amount=-0.1)),
-        asdict(ModulationRoute(source="Env 2", destination="Filter 1 Cutoff", amount=0.5)),
+        asdict(ModulationRoute(source="ENV 2", destination="Filter 1 Cutoff", amount=0.5)),
         asdict(ModulationRoute(source="Macro 1", destination="Osc A WT Pos", amount=1.0)),
         asdict(ModulationRoute(source="Macro 1", destination="Osc B WT Pos", amount=1.0)),
     ]
@@ -1147,13 +1632,14 @@ def build_dubstep_patches() -> list[dict]:
         asdict(EffectSlot(fx_type=EffectType.CHORUS.value, mix=0.2, param_a=0.618)),
         asdict(EffectSlot(fx_type=EffectType.DISTORTION.value, mix=0.3,
                           distortion_mode=DistortionMode.TUBE.value)),
-        asdict(EffectSlot(fx_type=EffectType.EQ.value, mix=1.0)),
-        asdict(EffectSlot(fx_type=EffectType.COMPRESSOR.value, mix=0.5)),
+        asdict(EffectSlot(fx_type=EffectType.EQUALIZER.value, mix=1.0)),
+        asdict(EffectSlot(fx_type=EffectType.COMPRESSOR.value, mix=0.5,
+                          compressor_mode=CompressorMode.SINGLE.value)),
     ]
 
     reese_patch.voicing.mode = VoicingMode.MONO.value
     reese_patch.voicing.portamento_ms = 50.0
-    reese_patch.voicing.portamento_mode = "Legato"
+    reese_patch.voicing.portamento_always = False
     reese_patch.master_tune = A4_432
     patches.append(asdict(reese_patch))
 
@@ -1167,31 +1653,31 @@ def build_dubstep_patches() -> list[dict]:
     spectral_patch.osc_a.level = 0.85
     spectral_patch.osc_a.unison_voices = 3
     spectral_patch.osc_a.unison_detune = 0.15
-    spectral_patch.osc_a.warp_1 = WarpMode.FOLD.value
+    spectral_patch.osc_a.warp_1 = WarpMode.DIST_LINEAR_FOLD.value
     spectral_patch.osc_a.warp_1_amount = 0.618
-    spectral_patch.osc_a.warp_2 = WarpMode.DRIVE.value
+    spectral_patch.osc_a.warp_2 = WarpMode.DIST_TUBE.value
     spectral_patch.osc_a.warp_2_amount = 0.382
 
     spectral_patch.osc_b.enabled = True
     spectral_patch.osc_b.osc_type = OscillatorType.GRANULAR.value
     spectral_patch.osc_b.level = 0.5
 
-    spectral_patch.filter_1.filter_type = FilterType.COMB_PLUS.value
+    spectral_patch.filter_1.filter_type = FilterType.CMB_L.value
     spectral_patch.filter_1.cutoff = phi_filter_cutoff(55.0)[4]
     spectral_patch.filter_1.resonance = 0.75
 
     spectral_patch.filter_2.enabled = True
-    spectral_patch.filter_2.filter_type = FilterType.HP_24.value
+    spectral_patch.filter_2.filter_type = FilterType.HIGH_24.value
     spectral_patch.filter_2.cutoff = 80.0
     spectral_patch.filter_routing = FilterRouting.SERIAL.value
 
     spectral_patch.env_2 = phi_envelope(1.0)
-    spectral_patch.lfo_1.shape = LFOShape.S_AND_H.value
+    spectral_patch.lfo_1.lfo_type = LFOType.SAMPLE_AND_HOLD.value
     spectral_patch.lfo_1.rate_sync = "1/13"
 
     spectral_patch.mod_matrix = [
         asdict(ModulationRoute(source="LFO 1", destination="Osc A WT Pos", amount=0.618)),
-        asdict(ModulationRoute(source="Env 2", destination="Filter 1 Cutoff", amount=0.9)),
+        asdict(ModulationRoute(source="ENV 2", destination="Filter 1 Cutoff", amount=0.9)),
         asdict(ModulationRoute(source="LFO 2", destination="Osc A Warp 1", amount=0.5)),
         asdict(ModulationRoute(source="Macro 4", destination="FX Distortion Drive", amount=0.8)),
         asdict(ModulationRoute(source="Velocity", destination="Osc A Level", amount=0.3)),
@@ -1200,12 +1686,18 @@ def build_dubstep_patches() -> list[dict]:
     spectral_patch.effects = [
         asdict(EffectSlot(
             fx_type=EffectType.DISTORTION.value, mix=0.618,
-            distortion_mode=DistortionMode.XOR.value, param_a=0.7
+            distortion_mode=DistortionMode.X_SHAPER.value, param_a=0.7
         )),
-        asdict(EffectSlot(fx_type=EffectType.BITCRUSHER.value, mix=0.3, param_a=0.4)),
-        asdict(EffectSlot(fx_type=EffectType.OTT.value, mix=0.5)),
+        asdict(EffectSlot(
+            fx_type=EffectType.DISTORTION.value, mix=0.3,
+            distortion_mode=DistortionMode.DOWNSAMPLE.value, param_a=0.4
+        )),
+        asdict(EffectSlot(
+            fx_type=EffectType.COMPRESSOR.value, mix=0.5,
+            compressor_mode=CompressorMode.MULTIBAND.value
+        )),
         asdict(EffectSlot(fx_type=EffectType.HYPER_DIMENSION.value, mix=0.2)),
-        asdict(EffectSlot(fx_type=EffectType.EQ.value, mix=1.0)),
+        asdict(EffectSlot(fx_type=EffectType.EQUALIZER.value, mix=1.0)),
     ]
 
     spectral_patch.voicing.mode = VoicingMode.MONO.value
@@ -1222,7 +1714,7 @@ def build_dubstep_patches() -> list[dict]:
     gran_patch.osc_a.level = 0.7
     gran_patch.osc_a.unison_voices = 5
     gran_patch.osc_a.unison_detune = 0.3
-    gran_patch.osc_a.unison_mode = UnisonMode.SPREAD.value
+    gran_patch.osc_a.unison_mode = UnisonMode.RANDOM.value
 
     gran_patch.osc_b.enabled = True
     gran_patch.osc_b.osc_type = OscillatorType.WAVETABLE.value
@@ -1232,15 +1724,15 @@ def build_dubstep_patches() -> list[dict]:
     gran_patch.osc_b.level = 0.3
     gran_patch.osc_b.unison_voices = 3
 
-    gran_patch.filter_1.filter_type = FilterType.LP_24.value
+    gran_patch.filter_1.filter_type = FilterType.LOW_24.value
     gran_patch.filter_1.cutoff = phi_filter_cutoff(55.0)[6]  # ~987 Hz
     gran_patch.filter_1.resonance = 0.15
 
     gran_patch.env_1 = EnvelopeConfig(
-        attack_ms=500.0,                        # slow pad attack
-        decay_ms=500.0 * PHI,                   # 809 ms
+        attack_ms=500.0,
+        decay_ms=500.0 * PHI,
         sustain=0.8,
-        release_ms=500.0 * (PHI ** 2),          # 1309 ms
+        release_ms=500.0 * (PHI ** 2),
     )
 
     gran_patch.lfo_1.shape = LFOShape.SINE.value
@@ -1253,10 +1745,15 @@ def build_dubstep_patches() -> list[dict]:
     ]
 
     gran_patch.effects = [
-        asdict(EffectSlot(fx_type=EffectType.REVERB.value, mix=0.618, param_a=0.7, param_b=0.8)),
-        asdict(EffectSlot(fx_type=EffectType.DELAY.value, mix=0.3, param_a=0.382)),
+        asdict(EffectSlot(
+            fx_type=EffectType.REVERB.value, mix=0.618,
+            param_a=0.7, param_b=0.8,
+            reverb_type=ReverbType.HALL.value
+        )),
+        asdict(EffectSlot(fx_type=EffectType.DELAY.value, mix=0.3, param_a=0.382,
+                          delay_mode=DelayMode.PING_PONG.value)),
         asdict(EffectSlot(fx_type=EffectType.CHORUS.value, mix=0.25)),
-        asdict(EffectSlot(fx_type=EffectType.EQ.value, mix=1.0)),
+        asdict(EffectSlot(fx_type=EffectType.EQUALIZER.value, mix=1.0)),
     ]
 
     gran_patch.voicing.mode = VoicingMode.POLY.value
@@ -1277,7 +1774,7 @@ def build_dubstep_patches() -> list[dict]:
     weapon_patch.osc_a.unison_mode = UnisonMode.SUPER.value
     weapon_patch.osc_a.warp_1 = WarpMode.SYNC.value
     weapon_patch.osc_a.warp_1_amount = 0.5
-    weapon_patch.osc_a.warp_2 = WarpMode.FM_FROM_B.value
+    weapon_patch.osc_a.warp_2 = WarpMode.FM_B.value
     weapon_patch.osc_a.warp_2_amount = 0.618
 
     weapon_patch.osc_b.enabled = True
@@ -1286,13 +1783,21 @@ def build_dubstep_patches() -> list[dict]:
     weapon_patch.osc_b.octave = -1
     weapon_patch.osc_b.level = 0.6
 
-    weapon_patch.osc_a.sub_enabled = True
-    weapon_patch.osc_a.sub_shape = "Sine"
-    weapon_patch.osc_a.sub_level = 0.7
-    weapon_patch.osc_a.sub_octave = -2
-    weapon_patch.osc_a.sub_direct_out = True
+    # Use OSC C as a sub-bass layer (Serum 2 three-osc power)
+    weapon_patch.osc_c.enabled = True
+    weapon_patch.osc_c.wavetable = WavetableSlot(name="Basic_Shapes", frames=5)
+    weapon_patch.osc_c.wt_position = 0.0  # Sine
+    weapon_patch.osc_c.octave = -2
+    weapon_patch.osc_c.level = 0.5
+    weapon_patch.osc_c.unison_voices = 1
 
-    weapon_patch.filter_1.filter_type = FilterType.LP_ACID.value
+    weapon_patch.sub.enabled = True
+    weapon_patch.sub.waveform = SubOscWaveform.SINE.value
+    weapon_patch.sub.level = 0.7
+    weapon_patch.sub.octave = -2
+    weapon_patch.sub.direct_out = True
+
+    weapon_patch.filter_1.filter_type = FilterType.ACID_LADDER.value
     weapon_patch.filter_1.cutoff = phi_filter_cutoff(55.0)[3]  # ~233 Hz
     weapon_patch.filter_1.resonance = 0.55
     weapon_patch.filter_1.drive = 0.618
@@ -1313,7 +1818,7 @@ def build_dubstep_patches() -> list[dict]:
     weapon_patch.mod_matrix = [
         asdict(ModulationRoute(source="LFO 1", destination="Osc A WT Pos", amount=1.0)),
         asdict(ModulationRoute(source="LFO 1", destination="Osc B WT Pos", amount=0.618)),
-        asdict(ModulationRoute(source="Env 2", destination="Filter 1 Cutoff", amount=0.85)),
+        asdict(ModulationRoute(source="ENV 2", destination="Filter 1 Cutoff", amount=0.85)),
         asdict(ModulationRoute(source="LFO 2", destination="Osc A Warp 2", amount=0.5)),
         asdict(ModulationRoute(source="Macro 4", destination="FX Distortion Drive", amount=1.0)),
         asdict(ModulationRoute(source="Macro 1", destination="Osc A WT Pos", amount=1.0)),
@@ -1336,7 +1841,7 @@ def build_dubstep_patches() -> list[dict]:
     pad_patch.osc_a.wt_position = 0.618
     pad_patch.osc_a.unison_voices = 8
     pad_patch.osc_a.unison_detune = 0.2
-    pad_patch.osc_a.unison_mode = UnisonMode.SPREAD.value
+    pad_patch.osc_a.unison_mode = UnisonMode.LINEAR.value
     pad_patch.osc_a.octave = 0
     pad_patch.osc_a.level = 0.6
 
@@ -1345,7 +1850,7 @@ def build_dubstep_patches() -> list[dict]:
     pad_patch.osc_b.level = 0.4
     pad_patch.osc_b.octave = 1
 
-    pad_patch.filter_1.filter_type = FilterType.LP_24.value
+    pad_patch.filter_1.filter_type = FilterType.LOW_24.value
     pad_patch.filter_1.cutoff = phi_filter_cutoff(55.0)[7]  # ~1597 Hz
     pad_patch.filter_1.resonance = 0.1
 
@@ -1366,9 +1871,14 @@ def build_dubstep_patches() -> list[dict]:
 
     pad_patch.effects = [
         asdict(EffectSlot(fx_type=EffectType.CHORUS.value, mix=0.382)),
-        asdict(EffectSlot(fx_type=EffectType.REVERB.value, mix=0.618, param_a=0.85, param_b=0.9)),
-        asdict(EffectSlot(fx_type=EffectType.DELAY.value, mix=0.2, param_a=0.618)),
-        asdict(EffectSlot(fx_type=EffectType.EQ.value, mix=1.0)),
+        asdict(EffectSlot(
+            fx_type=EffectType.REVERB.value, mix=0.618,
+            param_a=0.85, param_b=0.9,
+            reverb_type=ReverbType.VINTAGE.value
+        )),
+        asdict(EffectSlot(fx_type=EffectType.DELAY.value, mix=0.2, param_a=0.618,
+                          delay_mode=DelayMode.PING_PONG.value)),
+        asdict(EffectSlot(fx_type=EffectType.EQUALIZER.value, mix=1.0)),
     ]
 
     pad_patch.voicing.mode = VoicingMode.POLY.value
@@ -1385,7 +1895,7 @@ def build_dubstep_patches() -> list[dict]:
 
 def build_init_template() -> dict:
     """
-    Build a DUBFORGE-optimized Serum 2 init template.
+    Build a DUBFORGE-optimised Serum 2 init template.
     Starting point for all new patches — pre-loaded with phi doctrine.
     """
     init = Serum2Patch(name="DUBFORGE Init Template")
@@ -1393,6 +1903,7 @@ def build_init_template() -> dict:
     init.osc_a.wt_position = 0.0
     init.osc_a.level = 0.8
     init.osc_b.enabled = False
+    init.osc_c.enabled = False
 
     init.filter_1.filter_type = FilterType.MG_LOW_24.value
     init.filter_1.cutoff = phi_filter_cutoff(55.0)[5]  # ~610 Hz
@@ -1403,11 +1914,11 @@ def build_init_template() -> dict:
 
     init.lfo_1 = LFOConfig(
         shape=LFOShape.SINE.value,
-        mode=LFOMode.SYNC.value,
+        mode=LFOMode.RETRIG.value,
         rate_sync="1/4",
     )
 
-    # Default macro assignments
+    # Default macro assignments (8 macros)
     init.macro_1 = MacroConfig(
         label="PHI MORPH",
         targets=[("Osc A WT Pos", 0.0, 1.0)],
@@ -1424,6 +1935,10 @@ def build_init_template() -> dict:
         label="GRIT",
         targets=[("FX Distortion Drive", 0.0, 1.0)],
     )
+    init.macro_5 = MacroConfig(label="FILTER ENV")
+    init.macro_6 = MacroConfig(label="SPACE")
+    init.macro_7 = MacroConfig(label="MOVEMENT")
+    init.macro_8 = MacroConfig(label="CHAOS")
 
     init.master_tune = A4_432
     init.quality = "2x"
@@ -1443,25 +1958,39 @@ MODULATION_DESTINATIONS = {
         "Osc B Level", "Osc B Pan", "Osc B WT Pos", "Osc B Octave",
         "Osc B Semi", "Osc B Fine", "Osc B Phase", "Osc B Unison Detune",
         "Osc B Unison Blend", "Osc B Warp 1", "Osc B Warp 2",
+        "Osc C Level", "Osc C Pan", "Osc C WT Pos", "Osc C Octave",
+        "Osc C Semi", "Osc C Fine", "Osc C Phase", "Osc C Unison Detune",
+        "Osc C Unison Blend", "Osc C Warp 1", "Osc C Warp 2",
         "Sub Level", "Sub Pan",
-        "Noise Level", "Noise Pan",
+        "Noise Level", "Noise Pan", "Noise Pitch",
     ],
     "filters": [
         "Filter 1 Cutoff", "Filter 1 Resonance", "Filter 1 Drive",
-        "Filter 1 Morph", "Filter 1 Fat",
+        "Filter 1 Var", "Filter 1 Pan", "Filter 1 Mix",
         "Filter 2 Cutoff", "Filter 2 Resonance", "Filter 2 Drive",
-        "Filter 2 Morph",
+        "Filter 2 Var", "Filter 2 Pan", "Filter 2 Mix",
     ],
     "envelopes": [
-        "Env 1 Attack", "Env 1 Decay", "Env 1 Sustain", "Env 1 Release",
-        "Env 2 Attack", "Env 2 Decay", "Env 2 Sustain", "Env 2 Release",
-        "Env 3 Attack", "Env 3 Decay", "Env 3 Sustain", "Env 3 Release",
+        "ENV 1 Attack", "ENV 1 Hold", "ENV 1 Decay",
+        "ENV 1 Sustain", "ENV 1 Release",
+        "ENV 2 Attack", "ENV 2 Hold", "ENV 2 Decay",
+        "ENV 2 Sustain", "ENV 2 Release",
+        "ENV 3 Attack", "ENV 3 Hold", "ENV 3 Decay",
+        "ENV 3 Sustain", "ENV 3 Release",
+        "ENV 4 Attack", "ENV 4 Hold", "ENV 4 Decay",
+        "ENV 4 Sustain", "ENV 4 Release",
     ],
     "lfos": [
         "LFO 1 Rate", "LFO 1 Phase", "LFO 1 Smooth",
         "LFO 2 Rate", "LFO 2 Phase", "LFO 2 Smooth",
         "LFO 3 Rate", "LFO 3 Phase", "LFO 3 Smooth",
         "LFO 4 Rate", "LFO 4 Phase", "LFO 4 Smooth",
+        "LFO 5 Rate", "LFO 5 Phase", "LFO 5 Smooth",
+        "LFO 6 Rate", "LFO 6 Phase", "LFO 6 Smooth",
+        "LFO 7 Rate", "LFO 7 Phase", "LFO 7 Smooth",
+        "LFO 8 Rate", "LFO 8 Phase", "LFO 8 Smooth",
+        "LFO 9 Rate", "LFO 9 Phase", "LFO 9 Smooth",
+        "LFO 10 Rate", "LFO 10 Phase", "LFO 10 Smooth",
     ],
     "effects": [
         "FX Distortion Drive", "FX Distortion Mix",
@@ -1470,10 +1999,17 @@ MODULATION_DESTINATIONS = {
         "FX Compressor Threshold", "FX Compressor Ratio",
         "FX Filter Cutoff", "FX Filter Resonance",
         "FX Chorus Rate", "FX Chorus Depth", "FX Chorus Mix",
-        "FX Phaser Rate", "FX Phaser Depth",
-        "FX EQ Low", "FX EQ Mid", "FX EQ High",
+        "FX Flanger Rate", "FX Flanger Depth", "FX Flanger Mix",
+        "FX Phaser Rate", "FX Phaser Depth", "FX Phaser Mix",
+        "FX EQ Low", "FX EQ High",
         "FX Hyper Amount", "FX Hyper Mix",
-        "FX OTT Depth", "FX OTT Mix",
+        "FX Bode Shift", "FX Bode Mix",
+        "FX Convolve Size", "FX Convolve Mix",
+        "FX Utility Width", "FX Utility Pan",
+    ],
+    "macros": [
+        "Macro 1", "Macro 2", "Macro 3", "Macro 4",
+        "Macro 5", "Macro 6", "Macro 7", "Macro 8",
     ],
     "global": [
         "Master Volume", "Master Pan",
@@ -1535,6 +2071,7 @@ def main() -> None:
                 "tags": p["tags"],
                 "osc_a_type": p["osc_a"]["osc_type"],
                 "osc_b_enabled": p["osc_b"]["enabled"],
+                "osc_c_enabled": p["osc_c"]["enabled"],
                 "filter_1_type": p["filter_1"]["filter_type"],
                 "fx_count": len(p["effects"]),
                 "mod_routes": len(p["mod_matrix"]),
@@ -1568,6 +2105,8 @@ def main() -> None:
     total_fx_types = len(EffectType)
     total_dist_modes = len(DistortionMode)
     total_unison_modes = len(UnisonMode)
+    total_reverb_types = len(ReverbType)
+    total_lfo_types = len(LFOType)
     print()
     print("  Serum 2 Engine Stats:")
     print(f"    Oscillator types:  {total_osc_types}")
@@ -1575,6 +2114,8 @@ def main() -> None:
     print(f"    Filter types:      {total_filter_types}")
     print(f"    Effect types:      {total_fx_types}")
     print(f"    Distortion modes:  {total_dist_modes}")
+    print(f"    Reverb types:      {total_reverb_types}")
+    print(f"    LFO types:         {total_lfo_types}")
     print(f"    Unison modes:      {total_unison_modes}")
     print(f"    DUBFORGE patches:  {len(patches)}")
     print(f"    Mod destinations:  {sum(len(v) for v in MODULATION_DESTINATIONS.values())}")
