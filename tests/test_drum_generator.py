@@ -1,18 +1,25 @@
-"""Tests for engine.drum_generator — Drum & Percussion MIDI Generator."""
+"""Tests for engine.drum_generator — Drum & Percussion Generator (v2.8.0)."""
 
 import os
 import tempfile
 import unittest
 
 import mido
+import numpy as np
 
 from engine.drum_generator import (
     ALL_DRUM_PATTERNS,
     DRUM_CHANNEL,
+    DRUM_KIT,
     GM_DRUMS,
+    SAMPLE_RATE,
     TICKS_PER_BEAT,
     DrumHit,
     DrumPattern,
+    _env_exp_decay,
+    _env_phi_transient,
+    _write_oneshot_wav,
+    export_drum_oneshots,
     fibonacci_accent_pattern,
     generate_breakbeat,
     generate_dubstep_build,
@@ -26,6 +33,14 @@ from engine.drum_generator import (
     generate_triplet_hat_groove,
     pattern_to_midi_track,
     phi_velocity,
+    synth_clap,
+    synth_crash,
+    synth_hat_closed,
+    synth_hat_open,
+    synth_kick,
+    synth_rim,
+    synth_snare,
+    synth_tom,
     write_drum_manifest,
     write_drum_midi,
     write_full_drum_arrangement,
@@ -305,6 +320,240 @@ class TestWriteDrumManifest(unittest.TestCase):
                 data = json.load(f)
             self.assertIn("patterns", data)
             self.assertIn("drop", data["patterns"])
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AUDIO SYNTHESIS TESTS (v2.8.0)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestEnvelopes(unittest.TestCase):
+    """Test envelope generators."""
+
+    def test_exp_decay_shape(self):
+        env = _env_exp_decay(5000, decay_ms=100)
+        self.assertEqual(len(env), 5000)
+        self.assertAlmostEqual(env[0], 1.0, places=2)
+        # Should decay toward 0 at the end
+        self.assertLess(env[4409], 0.01)
+
+    def test_exp_decay_all_positive(self):
+        env = _env_exp_decay(500, decay_ms=50)
+        self.assertTrue(np.all(env >= 0))
+
+    def test_phi_transient_attack_then_decay(self):
+        env = _env_phi_transient(2000, attack_ms=5, decay_ms=50)
+        self.assertEqual(len(env), 2000)
+        # Peak should be near the attack/decay boundary
+        peak_idx = np.argmax(env)
+        self.assertGreater(peak_idx, 0)
+
+    def test_phi_transient_non_negative(self):
+        env = _env_phi_transient(1000, attack_ms=2, decay_ms=100)
+        self.assertTrue(np.all(env >= 0))
+
+
+class TestSynthKick(unittest.TestCase):
+    """Test kick drum synthesis."""
+
+    def test_returns_array(self):
+        audio = synth_kick()
+        self.assertIsInstance(audio, np.ndarray)
+        self.assertGreater(len(audio), 0)
+
+    def test_duration(self):
+        audio = synth_kick(decay_ms=300)
+        expected_samples = int(300 * SAMPLE_RATE / 1000)
+        self.assertEqual(len(audio), expected_samples)
+
+    def test_finite_values(self):
+        audio = synth_kick()
+        self.assertTrue(np.all(np.isfinite(audio)))
+
+    def test_drive_affects_output(self):
+        clean = synth_kick(drive=0.0)
+        driven = synth_kick(drive=0.8)
+        self.assertFalse(np.allclose(clean, driven))
+
+    def test_custom_freq(self):
+        audio = synth_kick(freq=40.0, punch_freq=180.0)
+        self.assertGreater(len(audio), 0)
+
+
+class TestSynthSnare(unittest.TestCase):
+    """Test snare drum synthesis."""
+
+    def test_returns_array(self):
+        audio = synth_snare()
+        self.assertIsInstance(audio, np.ndarray)
+        self.assertGreater(len(audio), 0)
+
+    def test_noise_mix_range(self):
+        pure_tone = synth_snare(noise_mix=0.0)
+        pure_noise = synth_snare(noise_mix=1.0)
+        self.assertFalse(np.allclose(pure_tone, pure_noise))
+
+    def test_duration(self):
+        audio = synth_snare(decay_ms=200)
+        expected = int(200 * SAMPLE_RATE / 1000)
+        self.assertEqual(len(audio), expected)
+
+
+class TestSynthHats(unittest.TestCase):
+    """Test hi-hat synthesis."""
+
+    def test_closed_hat(self):
+        audio = synth_hat_closed()
+        self.assertIsInstance(audio, np.ndarray)
+        self.assertGreater(len(audio), 0)
+
+    def test_open_hat(self):
+        audio = synth_hat_open()
+        self.assertIsInstance(audio, np.ndarray)
+        self.assertGreater(len(audio), 0)
+
+    def test_open_longer_than_closed(self):
+        closed = synth_hat_closed()
+        opened = synth_hat_open()
+        self.assertGreater(len(opened), len(closed))
+
+    def test_finite(self):
+        self.assertTrue(np.all(np.isfinite(synth_hat_closed())))
+        self.assertTrue(np.all(np.isfinite(synth_hat_open())))
+
+
+class TestSynthClap(unittest.TestCase):
+    """Test clap synthesis."""
+
+    def test_returns_array(self):
+        audio = synth_clap()
+        self.assertIsInstance(audio, np.ndarray)
+        self.assertGreater(len(audio), 0)
+
+    def test_layers_parameter(self):
+        two = synth_clap(n_layers=2)
+        five = synth_clap(n_layers=5)
+        self.assertFalse(np.allclose(two, five))
+
+    def test_finite(self):
+        self.assertTrue(np.all(np.isfinite(synth_clap())))
+
+
+class TestSynthTom(unittest.TestCase):
+    """Test tom synthesis."""
+
+    def test_low_tom(self):
+        audio = synth_tom(freq=80.0)
+        self.assertGreater(len(audio), 0)
+
+    def test_mid_tom(self):
+        audio = synth_tom(freq=120.0)
+        self.assertGreater(len(audio), 0)
+
+    def test_high_tom(self):
+        audio = synth_tom(freq=180.0)
+        self.assertGreater(len(audio), 0)
+
+    def test_different_freqs_differ(self):
+        low = synth_tom(freq=80.0, decay_ms=200)
+        high = synth_tom(freq=180.0, decay_ms=200)
+        self.assertFalse(np.allclose(low, high))
+
+
+class TestSynthRim(unittest.TestCase):
+    """Test rim shot synthesis."""
+
+    def test_returns_array(self):
+        audio = synth_rim()
+        self.assertIsInstance(audio, np.ndarray)
+        self.assertGreater(len(audio), 0)
+
+    def test_short_duration(self):
+        audio = synth_rim(decay_ms=50)
+        expected = int(50 * SAMPLE_RATE / 1000)
+        self.assertEqual(len(audio), expected)
+
+
+class TestSynthCrash(unittest.TestCase):
+    """Test crash cymbal synthesis."""
+
+    def test_returns_array(self):
+        audio = synth_crash()
+        self.assertIsInstance(audio, np.ndarray)
+        self.assertGreater(len(audio), 0)
+
+    def test_long_decay(self):
+        audio = synth_crash(decay_ms=1500)
+        # Should be ~1.5 seconds
+        self.assertGreater(len(audio), SAMPLE_RATE)
+
+    def test_finite(self):
+        self.assertTrue(np.all(np.isfinite(synth_crash())))
+
+
+class TestDrumKit(unittest.TestCase):
+    """Test DRUM_KIT dictionary and all presets."""
+
+    def test_all_entries_callable(self):
+        for name, (synth_fn, kwargs) in DRUM_KIT.items():
+            audio = synth_fn(**kwargs)
+            self.assertIsInstance(audio, np.ndarray, f"Failed for {name}")
+            self.assertGreater(len(audio), 0, f"Empty audio for {name}")
+
+    def test_kit_size(self):
+        self.assertEqual(len(DRUM_KIT), 16)
+
+    def test_all_finite(self):
+        for name, (synth_fn, kwargs) in DRUM_KIT.items():
+            audio = synth_fn(**kwargs)
+            self.assertTrue(np.all(np.isfinite(audio)), f"Non-finite in {name}")
+
+
+class TestWriteOneshotWav(unittest.TestCase):
+    """Test WAV file writer."""
+
+    def test_writes_file(self):
+        audio = synth_kick()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test_kick.wav")
+            result = _write_oneshot_wav(path, audio)
+            self.assertTrue(os.path.exists(result))
+            self.assertTrue(result.endswith(".wav"))
+
+    def test_file_size_reasonable(self):
+        audio = synth_kick(decay_ms=300)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "kick.wav")
+            _write_oneshot_wav(path, audio)
+            size = os.path.getsize(path)
+            # 300ms × 44100 × 2 bytes ≈ 26460, plus header
+            self.assertGreater(size, 20000)
+
+    def test_creates_parent_dirs(self):
+        audio = synth_snare()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "sub", "dir", "snare.wav")
+            result = _write_oneshot_wav(path, audio)
+            self.assertTrue(os.path.exists(result))
+
+
+class TestExportDrumOneshots(unittest.TestCase):
+    """Test bulk drum one-shot export."""
+
+    def test_exports_all_kit_pieces(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = export_drum_oneshots(out_dir=tmpdir)
+            self.assertEqual(len(paths), len(DRUM_KIT))
+            for path in paths:
+                self.assertTrue(os.path.exists(path))
+                self.assertTrue(path.endswith(".wav"))
+
+    def test_filenames_uppercase(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = export_drum_oneshots(out_dir=tmpdir)
+            for path in paths:
+                basename = os.path.basename(path)
+                self.assertTrue(basename.startswith("DRUM_"))
 
 
 if __name__ == "__main__":

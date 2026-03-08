@@ -4,9 +4,13 @@ DUBFORGE Engine — 4/4 Drum & Percussion Generator
 Generates MIDI drum patterns using Fibonacci-timed fills,
 phi-ratio velocity curves, and genre-specific dubstep patterns.
 
+v2.8.0 — Real audio drum synthesis: kick, snare, hat, clap, tom,
+         rim, crash as .wav one-shots with phi-timed transients.
+
 Outputs:
     output/midi/drums_*.mid — One per pattern preset
     output/midi/drums_FULL_KIT.mid — Multi-track combined drum arrangement
+    output/drums/*.wav — Synthesized drum one-shots (v2.8.0)
 
 All patterns follow General MIDI drum mapping (channel 10).
 """
@@ -15,10 +19,12 @@ from __future__ import annotations
 
 import json
 import math
+import wave
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import mido
+import numpy as np
 
 from engine.config_loader import FIBONACCI, PHI
 from engine.log import get_logger
@@ -3048,6 +3054,353 @@ def write_drum_manifest(patterns: dict[str, DrumPattern],
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# AUDIO SYNTHESIS — Real drum one-shots (v2.8.0)
+# ═══════════════════════════════════════════════════════════════════════════
+
+SAMPLE_RATE = 44100
+
+
+def _write_oneshot_wav(path: str, audio: np.ndarray,
+                       sample_rate: int = SAMPLE_RATE) -> str:
+    """Write a mono 16-bit PCM WAV file (no wavetable markers)."""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    peak = np.max(np.abs(audio))
+    if peak > 0:
+        audio = audio / peak
+    samples_16 = np.clip(audio * 32767, -32768, 32767).astype(np.int16)
+    with wave.open(str(out), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(samples_16.tobytes())
+    return str(out)
+
+
+def _env_exp_decay(n_samples: int, decay_ms: float,
+                   sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Exponential decay envelope: 1 → 0 over decay_ms."""
+    decay_samples = int(decay_ms * sample_rate / 1000)
+    if decay_samples < 1:
+        decay_samples = 1
+    env = np.zeros(n_samples)
+    length = min(decay_samples, n_samples)
+    t = np.arange(length, dtype=np.float64)
+    env[:length] = np.exp(-t * 5.0 / decay_samples)
+    return env
+
+
+def _env_phi_transient(n_samples: int, attack_ms: float, decay_ms: float,
+                       sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Phi-timed attack → decay envelope.
+    Attack is 1/PHI of the total, decay is the remaining.
+    """
+    attack_samp = max(1, int(attack_ms * sample_rate / 1000))
+    decay_samp = max(1, int(decay_ms * sample_rate / 1000))
+    total = attack_samp + decay_samp
+    env = np.zeros(max(n_samples, total))
+
+    # Attack: fast rise
+    if attack_samp > 0:
+        env[:attack_samp] = np.linspace(0, 1, attack_samp)
+    # Decay: exponential fall
+    t = np.arange(decay_samp, dtype=np.float64)
+    env[attack_samp:attack_samp + decay_samp] = np.exp(-t * PHI * 3.0 / decay_samp)
+
+    return env[:n_samples]
+
+
+# --- Individual drum synthesizers -----------------------------------------
+
+def synth_kick(freq: float = 55.0, punch_freq: float = 200.0,
+               decay_ms: float = 300, drive: float = 0.3,
+               sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Synthesize a dubstep kick drum.
+
+    - Pitch sweep from punch_freq → freq (exponential)
+    - Tanh saturation for weight
+    - Short click transient at the start
+    - Phi-timed decay envelope
+    """
+    n_samples = int(decay_ms * sample_rate / 1000)
+    t = np.arange(n_samples, dtype=np.float64) / sample_rate
+
+    # Pitch envelope: exponential sweep from punch_freq to freq
+    pitch_decay = np.exp(-t * 30.0)  # fast pitch drop
+    freq_env = freq + (punch_freq - freq) * pitch_decay
+
+    # Phase accumulator for varying frequency
+    phase = np.cumsum(2 * np.pi * freq_env / sample_rate)
+    body = np.sin(phase)
+
+    # Click transient: 2ms noise burst
+    click_samples = int(0.002 * sample_rate)
+    rng = np.random.RandomState(42)
+    click = np.zeros(n_samples)
+    click[:click_samples] = rng.uniform(-1, 1, click_samples) * 0.5
+
+    # Amp envelope: phi-timed decay
+    amp_env = _env_phi_transient(n_samples, attack_ms=1.0, decay_ms=decay_ms)
+
+    # Mix
+    signal = (body + click) * amp_env
+
+    # Saturation
+    if drive > 0:
+        signal = np.tanh(signal * (1.0 + drive * 4.0))
+
+    return signal
+
+
+def synth_snare(tone_freq: float = 180.0, noise_mix: float = 0.6,
+                decay_ms: float = 200,
+                sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Synthesize a snare drum.
+
+    - Pitched sine body at tone_freq with short decay
+    - Noise component with longer decay
+    - noise_mix controls body/noise blend (0 = pure tone, 1 = pure noise)
+    """
+    n_samples = int(decay_ms * sample_rate / 1000)
+    t = np.arange(n_samples, dtype=np.float64) / sample_rate
+
+    # Tone body — short decay
+    tone_env = _env_exp_decay(n_samples, decay_ms * 0.3)
+    tone = np.sin(2 * np.pi * tone_freq * t) * tone_env
+
+    # Noise body — longer decay
+    rng = np.random.RandomState(137)
+    noise = rng.uniform(-1, 1, n_samples)
+    noise_env = _env_exp_decay(n_samples, decay_ms * 0.8)
+    noise = noise * noise_env
+
+    # Simple high-pass on noise (difference filter)
+    noise_hp = np.diff(noise, prepend=0) * 2.0
+
+    # Mix
+    signal = tone * (1.0 - noise_mix) + noise_hp * noise_mix
+
+    # Amp envelope
+    amp_env = _env_phi_transient(n_samples, attack_ms=0.5, decay_ms=decay_ms)
+    signal = signal * amp_env
+
+    return signal
+
+
+def synth_hat_closed(freq: float = 8000.0, decay_ms: float = 60,
+                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Synthesize a closed hi-hat.
+
+    - Inharmonic metallic partials at Fibonacci ratios
+    - Very short noise decay
+    """
+    n_samples = int(decay_ms * sample_rate / 1000)
+    t = np.arange(n_samples, dtype=np.float64) / sample_rate
+
+    # Metallic partials at Fibonacci frequency ratios
+    signal = np.zeros(n_samples)
+    fib_ratios = [1, 1, 2, 3, 5, 8]
+    for i, ratio in enumerate(fib_ratios):
+        partial_freq = freq * ratio / 5.0
+        amp = 1.0 / (i + 1)
+        signal += np.sin(2 * np.pi * partial_freq * t) * amp
+
+    # Add noise for sizzle
+    rng = np.random.RandomState(233)
+    noise = rng.uniform(-1, 1, n_samples) * 0.5
+    signal += noise
+
+    # Sharp decay
+    env = _env_exp_decay(n_samples, decay_ms)
+    signal = signal * env
+
+    return signal
+
+
+def synth_hat_open(freq: float = 8000.0, decay_ms: float = 300,
+                   sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Synthesize an open hi-hat.
+    Same metallic partials as closed, but longer sustain.
+    """
+    n_samples = int(decay_ms * sample_rate / 1000)
+    t = np.arange(n_samples, dtype=np.float64) / sample_rate
+
+    signal = np.zeros(n_samples)
+    fib_ratios = [1, 1, 2, 3, 5, 8]
+    for i, ratio in enumerate(fib_ratios):
+        partial_freq = freq * ratio / 5.0
+        amp = 1.0 / (i + 1)
+        signal += np.sin(2 * np.pi * partial_freq * t) * amp
+
+    rng = np.random.RandomState(233)
+    noise = rng.uniform(-1, 1, n_samples) * 0.4
+    signal += noise
+
+    # Longer decay
+    env = _env_exp_decay(n_samples, decay_ms)
+    signal = signal * env
+
+    return signal
+
+
+def synth_clap(decay_ms: float = 250, n_layers: int = 3,
+               sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Synthesize a clap.
+
+    - Multiple short noise bursts spaced φ ms apart (simulating hands)
+    - Noise tail with longer decay
+    """
+    n_samples = int(decay_ms * sample_rate / 1000)
+    signal = np.zeros(n_samples)
+    rng = np.random.RandomState(89)
+
+    # Phi-spaced initial bursts (~10ms each, spaced PHI * 8ms apart)
+    burst_len = int(0.010 * sample_rate)
+    spacing_ms = PHI * 8.0  # ~13ms between bursts
+
+    for i in range(n_layers):
+        offset = int(i * spacing_ms * sample_rate / 1000)
+        end = min(offset + burst_len, n_samples)
+        if offset < n_samples:
+            burst = rng.uniform(-1, 1, end - offset)
+            signal[offset:end] += burst * (0.8 ** i)  # each burst slightly quieter
+
+    # Noise tail
+    tail_start = int(n_layers * spacing_ms * sample_rate / 1000)
+    if tail_start < n_samples:
+        tail = rng.uniform(-1, 1, n_samples - tail_start) * 0.6
+        tail_env = _env_exp_decay(n_samples - tail_start, decay_ms * 0.6)
+        signal[tail_start:] += tail * tail_env
+
+    # Overall envelope
+    amp_env = _env_phi_transient(n_samples, attack_ms=0.3, decay_ms=decay_ms)
+    signal = signal * amp_env
+
+    return signal
+
+
+def synth_tom(freq: float = 100.0, decay_ms: float = 250,
+              sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Synthesize a tom drum.
+
+    - Pitched sine with slight pitch bend down
+    - Phi-timed exponential decay
+    """
+    n_samples = int(decay_ms * sample_rate / 1000)
+    t = np.arange(n_samples, dtype=np.float64) / sample_rate
+
+    # Slight pitch bend: start 20% higher, glide down
+    pitch_env = 1.0 + 0.2 * np.exp(-t * 20.0)
+    phase = np.cumsum(2 * np.pi * freq * pitch_env / sample_rate)
+    body = np.sin(phase)
+
+    # Envelope
+    env = _env_phi_transient(n_samples, attack_ms=0.5, decay_ms=decay_ms)
+    signal = body * env
+
+    return signal
+
+
+def synth_rim(freq: float = 500.0, decay_ms: float = 50,
+              sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Synthesize a rim shot / cross-stick.
+    Very short, high-pitched ping.
+    """
+    n_samples = int(decay_ms * sample_rate / 1000)
+    t = np.arange(n_samples, dtype=np.float64) / sample_rate
+
+    # Two partials — fundamental + phi harmonic
+    signal = np.sin(2 * np.pi * freq * t) * 0.7
+    signal += np.sin(2 * np.pi * freq * PHI * t) * 0.3
+
+    # Very fast decay
+    env = _env_exp_decay(n_samples, decay_ms)
+    signal = signal * env
+
+    return signal
+
+
+def synth_crash(freq: float = 6000.0, decay_ms: float = 1500,
+                sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Synthesize a crash cymbal.
+    Dense inharmonic partials + noise with slow decay.
+    """
+    n_samples = int(decay_ms * sample_rate / 1000)
+    t = np.arange(n_samples, dtype=np.float64) / sample_rate
+
+    # Dense partials at irrational ratios
+    signal = np.zeros(n_samples)
+    ratios = [1.0, PHI, PHI ** 2, 2.0 * PHI, 3.0, PHI ** 3]
+    for i, ratio in enumerate(ratios):
+        amp = 0.5 / (i + 1)
+        signal += np.sin(2 * np.pi * freq * ratio / 3.0 * t) * amp
+
+    # Noise layer
+    rng = np.random.RandomState(144)
+    noise = rng.uniform(-1, 1, n_samples) * 0.4
+    signal += noise
+
+    # Long decay
+    env = _env_exp_decay(n_samples, decay_ms)
+    signal = signal * env
+
+    return signal
+
+
+# --- Drum kit presets -----------------------------------------------------
+
+DRUM_KIT = {
+    "kick":        (synth_kick, {}),
+    "kick_hard":   (synth_kick, {"drive": 0.6, "punch_freq": 250.0}),
+    "kick_sub":    (synth_kick, {"freq": 40.0, "punch_freq": 150.0, "decay_ms": 400}),
+    "snare":       (synth_snare, {}),
+    "snare_tight": (synth_snare, {"decay_ms": 120, "noise_mix": 0.4}),
+    "snare_fat":   (synth_snare, {"decay_ms": 300, "noise_mix": 0.7, "tone_freq": 150.0}),
+    "hat_closed":  (synth_hat_closed, {}),
+    "hat_open":    (synth_hat_open, {}),
+    "clap":        (synth_clap, {}),
+    "clap_tight":  (synth_clap, {"decay_ms": 150, "n_layers": 2}),
+    "tom_low":     (synth_tom, {"freq": 80.0, "decay_ms": 300}),
+    "tom_mid":     (synth_tom, {"freq": 120.0, "decay_ms": 250}),
+    "tom_high":    (synth_tom, {"freq": 180.0, "decay_ms": 200}),
+    "rim":         (synth_rim, {}),
+    "crash":       (synth_crash, {}),
+    "crash_short": (synth_crash, {"decay_ms": 800}),
+}
+
+
+def export_drum_oneshots(out_dir: str = "output/drums") -> list[str]:
+    """
+    Synthesize and export all drum kit one-shots as .wav files.
+
+    Returns list of written file paths.
+    """
+    drum_dir = Path(out_dir)
+    drum_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+
+    for name, (synth_fn, kwargs) in DRUM_KIT.items():
+        audio = synth_fn(**kwargs)
+        wav_name = f"DRUM_{name.upper()}.wav"
+        wav_path = str(drum_dir / wav_name)
+        _write_oneshot_wav(wav_path, audio)
+        dur_ms = len(audio) / SAMPLE_RATE * 1000
+        print(f"  DRUM {name}: {wav_name} ({dur_ms:.0f}ms)")
+        paths.append(wav_path)
+
+    return paths
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -3072,7 +3425,14 @@ def main() -> None:
     write_drum_manifest(patterns, str(midi_dir))
     print("  drums_manifest.json")
 
-    print(f"Drum Generator complete — {len(patterns) + 1} MIDI files.")
+    print(f"Drum Generator MIDI — {len(patterns) + 1} MIDI files.")
+
+    # Audio drum one-shots (v2.8.0)
+    print("\n  Drum one-shots:")
+    oneshot_paths = export_drum_oneshots()
+    print(f"Drum Generator audio — {len(oneshot_paths)} one-shot .wav files.")
+
+    print("Drum Generator complete.")
 
 
 if __name__ == "__main__":
