@@ -57,6 +57,24 @@ from engine.arp_synth import (
     synthesize_arp,
     write_arp_manifest,
 )
+
+# --- v2.5 new modules ---
+from engine.arrangement_sequencer import (
+    ALL_ARRANGEMENT_BANKS,
+    ArrangementBank,
+    ArrangementTemplate,
+    SectionDef,
+    arrangement_duration_s,
+    arrangement_energy_curve,
+    arrangement_total_bars,
+    build_arrangement,
+    build_emotive_template,
+    build_fibonacci_template,
+    build_hybrid_template,
+    build_weapon_template,
+    golden_section_check,
+    write_arrangement_sequencer_manifest,
+)
 from engine.bass_oneshot import (
     ALL_BASS_BANKS,
     BassBank,
@@ -434,6 +452,19 @@ from engine.lead_synth import (
     wavetable_lead_bank,
     write_lead_manifest,
 )
+from engine.lfo_matrix import (
+    ALL_LFO_BANKS,
+    LFOBank,
+    LFOPreset,
+    apply_lfo,
+    generate_lfo,
+    sample_hold_lfo_bank,
+    saw_lfo_bank,
+    sine_lfo_bank,
+    square_lfo_bank,
+    triangle_lfo_bank,
+    write_lfo_matrix_manifest,
+)
 from engine.log import get_logger
 from engine.mastering_chain import (
     MasterReport,
@@ -467,6 +498,18 @@ from engine.midi_export import (
     progression_to_events,
     write_midi_file,
     write_single_track_midi,
+)
+from engine.multiband_distortion import (
+    ALL_MULTIBAND_DIST_BANKS,
+    MultibandDistBank,
+    MultibandDistPreset,
+    aggressive_distortion_bank,
+    apply_multiband_distortion,
+    digital_distortion_bank,
+    tape_distortion_bank,
+    tube_distortion_bank,
+    warm_distortion_bank,
+    write_multiband_distortion_manifest,
 )
 from engine.noise_generator import (
     ALL_NOISE_BANKS,
@@ -535,6 +578,19 @@ from engine.phi_core import (
     phi_harmonic_series,
     write_wav,
 )
+from engine.pitch_automation import (
+    ALL_PITCH_AUTO_BANKS,
+    PitchAutoBank,
+    PitchAutoPreset,
+    apply_pitch_automation,
+    dive_pitch_bank,
+    generate_pitch_automation,
+    glide_pitch_bank,
+    rise_pitch_bank,
+    staircase_pitch_bank,
+    wobble_pitch_bank,
+    write_pitch_automation_manifest,
+)
 from engine.pluck_synth import (
     ALL_PLUCK_BANKS,
     PluckBank,
@@ -576,6 +632,18 @@ from engine.rco import (
     subtronics_hybrid_preset,
     subtronics_weapon_preset,
 )
+from engine.riddim_engine import (
+    ALL_RIDDIM_BANKS,
+    RiddimBank,
+    RiddimPreset,
+    bounce_riddim_bank,
+    generate_riddim,
+    heavy_riddim_bank,
+    minimal_riddim_bank,
+    stutter_riddim_bank,
+    triplet_riddim_bank,
+    write_riddim_manifest,
+)
 from engine.riser_synth import (
     ALL_RISER_BANKS,
     RiserBank,
@@ -614,6 +682,7 @@ from engine.sb_analyzer import (
     build_corpus,
     build_signature_vector,
     load_corpus,
+    spectral_profile,
     vip_delta_analysis,
 )
 from engine.sb_analyzer import (
@@ -632,6 +701,42 @@ from engine.serum2 import (
 )
 from engine.serum2 import (
     build_init_template as serum2_init_template,
+)
+from engine.sidechain import (
+    ALL_SIDECHAIN_BANKS,
+    SidechainBank,
+    SidechainPreset,
+    apply_sidechain,
+    bounce_sidechain_bank,
+    generate_sidechain,
+    hard_cut_sidechain_bank,
+    phi_curve_sidechain_bank,
+    pump_sidechain_bank,
+    smooth_sidechain_bank,
+    write_sidechain_manifest,
+)
+from engine.song_templates import (
+    ALL_SONG_TEMPLATE_BANKS,
+    SongSection,
+    SongTemplate,
+    SongTemplateBank,
+    emotive_template_bank,
+    experimental_template_bank,
+    hybrid_template_bank,
+    weapon_template_bank,
+    write_song_templates_manifest,
+)
+from engine.stereo_imager import (
+    ALL_STEREO_BANKS,
+    StereoBank,
+    StereoPreset,
+    apply_stereo_imaging,
+    freq_split_stereo_bank,
+    haas_stereo_bank,
+    mid_side_stereo_bank,
+    phase_stereo_bank,
+    psychoacoustic_stereo_bank,
+    write_stereo_imager_manifest,
 )
 from engine.sub_bass import (
     ALL_SUB_BASS_BANKS,
@@ -764,6 +869,7 @@ __all__ = [
     "analyze_corpus",
     "build_signature_vector",
     "vip_delta_analysis",
+    "spectral_profile",
     # trance_arp
     "ArpNote",
     "ArpPattern",
@@ -1385,4 +1491,99 @@ __all__ = [
     "bongo_bank",
     "guiro_bank",
     "agogo_bank",
+    # --- v2.5 new modules ---
+    # sidechain
+    "SidechainPreset",
+    "SidechainBank",
+    "ALL_SIDECHAIN_BANKS",
+    "pump_sidechain_bank",
+    "hard_cut_sidechain_bank",
+    "smooth_sidechain_bank",
+    "bounce_sidechain_bank",
+    "phi_curve_sidechain_bank",
+    "generate_sidechain",
+    "apply_sidechain",
+    "write_sidechain_manifest",
+    # riddim_engine
+    "RiddimPreset",
+    "RiddimBank",
+    "ALL_RIDDIM_BANKS",
+    "minimal_riddim_bank",
+    "heavy_riddim_bank",
+    "bounce_riddim_bank",
+    "stutter_riddim_bank",
+    "triplet_riddim_bank",
+    "generate_riddim",
+    "write_riddim_manifest",
+    # pitch_automation
+    "PitchAutoPreset",
+    "PitchAutoBank",
+    "ALL_PITCH_AUTO_BANKS",
+    "dive_pitch_bank",
+    "rise_pitch_bank",
+    "wobble_pitch_bank",
+    "staircase_pitch_bank",
+    "glide_pitch_bank",
+    "generate_pitch_automation",
+    "apply_pitch_automation",
+    "write_pitch_automation_manifest",
+    # lfo_matrix
+    "LFOPreset",
+    "LFOBank",
+    "ALL_LFO_BANKS",
+    "sine_lfo_bank",
+    "triangle_lfo_bank",
+    "saw_lfo_bank",
+    "square_lfo_bank",
+    "sample_hold_lfo_bank",
+    "generate_lfo",
+    "apply_lfo",
+    "write_lfo_matrix_manifest",
+    # stereo_imager
+    "StereoPreset",
+    "StereoBank",
+    "ALL_STEREO_BANKS",
+    "haas_stereo_bank",
+    "mid_side_stereo_bank",
+    "freq_split_stereo_bank",
+    "phase_stereo_bank",
+    "psychoacoustic_stereo_bank",
+    "apply_stereo_imaging",
+    "write_stereo_imager_manifest",
+    # multiband_distortion
+    "MultibandDistPreset",
+    "MultibandDistBank",
+    "ALL_MULTIBAND_DIST_BANKS",
+    "warm_distortion_bank",
+    "aggressive_distortion_bank",
+    "digital_distortion_bank",
+    "tube_distortion_bank",
+    "tape_distortion_bank",
+    "apply_multiband_distortion",
+    "write_multiband_distortion_manifest",
+    # arrangement_sequencer
+    "SectionDef",
+    "ArrangementTemplate",
+    "ArrangementBank",
+    "ALL_ARRANGEMENT_BANKS",
+    "build_arrangement",
+    "build_weapon_template",
+    "build_emotive_template",
+    "build_hybrid_template",
+    "build_fibonacci_template",
+    "arrangement_total_bars",
+    "arrangement_duration_s",
+    "arrangement_energy_curve",
+    "golden_section_check",
+    "write_arrangement_sequencer_manifest",
+    # song_templates
+    "SongSection",
+    "SongTemplate",
+    "SongTemplateBank",
+    "ALL_SONG_TEMPLATE_BANKS",
+    "weapon_template_bank",
+    "emotive_template_bank",
+    "hybrid_template_bank",
+    "experimental_template_bank",
+    "write_song_templates_manifest",
 ]

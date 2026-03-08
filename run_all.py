@@ -99,6 +99,14 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("formant_synth",     "Formant Synthesizer"),
     ("glitch_engine",     "Glitch Engine"),
     ("drone_synth",       "Drone Synthesizer"),
+    ("sidechain",         "Sidechain Engine"),
+    ("riddim_engine",     "Riddim Engine"),
+    ("pitch_automation",  "Pitch Automation"),
+    ("lfo_matrix",        "LFO Modulation Matrix"),
+    ("stereo_imager",     "Stereo Imager"),
+    ("multiband_distortion", "Multiband Distortion"),
+    ("arrangement_sequencer", "Arrangement Sequencer"),
+    ("song_templates",    "Song Templates"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]
