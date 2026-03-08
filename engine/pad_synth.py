@@ -410,6 +410,83 @@ def synthesize_metallic_pad(preset: PadPreset,
     return _normalize(signal)
 
 
+def synthesize_noise_pad(preset: PadPreset,
+                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Noise pad — filtered noise with tonal coloring."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    rng = np.random.default_rng(42)
+
+    noise = rng.standard_normal(n)
+
+    # Bandpass filter around fundamental
+    alpha = min(0.99, preset.frequency / sample_rate * 2 * math.pi)
+    y = 0.0
+    signal = np.zeros(n)
+    for i in range(n):
+        y = y * (1 - alpha) + noise[i] * alpha
+        signal[i] = y
+
+    # Add tonal reference
+    signal += 0.3 * np.sin(2 * math.pi * preset.frequency * t)
+
+    mod = 1.0 + 0.15 * np.sin(2 * math.pi * preset.lfo_rate * t)
+    signal *= mod
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
+def synthesize_spectral_pad(preset: PadPreset,
+                            sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Spectral pad — sparse harmonic spectrum with slow drift."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Use prime-numbered harmonics for unique color
+    primes = [1, 2, 3, 5, 7, 11, 13]
+    signal = np.zeros(n)
+    for p in primes:
+        freq = preset.frequency * p
+        if freq > sample_rate / 2:
+            break
+        amp = 0.8 / p
+        # Slow drift per harmonic
+        drift = np.sin(2 * math.pi * preset.lfo_rate * p * 0.1 * t)
+        signal += amp * np.sin(2 * math.pi * freq * t + drift * 0.5)
+
+    mod = 1.0 + 0.1 * np.sin(2 * math.pi * preset.lfo_rate * t)
+    signal *= mod
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
+def synthesize_vocal_pad(preset: PadPreset,
+                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Vocal pad — formant-like resonances for breathy texture."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Rich harmonics
+    source = np.zeros(n)
+    for h in range(1, 12):
+        source += (0.7 ** h) * np.sin(2 * math.pi * preset.frequency * h * t)
+
+    # Three formant resonances (vowel-like)
+    formants = [500, 1500, 2500]
+    signal = np.zeros(n)
+    for ff in formants:
+        alpha = min(0.99, ff / sample_rate * 2 * math.pi)
+        y = 0.0
+        for i in range(n):
+            y = y * (1 - alpha) + source[i] * alpha
+            signal[i] += y * 0.33
+
+    mod = 1.0 + 0.1 * np.sin(2 * math.pi * preset.lfo_rate * t)
+    signal *= mod
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
 def synthesize_pad(preset: PadPreset,
                    sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct pad synthesizer."""
@@ -424,6 +501,9 @@ def synthesize_pad(preset: PadPreset,
         "granular": synthesize_granular_pad,
         "crystal": synthesize_crystal_pad,
         "metallic": synthesize_metallic_pad,
+        "noise": synthesize_noise_pad,
+        "spectral": synthesize_spectral_pad,
+        "vocal": synthesize_vocal_pad,
     }
     fn = synthesizers.get(preset.pad_type)
     if fn is None:
@@ -605,6 +685,57 @@ def metallic_pad_bank() -> PadBank:
     )
 
 
+def noise_pad_bank() -> PadBank:
+    """Noise pads — filtered noise with tonal coloring."""
+    return PadBank(
+        name="NOISE_PADS",
+        presets=[
+            PadPreset("noise_C3", "noise", 130.81, duration_s=5.0,
+                      brightness=0.6, attack_s=0.5, lfo_rate=0.15),
+            PadPreset("noise_E3", "noise", 164.81, duration_s=5.0,
+                      brightness=0.7, attack_s=0.4, lfo_rate=0.2),
+            PadPreset("noise_G3", "noise", 196.00, duration_s=5.0,
+                      brightness=0.5, attack_s=0.6, lfo_rate=0.1),
+            PadPreset("noise_A3", "noise", 220.00, duration_s=5.0,
+                      brightness=0.8, attack_s=0.45, lfo_rate=0.18),
+        ],
+    )
+
+
+def spectral_pad_bank() -> PadBank:
+    """Spectral pads — sparse prime-harmonic textures."""
+    return PadBank(
+        name="SPECTRAL_PADS",
+        presets=[
+            PadPreset("spectral_C3", "spectral", 130.81, duration_s=5.0,
+                      brightness=0.7, attack_s=0.4, lfo_rate=0.12),
+            PadPreset("spectral_E3", "spectral", 164.81, duration_s=5.0,
+                      brightness=0.6, attack_s=0.5, lfo_rate=0.15),
+            PadPreset("spectral_G3", "spectral", 196.00, duration_s=5.0,
+                      brightness=0.8, attack_s=0.35, lfo_rate=0.1),
+            PadPreset("spectral_A3", "spectral", 220.00, duration_s=5.0,
+                      brightness=0.65, attack_s=0.45, lfo_rate=0.2),
+        ],
+    )
+
+
+def vocal_pad_bank() -> PadBank:
+    """Vocal pads — formant-like breathy textures."""
+    return PadBank(
+        name="VOCAL_PADS",
+        presets=[
+            PadPreset("vocal_C3", "vocal", 130.81, duration_s=5.0,
+                      brightness=0.5, attack_s=0.5, lfo_rate=0.1),
+            PadPreset("vocal_E3", "vocal", 164.81, duration_s=5.0,
+                      brightness=0.6, attack_s=0.4, lfo_rate=0.15),
+            PadPreset("vocal_G3", "vocal", 196.00, duration_s=5.0,
+                      brightness=0.55, attack_s=0.55, lfo_rate=0.12),
+            PadPreset("vocal_A3", "vocal", 220.00, duration_s=5.0,
+                      brightness=0.7, attack_s=0.35, lfo_rate=0.18),
+        ],
+    )
+
+
 ALL_PAD_BANKS: dict[str, callable] = {
     "lush":     lush_pad_bank,
     "dark":     dark_pad_bank,
@@ -618,6 +749,10 @@ ALL_PAD_BANKS: dict[str, callable] = {
     # v2.1
     "crystal":  crystal_pad_bank,
     "metallic": metallic_pad_bank,
+    # v2.3
+    "noise":    noise_pad_bank,
+    "spectral": spectral_pad_bank,
+    "vocal":    vocal_pad_bank,
 }
 
 

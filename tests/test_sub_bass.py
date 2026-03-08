@@ -119,11 +119,11 @@ class TestSubBassBanks(unittest.TestCase):
     """Bank function tests."""
 
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_SUB_BASS_BANKS), 7)
+        self.assertEqual(len(ALL_SUB_BASS_BANKS), 9)
 
     def test_total_presets(self):
         total = sum(len(fn().presets) for fn in ALL_SUB_BASS_BANKS.values())
-        self.assertEqual(total, 28)
+        self.assertEqual(total, 36)
 
     def test_each_bank_has_4_presets(self):
         for name, fn in ALL_SUB_BASS_BANKS.items():
@@ -144,7 +144,7 @@ class TestSubBassBanks(unittest.TestCase):
     def test_manifest_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             manifest = write_sub_bass_manifest(tmp)
-            self.assertEqual(len(manifest["banks"]), 7)
+            self.assertEqual(len(manifest["banks"]), 9)
             manifest_path = Path(tmp) / "analysis" / "sub_bass_manifest.json"
             self.assertTrue(manifest_path.exists())
             data = json.loads(manifest_path.read_text())

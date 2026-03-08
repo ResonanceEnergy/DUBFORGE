@@ -529,6 +529,69 @@ def noise_burst_bank() -> TransitionBank:
     )
 
 
+def stutter_gate_bank() -> TransitionBank:
+    """Stutter gate FX — rapid gated transition effects."""
+    return TransitionBank(
+        name="STUTTER_GATES",
+        presets=[
+            TransitionPreset("sgate_fast", "gate_chop", duration_s=1.0,
+                             start_freq=800, gate_divisions=16,
+                             brightness=0.7, distortion=0.2),
+            TransitionPreset("sgate_medium", "gate_chop", duration_s=1.5,
+                             start_freq=600, gate_divisions=8,
+                             brightness=0.6, distortion=0.15),
+            TransitionPreset("sgate_chaotic", "gate_chop", duration_s=0.75,
+                             start_freq=1200, gate_divisions=24,
+                             brightness=0.9, distortion=0.4),
+            TransitionPreset("sgate_slow", "gate_chop", duration_s=2.0,
+                             start_freq=400, gate_divisions=4,
+                             brightness=0.5, distortion=0.1),
+        ],
+    )
+
+
+def reverse_tone_bank() -> TransitionBank:
+    """Reverse tone FX — tonal reversed crash/buildup layers."""
+    return TransitionBank(
+        name="REVERSE_TONES",
+        presets=[
+            TransitionPreset("rtone_bright", "reverse_crash", duration_s=1.5,
+                             start_freq=2000, brightness=0.9,
+                             reverb_amount=0.4),
+            TransitionPreset("rtone_sub", "reverse_crash", duration_s=2.0,
+                             start_freq=100, brightness=0.3,
+                             reverb_amount=0.6),
+            TransitionPreset("rtone_mid", "reverse_crash", duration_s=1.0,
+                             start_freq=800, brightness=0.6,
+                             reverb_amount=0.3),
+            TransitionPreset("rtone_wide", "reverse_crash", duration_s=2.5,
+                             start_freq=1500, brightness=0.8,
+                             reverb_amount=0.5),
+        ],
+    )
+
+
+def pitch_ramp_bank() -> TransitionBank:
+    """Pitch ramp FX — aggressive pitch dive transitions."""
+    return TransitionBank(
+        name="PITCH_RAMPS",
+        presets=[
+            TransitionPreset("pramp_fast", "pitch_dive", duration_s=0.5,
+                             start_freq=2000, end_freq=50,
+                             distortion=0.3),
+            TransitionPreset("pramp_slow", "pitch_dive", duration_s=2.0,
+                             start_freq=3000, end_freq=30,
+                             distortion=0.1),
+            TransitionPreset("pramp_mid", "pitch_dive", duration_s=1.0,
+                             start_freq=1500, end_freq=80,
+                             distortion=0.2),
+            TransitionPreset("pramp_extreme", "pitch_dive", duration_s=0.75,
+                             start_freq=5000, end_freq=20,
+                             distortion=0.5),
+        ],
+    )
+
+
 ALL_TRANSITION_BANKS: dict[str, callable] = {
     "tape_stops":      tape_stop_bank,
     "tape_starts":     tape_start_bank,
@@ -543,6 +606,10 @@ ALL_TRANSITION_BANKS: dict[str, callable] = {
     # v2.1
     "filter_sweeps":   filter_sweep_bank,
     "noise_bursts":    noise_burst_bank,
+    # v2.3
+    "stutter_gates":   stutter_gate_bank,
+    "reverse_tones":   reverse_tone_bank,
+    "pitch_ramps":     pitch_ramp_bank,
 }
 
 

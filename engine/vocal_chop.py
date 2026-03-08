@@ -526,6 +526,65 @@ def whisper_chops() -> VocalChopBank:
     )
 
 
+def pitched_down_chops() -> VocalChopBank:
+    """Pitched-down vocal chops — deep formant shifted effects."""
+    return VocalChopBank(
+        name="PITCHED_DOWN_CHOPS",
+        chops=[
+            VocalChop("pdown_ah_C3", "ah", "C3", 0.5,
+                       formant_shift=-12.0, distortion=0.1),
+            VocalChop("pdown_oh_E3", "oh", "E3", 0.4,
+                       formant_shift=-15.0, distortion=0.15),
+            VocalChop("pdown_oo_G2", "oo", "G2", 0.6,
+                       formant_shift=-18.0, distortion=0.05),
+            VocalChop("pdown_eh_A2", "eh", "A2", 0.5,
+                       formant_shift=-20.0, distortion=0.2),
+        ],
+    )
+
+
+def chopped_stutter_chops() -> VocalChopBank:
+    """Chopped stutter — rapid retriggered vocal fragments."""
+    return VocalChopBank(
+        name="CHOPPED_STUTTER_CHOPS",
+        chops=[
+            VocalChop("cstut_ah_C4", "ah", "C4", 0.3,
+                       stutter_count=8, stutter_pitch_drift=1.0,
+                       distortion=0.2),
+            VocalChop("cstut_oh_E4", "oh", "E4", 0.25,
+                       stutter_count=12, stutter_pitch_drift=2.0,
+                       distortion=0.3),
+            VocalChop("cstut_oo_G4", "oo", "G4", 0.35,
+                       stutter_count=6, stutter_pitch_drift=-1.0,
+                       distortion=0.15),
+            VocalChop("cstut_ee_A4", "ee", "A4", 0.2,
+                       stutter_count=16, stutter_pitch_drift=3.0,
+                       distortion=0.4),
+        ],
+    )
+
+
+def ethereal_chops() -> VocalChopBank:
+    """Ethereal vocal chops — reverb-heavy dreamy fragments."""
+    return VocalChopBank(
+        name="ETHEREAL_CHOPS",
+        chops=[
+            VocalChop("ether_ah_C5", "ah", "C5", 0.6,
+                       attack_s=0.05, release_s=0.2,
+                       formant_shift=6.0, distortion=0.0),
+            VocalChop("ether_oh_E5", "oh", "E5", 0.5,
+                       attack_s=0.04, release_s=0.15,
+                       formant_shift=8.0, distortion=0.0),
+            VocalChop("ether_oo_G4", "oo", "G4", 0.7,
+                       attack_s=0.06, release_s=0.25,
+                       formant_shift=4.0, distortion=0.0),
+            VocalChop("ether_ee_A4", "ee", "A4", 0.45,
+                       attack_s=0.03, release_s=0.18,
+                       formant_shift=10.0, distortion=0.02),
+        ],
+    )
+
+
 ALL_CHOP_BANKS: dict[str, callable] = {
     "drop_vowel":      drop_vowel_chops,
     "stutter":         stutter_chops,
@@ -540,6 +599,10 @@ ALL_CHOP_BANKS: dict[str, callable] = {
     # v2.2
     "glitched":        glitched_chops,
     "whisper":         whisper_chops,
+    # v2.3
+    "pitched_down":    pitched_down_chops,
+    "chopped_stutter": chopped_stutter_chops,
+    "ethereal":        ethereal_chops,
 }
 
 

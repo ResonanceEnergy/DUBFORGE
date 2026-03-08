@@ -232,6 +232,48 @@ def synthesize_triangle_sub(preset: SubBassPreset,
     return signal / (np.max(np.abs(signal)) + 1e-10)
 
 
+def synthesize_fm_sub(preset: SubBassPreset,
+                      sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """FM sub-bass — frequency-modulated sub tone."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # FM synthesis with sub-friendly ratio
+    mod_freq = preset.frequency * PHI
+    mod_index = preset.harmonic_mix * 2
+    modulator = mod_index * np.sin(2 * math.pi * mod_freq * t)
+    signal = np.sin(2 * math.pi * preset.frequency * t + modulator)
+
+    # Add pure sub for weight
+    signal = signal * 0.6 + 0.4 * np.sin(2 * math.pi * preset.frequency * t)
+    signal *= preset.sub_weight
+
+    env = _adsr_envelope(n, preset, sample_rate)
+    signal = _soft_clip(signal * env, preset.drive)
+    return signal / (np.max(np.abs(signal)) + 1e-10)
+
+
+def synthesize_distorted_sub(preset: SubBassPreset,
+                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Distorted sub-bass — saturated sub for aggressive low end."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Rich sub with harmonics
+    signal = np.sin(2 * math.pi * preset.frequency * t)
+    signal += 0.3 * np.sin(2 * math.pi * preset.frequency * 2 * t)
+    signal += 0.1 * np.sin(2 * math.pi * preset.frequency * 3 * t)
+
+    # Heavy saturation
+    drive = 0.5 + preset.drive * 2
+    signal = np.tanh(signal * drive * 3)
+    signal *= preset.sub_weight
+
+    env = _adsr_envelope(n, preset, sample_rate)
+    signal = signal * env
+    return signal / (np.max(np.abs(signal)) + 1e-10)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTER
 # ═══════════════════════════════════════════════════════════════════════════
@@ -247,6 +289,8 @@ def synthesize_sub_bass(preset: SubBassPreset,
         "rumble": synthesize_rumble,
         "pulse": synthesize_pulse_sub,
         "triangle": synthesize_triangle_sub,
+        "fm_sub": synthesize_fm_sub,
+        "distorted": synthesize_distorted_sub,
     }
     fn = synthesizers.get(preset.sub_type)
     if fn is None:
@@ -363,6 +407,33 @@ def triangle_sub_bank() -> SubBassBank:
     )
 
 
+def fm_sub_bank() -> SubBassBank:
+    """FM sub-bass — frequency-modulated sub tones — 4 presets."""
+    return SubBassBank(
+        name="fm_sub",
+        presets=[
+            SubBassPreset(f"fm_sub_{note}", "fm_sub", freq,
+                          duration_s=2.0, attack_s=0.01, decay_s=0.25,
+                          sustain=0.85, release_s=0.4,
+                          harmonic_mix=0.4, drive=0.1)
+            for note, freq in _SUB_NOTES
+        ],
+    )
+
+
+def distorted_sub_bank() -> SubBassBank:
+    """Distorted sub-bass — saturated aggressive low end — 4 presets."""
+    return SubBassBank(
+        name="distorted",
+        presets=[
+            SubBassPreset(f"distorted_{note}", "distorted", freq,
+                          duration_s=1.5, attack_s=0.01, decay_s=0.2,
+                          sustain=0.9, release_s=0.3, drive=0.6)
+            for note, freq in _SUB_NOTES
+        ],
+    )
+
+
 ALL_SUB_BASS_BANKS: dict[str, callable] = {
     "deep_sines": deep_sine_bank,
     "octaves": octave_bank,
@@ -372,6 +443,9 @@ ALL_SUB_BASS_BANKS: dict[str, callable] = {
     # v2.2
     "pulses": pulse_sub_bank,
     "triangles": triangle_sub_bank,
+    # v2.3
+    "fm_subs": fm_sub_bank,
+    "distorteds": distorted_sub_bank,
 }
 
 

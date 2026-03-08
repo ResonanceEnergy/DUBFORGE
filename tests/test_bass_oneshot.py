@@ -220,7 +220,7 @@ class TestBanks(unittest.TestCase):
             self.assertEqual(p.bass_type, "phase")
 
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_BASS_BANKS), 14)
+        self.assertEqual(len(ALL_BASS_BANKS), 18)
 
     def test_all_banks_synthesize(self):
         for bank_name, gen_fn in ALL_BASS_BANKS.items():
@@ -232,7 +232,7 @@ class TestBanks(unittest.TestCase):
 
     def test_total_presets_is_56(self):
         total = sum(len(fn().presets) for fn in ALL_BASS_BANKS.values())
-        self.assertEqual(total, 56)
+        self.assertEqual(total, 72)
 
 
 class TestManifest(unittest.TestCase):
@@ -246,7 +246,7 @@ class TestManifest(unittest.TestCase):
             with open(path) as f:
                 data = json.load(f)
             self.assertIn("banks", data)
-            self.assertEqual(len(data["banks"]), 14)
+            self.assertEqual(len(data["banks"]), 18)
 
 
 if __name__ == "__main__":

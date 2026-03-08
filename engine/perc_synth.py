@@ -304,6 +304,86 @@ def synthesize_tambourine(preset: PercPreset,
     return signal
 
 
+def synthesize_conga(preset: PercPreset,
+                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Conga — pitched resonant drum hit."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Pitched tone with pitch drop
+    freq_curve = preset.pitch * np.exp(-t * 5)
+    phase = np.cumsum(2 * math.pi * freq_curve / sample_rate)
+    tone = np.sin(phase)
+
+    # Body resonance
+    body = np.sin(2 * math.pi * preset.pitch * 0.5 * t) * 0.3
+
+    signal = (tone + body) * np.exp(-t * 4 / preset.decay_s)
+
+    # Short attack click
+    attack_n = max(1, int(0.002 * sample_rate))
+    env = np.ones(n)
+    env[:attack_n] *= np.linspace(0, 1, attack_n)
+    signal *= env
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal /= np.max(np.abs(signal)) + 1e-10
+    return signal
+
+
+def synthesize_shaker(preset: PercPreset,
+                      sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Shaker — noise-based shaker hit."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    rng = np.random.default_rng(42)
+
+    noise = rng.standard_normal(n)
+
+    # Bandpass around brightness-determined frequency
+    bp_freq = 3000 + preset.brightness * 5000
+    alpha = min(0.99, bp_freq / sample_rate * 2 * math.pi)
+    y = 0.0
+    signal = np.zeros(n)
+    for i in range(n):
+        y = y * (1 - alpha) + noise[i] * alpha
+        signal[i] = y
+
+    env = np.exp(-t * 6 / preset.decay_s)
+    attack_n = max(1, int(0.001 * sample_rate))
+    env[:attack_n] *= np.linspace(0, 1, attack_n)
+    signal *= env
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal /= np.max(np.abs(signal)) + 1e-10
+    return signal
+
+
+def synthesize_woodblock(preset: PercPreset,
+                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Woodblock — sharp pitched click."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Two resonant frequencies for wood character
+    f1 = preset.pitch
+    f2 = preset.pitch * 2.76  # inharmonic ratio
+    signal = np.sin(2 * math.pi * f1 * t) * 0.6
+    signal += np.sin(2 * math.pi * f2 * t) * 0.4
+
+    env = np.exp(-t * 15 / preset.decay_s)
+    attack_n = max(1, int(0.0005 * sample_rate))
+    env[:attack_n] *= np.linspace(0, 1, attack_n)
+    signal *= env
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal /= np.max(np.abs(signal)) + 1e-10
+    return signal
+
+
 def synthesize_perc(preset: PercPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct percussion synthesizer."""
@@ -315,6 +395,9 @@ def synthesize_perc(preset: PercPreset,
         "rim": synthesize_rim,
         "cowbell": synthesize_cowbell,
         "tambourine": synthesize_tambourine,
+        "conga": synthesize_conga,
+        "shaker": synthesize_shaker,
+        "woodblock": synthesize_woodblock,
     }
     fn = synthesizers.get(preset.perc_type)
     if fn is None:
@@ -446,6 +529,57 @@ def tambourine_bank() -> PercBank:
     )
 
 
+def conga_bank() -> PercBank:
+    """Conga hits — pitched resonant drums."""
+    return PercBank(
+        name="CONGAS",
+        presets=[
+            PercPreset("conga_high", "conga", duration_s=0.25,
+                       pitch=400.0, decay_s=0.12, tone_mix=0.7, brightness=0.6),
+            PercPreset("conga_low", "conga", duration_s=0.3,
+                       pitch=250.0, decay_s=0.15, tone_mix=0.8, brightness=0.4),
+            PercPreset("conga_slap", "conga", duration_s=0.15,
+                       pitch=500.0, decay_s=0.08, tone_mix=0.5, brightness=0.8),
+            PercPreset("conga_muted", "conga", duration_s=0.1,
+                       pitch=350.0, decay_s=0.05, tone_mix=0.6, brightness=0.3),
+        ],
+    )
+
+
+def shaker_bank() -> PercBank:
+    """Shaker hits — noise-based rhythm textures."""
+    return PercBank(
+        name="SHAKERS",
+        presets=[
+            PercPreset("shaker_bright", "shaker", duration_s=0.2,
+                       pitch=600.0, decay_s=0.1, brightness=0.9),
+            PercPreset("shaker_dark", "shaker", duration_s=0.25,
+                       pitch=400.0, decay_s=0.12, brightness=0.4),
+            PercPreset("shaker_short", "shaker", duration_s=0.1,
+                       pitch=800.0, decay_s=0.05, brightness=0.7),
+            PercPreset("shaker_long", "shaker", duration_s=0.4,
+                       pitch=500.0, decay_s=0.2, brightness=0.6),
+        ],
+    )
+
+
+def woodblock_bank() -> PercBank:
+    """Woodblock hits — sharp pitched clicks."""
+    return PercBank(
+        name="WOODBLOCKS",
+        presets=[
+            PercPreset("woodblock_high", "woodblock", duration_s=0.1,
+                       pitch=1200.0, decay_s=0.04, brightness=0.8),
+            PercPreset("woodblock_low", "woodblock", duration_s=0.15,
+                       pitch=800.0, decay_s=0.06, brightness=0.5),
+            PercPreset("woodblock_sharp", "woodblock", duration_s=0.08,
+                       pitch=1500.0, decay_s=0.03, brightness=0.9),
+            PercPreset("woodblock_round", "woodblock", duration_s=0.12,
+                       pitch=900.0, decay_s=0.05, brightness=0.4),
+        ],
+    )
+
+
 ALL_PERC_BANKS: dict[str, callable] = {
     "kicks":  kick_bank,
     "snares": snare_bank,
@@ -455,6 +589,10 @@ ALL_PERC_BANKS: dict[str, callable] = {
     # v2.1
     "cowbells":     cowbell_bank,
     "tambourines":  tambourine_bank,
+    # v2.3
+    "congas":       conga_bank,
+    "shakers":      shaker_bank,
+    "woodblocks":   woodblock_bank,
 }
 
 

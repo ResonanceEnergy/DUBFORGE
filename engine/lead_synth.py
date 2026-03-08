@@ -32,6 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
+from engine.config_loader import PHI
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
 
@@ -422,6 +423,92 @@ def synthesize_ring_mod_lead(preset: LeadPreset,
     return _normalize(signal)
 
 
+def synthesize_wavetable_lead(preset: LeadPreset,
+                              sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Wavetable lead — morphing waveform shapes for evolving timbre."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    env = _adsr_envelope(n, preset, sample_rate)
+
+    phase = (preset.frequency * t) % 1.0
+    sine = np.sin(2 * math.pi * phase)
+    saw = 2 * phase - 1
+    sq = np.sign(np.sin(2 * math.pi * phase))
+
+    morph = np.linspace(0, 2, n)
+    signal = np.zeros(n)
+    for i in range(n):
+        m = morph[i]
+        if m < 1:
+            signal[i] = sine[i] * (1 - m) + saw[i] * m
+        else:
+            mm = m - 1
+            signal[i] = saw[i] * (1 - mm) + sq[i] * mm
+
+    if preset.filter_cutoff > 0.5:
+        signal += 0.2 * np.sin(2 * math.pi * preset.frequency * 2 * t)
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+    signal *= env
+    return _normalize(signal)
+
+
+def synthesize_granular_lead(preset: LeadPreset,
+                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Granular lead — grain-cloud texture on lead tone."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    env = _adsr_envelope(n, preset, sample_rate)
+
+    # Base tone
+    signal = np.sin(2 * math.pi * preset.frequency * t)
+
+    # Grain cloud overlay
+    grain_size = max(1, int(0.02 * sample_rate))
+    rng = np.random.default_rng(42)
+    grains = np.zeros(n)
+    for pos in range(0, n - grain_size, grain_size * 2):
+        grain = rng.standard_normal(grain_size) * 0.3
+        window = np.hanning(grain_size)
+        grains[pos:pos + grain_size] += grain * window
+
+    signal = signal * 0.7 + grains * preset.filter_cutoff
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal *= env
+    return _normalize(signal)
+
+
+def synthesize_sync_lead(preset: LeadPreset,
+                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Sync lead — oscillator hard-sync for cutting harmonics."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    env = _adsr_envelope(n, preset, sample_rate)
+
+    master_freq = preset.frequency
+    ratio = preset.fm_ratio if preset.fm_ratio else PHI
+    slave_freq = master_freq * ratio
+
+    master_phase = (master_freq * t) % 1.0
+    slave_phase = np.zeros(n)
+    acc = 0.0
+    for i in range(n):
+        if i > 0 and master_phase[i] < master_phase[i - 1]:
+            acc = 0.0
+        acc += slave_freq / sample_rate
+        slave_phase[i] = acc
+
+    signal = np.sin(2 * math.pi * slave_phase)
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+    signal *= env
+    return _normalize(signal)
+
+
 def synthesize_lead(preset: LeadPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct lead synthesizer."""
@@ -436,6 +523,9 @@ def synthesize_lead(preset: LeadPreset,
         "formant": synthesize_formant_lead,
         "phase_lead": synthesize_phase_lead,
         "ring_mod": synthesize_ring_mod_lead,
+        "wavetable": synthesize_wavetable_lead,
+        "granular": synthesize_granular_lead,
+        "sync": synthesize_sync_lead,
     }
     fn = synthesizers.get(preset.lead_type)
     if fn is None:
@@ -617,6 +707,57 @@ def ring_mod_lead_bank() -> LeadBank:
     )
 
 
+def wavetable_lead_bank() -> LeadBank:
+    """Wavetable leads — morphing waveform timbres."""
+    return LeadBank(
+        name="WAVETABLE_LEADS",
+        presets=[
+            LeadPreset("wavetable_C4", "wavetable", 261.63, duration_s=0.5,
+                       filter_cutoff=0.7, distortion=0.1),
+            LeadPreset("wavetable_E4", "wavetable", 329.63, duration_s=0.5,
+                       filter_cutoff=0.8, distortion=0.2),
+            LeadPreset("wavetable_G4", "wavetable", 392.00, duration_s=0.6,
+                       filter_cutoff=0.6, distortion=0.05),
+            LeadPreset("wavetable_A4", "wavetable", 440.00, duration_s=0.5,
+                       filter_cutoff=0.9, distortion=0.15),
+        ],
+    )
+
+
+def granular_lead_bank() -> LeadBank:
+    """Granular leads — grain-cloud textured tones."""
+    return LeadBank(
+        name="GRANULAR_LEADS",
+        presets=[
+            LeadPreset("granular_C4", "granular", 261.63, duration_s=0.6,
+                       filter_cutoff=0.6, distortion=0.1),
+            LeadPreset("granular_E4", "granular", 329.63, duration_s=0.5,
+                       filter_cutoff=0.7, distortion=0.15),
+            LeadPreset("granular_G4", "granular", 392.00, duration_s=0.5,
+                       filter_cutoff=0.5, distortion=0.05),
+            LeadPreset("granular_A4", "granular", 440.00, duration_s=0.6,
+                       filter_cutoff=0.8, distortion=0.2),
+        ],
+    )
+
+
+def sync_lead_bank() -> LeadBank:
+    """Sync leads — hard-sync oscillator cutting harmonics."""
+    return LeadBank(
+        name="SYNC_LEADS",
+        presets=[
+            LeadPreset("sync_C4", "sync", 261.63, duration_s=0.5,
+                       fm_ratio=PHI, distortion=0.15),
+            LeadPreset("sync_E4", "sync", 329.63, duration_s=0.5,
+                       fm_ratio=2.0, distortion=0.2),
+            LeadPreset("sync_G4", "sync", 392.00, duration_s=0.5,
+                       fm_ratio=1.5, distortion=0.1),
+            LeadPreset("sync_A4", "sync", 440.00, duration_s=0.5,
+                       fm_ratio=2.5, distortion=0.25),
+        ],
+    )
+
+
 ALL_LEAD_BANKS: dict[str, callable] = {
     "screech":  screech_lead_bank,
     "pluck":    pluck_lead_bank,
@@ -630,6 +771,10 @@ ALL_LEAD_BANKS: dict[str, callable] = {
     # v2.1
     "phase_lead": phase_lead_bank,
     "ring_mod":   ring_mod_lead_bank,
+    # v2.3
+    "wavetable":  wavetable_lead_bank,
+    "granular":   granular_lead_bank,
+    "sync":       sync_lead_bank,
 }
 
 

@@ -111,7 +111,7 @@ class TestBanks(unittest.TestCase):
         self.assertEqual(len(bank.presets), 4)
 
     def test_all_banks_registered(self):
-        self.assertEqual(len(ALL_PERC_BANKS), 7)
+        self.assertEqual(len(ALL_PERC_BANKS), 10)
 
     def test_all_banks_synthesize(self):
         for bank_name, gen_fn in ALL_PERC_BANKS.items():
@@ -123,7 +123,7 @@ class TestBanks(unittest.TestCase):
 
     def test_total_presets_is_28(self):
         total = sum(len(fn().presets) for fn in ALL_PERC_BANKS.values())
-        self.assertEqual(total, 28)
+        self.assertEqual(total, 40)
 
 
 class TestManifest(unittest.TestCase):
@@ -137,7 +137,7 @@ class TestManifest(unittest.TestCase):
             with open(path) as f:
                 data = json.load(f)
             self.assertIn("banks", data)
-            self.assertEqual(len(data["banks"]), 7)
+            self.assertEqual(len(data["banks"]), 10)
 
 
 if __name__ == "__main__":

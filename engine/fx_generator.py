@@ -728,6 +728,72 @@ def alarm_presets() -> FXBank:
     )
 
 
+def wobble_fx_presets() -> FXBank:
+    """Wobble FX — low-frequency modulated textures for drops."""
+    bar_s = 4 * 60 / DEFAULT_BPM
+    return FXBank(
+        name="WOBBLE_FX",
+        presets=[
+            FXPreset("wobble_slow_drone", "drone", duration_s=8 * bar_s,
+                     start_freq=60, end_freq=60, distortion=0.3,
+                     reverb_amount=0.4),
+            FXPreset("wobble_mid_texture", "texture", duration_s=4 * bar_s,
+                     start_freq=200, end_freq=800, distortion=0.2,
+                     reverb_amount=0.3),
+            FXPreset("wobble_sub_pulse", "subdrop", duration_s=4 * bar_s,
+                     start_freq=40, end_freq=25, distortion=0.1,
+                     reverb_amount=0.5),
+            FXPreset("wobble_siren_lfo", "siren", duration_s=8 * bar_s,
+                     start_freq=400, end_freq=200, distortion=0.15,
+                     reverb_amount=0.35),
+        ],
+    )
+
+
+def stutter_fx_presets() -> FXBank:
+    """Stutter FX — glitchy repeated impact textures."""
+    bar_s = 4 * 60 / DEFAULT_BPM
+    return FXBank(
+        name="STUTTER_FX",
+        presets=[
+            FXPreset("stutter_impact_1", "impact", duration_s=2 * bar_s,
+                     start_freq=80, end_freq=80, distortion=0.5,
+                     reverb_amount=0.2),
+            FXPreset("stutter_impact_2", "impact", duration_s=bar_s,
+                     start_freq=120, end_freq=120, distortion=0.6,
+                     reverb_amount=0.15),
+            FXPreset("stutter_riser", "riser", duration_s=4 * bar_s,
+                     start_freq=200, end_freq=4000, distortion=0.3,
+                     reverb_amount=0.3),
+            FXPreset("stutter_downlift", "downlifter", duration_s=2 * bar_s,
+                     start_freq=3000, end_freq=100, distortion=0.4,
+                     reverb_amount=0.25),
+        ],
+    )
+
+
+def feedback_fx_presets() -> FXBank:
+    """Feedback FX — resonant self-oscillating textures."""
+    bar_s = 4 * 60 / DEFAULT_BPM
+    return FXBank(
+        name="FEEDBACK_FX",
+        presets=[
+            FXPreset("fb_drone_low", "drone", duration_s=8 * bar_s,
+                     start_freq=50, end_freq=50, distortion=0.6,
+                     reverb_amount=0.5),
+            FXPreset("fb_siren_high", "siren", duration_s=4 * bar_s,
+                     start_freq=3000, end_freq=1000, distortion=0.7,
+                     reverb_amount=0.3),
+            FXPreset("fb_texture_mid", "texture", duration_s=4 * bar_s,
+                     start_freq=500, end_freq=2000, distortion=0.5,
+                     reverb_amount=0.4),
+            FXPreset("fb_subdrop_deep", "subdrop", duration_s=4 * bar_s,
+                     start_freq=30, end_freq=15, distortion=0.4,
+                     reverb_amount=0.6),
+        ],
+    )
+
+
 ALL_FX_BANKS: dict[str, callable] = {
     "risers":      riser_presets,
     "impacts":     impact_presets,
@@ -744,6 +810,10 @@ ALL_FX_BANKS: dict[str, callable] = {
     "laser":       laser_presets,
     "sweeps":      sweep_presets,
     "alarms":      alarm_presets,
+    # v2.3
+    "wobble_fx":   wobble_fx_presets,
+    "stutter_fx":  stutter_fx_presets,
+    "feedback_fx": feedback_fx_presets,
 }
 
 

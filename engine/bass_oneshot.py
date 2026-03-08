@@ -478,6 +478,127 @@ def synthesize_phase_bass(preset: BassPreset,
     return _apply_bass_envelope(signal, preset, sample_rate)
 
 
+def synthesize_bitcrush_bass(preset: BassPreset,
+                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Bitcrushed bass — reduced bit-depth crunch."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    signal = np.sin(2 * math.pi * preset.frequency * t)
+    signal += 0.3 * np.sin(2 * math.pi * preset.frequency * 2 * t)
+
+    # Bitcrush effect
+    bits = max(2, 16 - int(preset.distortion * 12))
+    levels = 2 ** bits
+    signal = np.round(signal * levels) / levels
+
+    # Downsample simulation
+    crush_factor = max(1, int(4 + preset.distortion * 8))
+    for i in range(0, n, crush_factor):
+        signal[i:i + crush_factor] = signal[i]
+
+    signal += 0.4 * np.sin(2 * math.pi * preset.frequency * 0.5 * t)
+    signal *= 0.5
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_formant_bass(preset: BassPreset,
+                            sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Formant bass — vowel-shaped resonances on bass tone."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Rich harmonic source
+    signal = np.zeros(n)
+    for h in range(1, 10):
+        signal += (0.7 ** h) * np.sin(2 * math.pi * preset.frequency * h * t)
+
+    # Simple formant filter: resonances at vowel frequencies
+    formant_freqs = [600, 1200, 2400]  # "ah" vowel
+    filtered = np.zeros(n)
+    for ff in formant_freqs:
+        alpha = min(0.99, ff / sample_rate * 2 * math.pi)
+        y = 0.0
+        for i in range(n):
+            y = y * (1 - alpha) + signal[i] * alpha
+            filtered[i] += y * 0.33
+
+    signal = filtered + 0.5 * np.sin(2 * math.pi * preset.frequency * t)
+    signal *= 0.5
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_sync_bass(preset: BassPreset,
+                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Hard-sync bass — oscillator sync for aggressive harmonics."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    # Master oscillator
+    master_freq = preset.frequency
+    # Slave oscillator at higher ratio
+    ratio = preset.fm_ratio if preset.fm_ratio else PHI
+    slave_freq = master_freq * ratio
+
+    master_phase = (master_freq * t) % 1.0
+    # Reset slave phase at master zero-crossings
+    slave_phase = np.zeros(n)
+    acc = 0.0
+    for i in range(n):
+        if i > 0 and master_phase[i] < master_phase[i - 1]:
+            acc = 0.0
+        acc += slave_freq / sample_rate
+        slave_phase[i] = acc
+
+    signal = np.sin(2 * math.pi * slave_phase)
+    signal += 0.3 * np.sin(2 * math.pi * preset.frequency * 0.5 * t)
+    signal *= 0.5
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_wavetable_bass(preset: BassPreset,
+                              sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Wavetable bass — morphing between waveform shapes."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    phase = (preset.frequency * t) % 1.0
+
+    # Morph between sine, triangle, saw, square
+    sine = np.sin(2 * math.pi * phase)
+    tri = 2 * np.abs(2 * phase - 1) - 1
+    saw = 2 * phase - 1
+    sq = np.sign(np.sin(2 * math.pi * phase))
+
+    # Morph position sweeps over time
+    morph = np.linspace(0, 3, n)
+    signal = np.zeros(n)
+    for i in range(n):
+        m = morph[i]
+        if m < 1:
+            signal[i] = sine[i] * (1 - m) + tri[i] * m
+        elif m < 2:
+            mm = m - 1
+            signal[i] = tri[i] * (1 - mm) + saw[i] * mm
+        else:
+            mm = m - 2
+            signal[i] = saw[i] * (1 - mm) + sq[i] * mm
+
+    signal += 0.4 * np.sin(2 * math.pi * preset.frequency * 0.5 * t)
+    signal *= 0.5
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
 def synthesize_bass(preset: BassPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct bass synthesizer."""
@@ -496,6 +617,10 @@ def synthesize_bass(preset: BassPreset,
         "dist_fm": synthesize_dist_fm_bass,
         "ring_mod": synthesize_ring_mod_bass,
         "phase": synthesize_phase_bass,
+        "bitcrush": synthesize_bitcrush_bass,
+        "formant": synthesize_formant_bass,
+        "sync": synthesize_sync_bass,
+        "wavetable": synthesize_wavetable_bass,
     }
     fn = synthesizers.get(preset.bass_type)
     if fn is None:
@@ -721,6 +846,70 @@ def phase_bass_bank() -> BassBank:
     )
 
 
+def bitcrush_bass_bank() -> BassBank:
+    """Bitcrushed bass — crunchy bit-reduced tones."""
+    return BassBank(
+        name="BITCRUSH_BASS",
+        presets=[
+            BassPreset("bitcrush_C2", "bitcrush", NOTE_C2, distortion=0.5),
+            BassPreset("bitcrush_D2", "bitcrush", NOTE_D2, distortion=0.7),
+            BassPreset("bitcrush_E2", "bitcrush", NOTE_E2, distortion=0.3),
+            BassPreset("bitcrush_F2", "bitcrush", NOTE_F2, distortion=0.8),
+        ],
+    )
+
+
+def formant_bass_bank() -> BassBank:
+    """Formant bass — vowel-shaped resonances."""
+    return BassBank(
+        name="FORMANT_BASS",
+        presets=[
+            BassPreset("formant_bass_C2", "formant", NOTE_C2,
+                       filter_cutoff=0.6),
+            BassPreset("formant_bass_D2", "formant", NOTE_D2,
+                       filter_cutoff=0.7),
+            BassPreset("formant_bass_E2", "formant", NOTE_E2,
+                       filter_cutoff=0.5),
+            BassPreset("formant_bass_F2", "formant", NOTE_F2,
+                       filter_cutoff=0.8),
+        ],
+    )
+
+
+def sync_bass_bank() -> BassBank:
+    """Hard-sync bass — aggressive oscillator sync tones."""
+    return BassBank(
+        name="SYNC_BASS",
+        presets=[
+            BassPreset("sync_bass_C2", "sync", NOTE_C2,
+                       fm_ratio=PHI, distortion=0.2),
+            BassPreset("sync_bass_D2", "sync", NOTE_D2,
+                       fm_ratio=2.0, distortion=0.3),
+            BassPreset("sync_bass_E2", "sync", NOTE_E2,
+                       fm_ratio=1.5, distortion=0.15),
+            BassPreset("sync_bass_F2", "sync", NOTE_F2,
+                       fm_ratio=2.5, distortion=0.4),
+        ],
+    )
+
+
+def wavetable_bass_bank() -> BassBank:
+    """Wavetable bass — morphing waveform shapes."""
+    return BassBank(
+        name="WAVETABLE_BASS",
+        presets=[
+            BassPreset("wavetable_bass_C2", "wavetable", NOTE_C2,
+                       distortion=0.1),
+            BassPreset("wavetable_bass_D2", "wavetable", NOTE_D2,
+                       distortion=0.2),
+            BassPreset("wavetable_bass_E2", "wavetable", NOTE_E2,
+                       distortion=0.0),
+            BassPreset("wavetable_bass_F2", "wavetable", NOTE_F2,
+                       distortion=0.3),
+        ],
+    )
+
+
 ALL_BASS_BANKS: dict[str, callable] = {
     "sub_sine":    sub_sine_bank,
     "reese":       reese_bank,
@@ -738,6 +927,11 @@ ALL_BASS_BANKS: dict[str, callable] = {
     # v2.2
     "ring_mod_bass": ring_mod_bass_bank,
     "phase_bass":    phase_bass_bank,
+    # v2.3
+    "bitcrush_bass":  bitcrush_bass_bank,
+    "formant_bass":   formant_bass_bank,
+    "sync_bass":      sync_bass_bank,
+    "wavetable_bass": wavetable_bass_bank,
 }
 
 
