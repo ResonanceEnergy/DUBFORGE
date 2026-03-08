@@ -215,5 +215,78 @@ class TestHybridPhiLevels(unittest.TestCase):
         self.assertLess(volumes[-1], volumes[0])
 
 
+class TestAutoPopulateStems(unittest.TestCase):
+    """Test stem auto-population for Session 118."""
+
+    def test_auto_populate_returns_path(self):
+        from engine.als_generator import auto_populate_stems
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = dubstep_weapon_session()
+            result = auto_populate_stems(project, stem_dir=tmpdir, output_dir=tmpdir)
+            self.assertTrue(result.endswith(".als"))
+
+    def test_auto_populate_creates_file(self):
+        from engine.als_generator import auto_populate_stems
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = dubstep_weapon_session()
+            result = auto_populate_stems(project, stem_dir=tmpdir, output_dir=tmpdir)
+            self.assertTrue(os.path.exists(result))
+
+    def test_auto_populate_enriched_name(self):
+        from engine.als_generator import auto_populate_stems
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = dubstep_weapon_session()
+            result = auto_populate_stems(project, stem_dir=tmpdir, output_dir=tmpdir)
+            self.assertIn("STEMS", os.path.basename(result))
+
+    def test_auto_populate_with_wav_files(self):
+        import wave
+
+        import numpy as np
+
+        from engine.als_generator import auto_populate_stems
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a dummy wav in stem_dir
+            stem_dir = os.path.join(tmpdir, "stems")
+            os.makedirs(stem_dir)
+            wav_path = os.path.join(stem_dir, "bass_test.wav")
+            sr = 44100
+            data = np.zeros(sr, dtype=np.int16)
+            with wave.open(wav_path, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(sr)
+                wf.writeframes(data.tobytes())
+            project = dubstep_weapon_session()
+            out_dir = os.path.join(tmpdir, "out")
+            result = auto_populate_stems(project, stem_dir=stem_dir, output_dir=out_dir)
+            self.assertTrue(os.path.exists(result))
+
+
+class TestExportAllALS(unittest.TestCase):
+    """Test export_all_als function."""
+
+    def test_export_all_returns_paths(self):
+        from engine.als_generator import export_all_als
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = export_all_als(tmpdir)
+            self.assertIsInstance(paths, list)
+            self.assertGreater(len(paths), 0)
+
+    def test_export_all_creates_files(self):
+        from engine.als_generator import export_all_als
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = export_all_als(tmpdir)
+            for p in paths:
+                self.assertTrue(os.path.exists(p))
+
+    def test_export_all_includes_stems(self):
+        from engine.als_generator import export_all_als
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = export_all_als(tmpdir)
+            stem_paths = [p for p in paths if "STEMS" in os.path.basename(p)]
+            self.assertGreater(len(stem_paths), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

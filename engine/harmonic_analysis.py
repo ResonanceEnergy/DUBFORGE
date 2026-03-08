@@ -533,10 +533,119 @@ def write_harmonic_analysis_manifest(output_dir: str = "output") -> dict:
     return manifest
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# WAV ANALYSIS  (Session 121)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def analyze_wav_file(wav_path: str, analysis_type: str = "spectral_peaks",
+                     preset: AnalysisPreset | None = None) -> dict:
+    """Analyse a .wav file and return results as a dict.
+
+    Parameters
+    ----------
+    wav_path : str
+        Path to a .wav file (mono or stereo, 16-bit or float).
+    analysis_type : str
+        One of the five analysis types.
+    preset : AnalysisPreset, optional
+        Override preset.  Defaults to the first preset in the matching bank.
+
+    Returns
+    -------
+    dict  with keys: ``file``, ``analysis_type``, ``sample_rate``, ``duration_s``,
+    ``results`` (analysis-specific).
+    """
+    import wave
+    from pathlib import Path as _Path
+
+    p = _Path(wav_path)
+    if not p.exists():
+        raise FileNotFoundError(wav_path)
+
+    with wave.open(str(p), "rb") as wf:
+        n_channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        sr = wf.getframerate()
+        n_frames = wf.getnframes()
+        raw = wf.readframes(n_frames)
+
+    if sampwidth == 2:
+        samples = np.frombuffer(raw, dtype=np.int16).astype(np.float64) / 32768.0
+    elif sampwidth == 4:
+        samples = np.frombuffer(raw, dtype=np.int32).astype(np.float64) / 2147483648.0
+    else:
+        samples = np.frombuffer(raw, dtype=np.int16).astype(np.float64) / 32768.0
+
+    # Mix to mono if needed
+    if n_channels > 1:
+        samples = samples.reshape(-1, n_channels).mean(axis=1)
+
+    if preset is None:
+        bank_fn = ALL_ANALYSIS_BANKS.get(analysis_type)
+        if bank_fn is None:
+            raise ValueError(f"Unknown analysis_type: {analysis_type}")
+        bank = bank_fn()
+        preset = bank.presets[0]
+
+    result_obj = run_analysis(samples, preset)
+
+    # Convert result to serialisable dict
+    def _to_dict(obj):
+        if hasattr(obj, "__dataclass_fields__"):
+            return {k: _to_dict(getattr(obj, k)) for k in obj.__dataclass_fields__}
+        if isinstance(obj, (list, tuple)):
+            return [_to_dict(v) for v in obj]
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, (np.floating, np.integer)):
+            return float(obj)
+        return obj
+
+    return {
+        "file": str(p),
+        "analysis_type": analysis_type,
+        "sample_rate": sr,
+        "duration_s": round(n_frames / sr, 4),
+        "preset": preset.name,
+        "results": _to_dict(result_obj),
+    }
+
+
+def export_analysis_reports(output_dir: str = "output") -> list[str]:
+    """Generate analysis JSON reports for any .wav files in output/wavetables."""
+    import json
+    from pathlib import Path as _Path
+
+    wav_dir = _Path(output_dir) / "wavetables"
+    out = _Path(output_dir) / "analysis"
+    out.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+
+    # Gather up to 20 .wav files to analyse
+    wav_files = sorted(wav_dir.rglob("*.wav"))[:20] if wav_dir.exists() else []
+
+    for wf in wav_files:
+        for atype in ["spectral_peaks", "phi_detection"]:
+            try:
+                report = analyze_wav_file(str(wf), atype)
+                fname = f"{wf.stem}_{atype}.json"
+                rpath = out / fname
+                with open(rpath, "w") as fp:
+                    json.dump(report, fp, indent=2)
+                paths.append(str(rpath))
+            except Exception:
+                pass  # skip unreadable or tiny files
+
+    return paths
+
+
 def main() -> None:
     manifest = write_harmonic_analysis_manifest()
     total = sum(b["preset_count"] for b in manifest["banks"].values())
-    print(f"Harmonic Analysis: {len(manifest['banks'])} banks, {total} presets")
+
+    reports = export_analysis_reports()
+    print(f"Harmonic Analysis: {len(manifest['banks'])} banks, {total} presets, "
+          f"{len(reports)} analysis reports")
 
 
 if __name__ == "__main__":

@@ -111,6 +111,13 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("reverb_delay",     "Reverb & Delay"),
     ("convolution",      "Convolution Engine"),
     ("harmonic_analysis", "Harmonic Analysis"),
+    ("render_pipeline",   "Render Pipeline"),
+    ("batch_renderer",    "Batch Renderer"),
+    ("stem_mixer",        "Stem Mixer"),
+    ("sample_pack_builder", "Sample Pack Builder"),
+    ("preset_pack_builder", "Preset Pack Builder"),
+    ("wavetable_morph",   "Wavetable Morph Engine"),
+    ("spectral_resynthesis", "Spectral Resynthesis"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]

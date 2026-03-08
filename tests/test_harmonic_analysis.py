@@ -1,4 +1,6 @@
-"""Tests for engine.harmonic_analysis — 22 tests."""
+"""Tests for engine.harmonic_analysis — 33 tests."""
+
+import wave
 
 import numpy as np
 import pytest
@@ -16,6 +18,8 @@ from engine.harmonic_analysis import (
     analyze_roughness,
     analyze_spectral_flux,
     analyze_spectral_peaks,
+    analyze_wav_file,
+    export_analysis_reports,
     harmonic_series_bank,
     phi_detection_bank,
     roughness_bank,
@@ -214,3 +218,104 @@ class TestManifest:
         assert len(m["banks"]) == 5
         total = sum(b["preset_count"] for b in m["banks"].values())
         assert total == 20
+
+
+# ─── WAV ANALYSIS (Session 121) ─────────────────────────────────────────
+
+
+def _make_test_wav(path, freq=440.0, dur=0.5, sr=44100):
+    """Create a simple test .wav file."""
+    t = np.arange(int(dur * sr)) / sr
+    samples = np.sin(2.0 * np.pi * freq * t)
+    data = np.clip(samples * 32767, -32768, 32767).astype(np.int16)
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(data.tobytes())
+
+
+class TestAnalyzeWavFile:
+    def test_basic_analysis(self, tmp_path):
+        p = tmp_path / "tone.wav"
+        _make_test_wav(p, 440.0)
+        result = analyze_wav_file(str(p), "spectral_peaks")
+        assert result["analysis_type"] == "spectral_peaks"
+        assert result["sample_rate"] == 44100
+        assert result["duration_s"] > 0
+
+    def test_phi_detection_on_wav(self, tmp_path):
+        p = tmp_path / "phi.wav"
+        _make_test_wav(p, 432.0)
+        result = analyze_wav_file(str(p), "phi_detection")
+        assert result["analysis_type"] == "phi_detection"
+        assert "results" in result
+
+    def test_harmonic_series_on_wav(self, tmp_path):
+        p = tmp_path / "hs.wav"
+        _make_test_wav(p, 220.0)
+        result = analyze_wav_file(str(p), "harmonic_series")
+        assert result["analysis_type"] == "harmonic_series"
+
+    def test_spectral_flux_on_wav(self, tmp_path):
+        p = tmp_path / "flux.wav"
+        _make_test_wav(p, 440.0)
+        result = analyze_wav_file(str(p), "spectral_flux")
+        assert result["analysis_type"] == "spectral_flux"
+
+    def test_roughness_on_wav(self, tmp_path):
+        p = tmp_path / "rough.wav"
+        _make_test_wav(p, 440.0)
+        result = analyze_wav_file(str(p), "roughness")
+        assert result["analysis_type"] == "roughness"
+
+    def test_missing_file_raises(self):
+        with pytest.raises(FileNotFoundError):
+            analyze_wav_file("/nonexistent/foo.wav")
+
+    def test_invalid_type_raises(self, tmp_path):
+        p = tmp_path / "t.wav"
+        _make_test_wav(p)
+        with pytest.raises(ValueError):
+            analyze_wav_file(str(p), "bogus_type")
+
+    def test_result_has_preset_name(self, tmp_path):
+        p = tmp_path / "pn.wav"
+        _make_test_wav(p)
+        result = analyze_wav_file(str(p))
+        assert "preset" in result
+
+    def test_stereo_wav(self, tmp_path):
+        """Stereo files should be mixed to mono for analysis."""
+        p = tmp_path / "stereo.wav"
+        sr = 44100
+        t = np.arange(int(0.3 * sr)) / sr
+        left = np.sin(2 * np.pi * 440 * t)
+        right = np.sin(2 * np.pi * 440 * t)
+        interleaved = np.empty(len(t) * 2, dtype=np.float64)
+        interleaved[0::2] = left
+        interleaved[1::2] = right
+        data = np.clip(interleaved * 32767, -32768, 32767).astype(np.int16)
+        with wave.open(str(p), "wb") as wf:
+            wf.setnchannels(2)
+            wf.setsampwidth(2)
+            wf.setframerate(sr)
+            wf.writeframes(data.tobytes())
+        result = analyze_wav_file(str(p), "spectral_peaks")
+        assert result["duration_s"] > 0
+
+
+class TestExportAnalysisReports:
+    def test_no_wavs_returns_empty(self, tmp_path):
+        paths = export_analysis_reports(str(tmp_path))
+        assert paths == []
+
+    def test_with_wavs(self, tmp_path):
+        wt_dir = tmp_path / "wavetables"
+        wt_dir.mkdir()
+        _make_test_wav(wt_dir / "test1.wav", 440.0)
+        _make_test_wav(wt_dir / "test2.wav", 220.0)
+        paths = export_analysis_reports(str(tmp_path))
+        assert len(paths) >= 2  # at least 2 analysis types × 2 files = 4
+        for p in paths:
+            assert p.endswith(".json")

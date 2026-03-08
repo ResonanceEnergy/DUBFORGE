@@ -422,23 +422,98 @@ ALL_ALS_TEMPLATES = {
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# MAIN
+# STEM AUTO-POPULATE
 # ═══════════════════════════════════════════════════════════════════════════
 
-def main() -> None:
-    out_dir = Path("output/ableton")
+def auto_populate_stems(project: ALSProject, stem_dir: str = "output/wavetables",
+                        output_dir: str = "output/ableton") -> str:
+    """Generate an ALS project auto-populated with rendered stem references.
+
+    Scans *stem_dir* for .wav files and assigns them to matching audio tracks
+    in the project template.  Returns the path to the written .als file.
+    """
+    stem_path = Path(stem_dir)
+    wav_files = sorted(stem_path.rglob("*.wav")) if stem_path.exists() else []
+
+    # Build a mapping from track name fragments to wav files
+    stem_map: dict[str, list[str]] = {}
+    for wav in wav_files:
+        stem_name = wav.stem.lower()
+        stem_map.setdefault(stem_name, []).append(str(wav))
+
+    # Enrich audio tracks with discovered stems
+    enriched_tracks: list[ALSTrack] = []
+    for track in project.tracks:
+        t = ALSTrack(
+            name=track.name,
+            track_type=track.track_type,
+            color=track.color,
+            volume_db=track.volume_db,
+            pan=track.pan,
+            mute=track.mute,
+            solo=track.solo,
+            armed=track.armed,
+            midi_channel=track.midi_channel,
+            device_names=list(track.device_names),
+            clip_names=list(track.clip_names),
+        )
+        if track.track_type == "audio":
+            key_lower = track.name.lower()
+            for sname, spaths in stem_map.items():
+                if key_lower in sname or sname in key_lower:
+                    t.clip_names.extend(Path(p).stem for p in spaths[:4])
+                    break
+        enriched_tracks.append(t)
+
+    enriched = ALSProject(
+        name=project.name + "_STEMS",
+        bpm=project.bpm,
+        time_sig_num=project.time_sig_num,
+        time_sig_den=project.time_sig_den,
+        tracks=enriched_tracks,
+        scenes=list(project.scenes),
+        master_volume_db=project.master_volume_db,
+        notes=project.notes + " | Stems auto-populated",
+    )
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    als_path = str(out / f"{enriched.name}.als")
+    write_als(enriched, als_path)
+    write_als_json(enriched, str(out / f"{enriched.name}_structure.json"))
+    return als_path
+
+
+def export_all_als(output_dir: str = "output") -> list[str]:
+    """Generate all ALS templates + stem-populated variants."""
+    paths: list[str] = []
+    out_dir = Path(output_dir) / "ableton"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for name, gen_fn in ALL_ALS_TEMPLATES.items():
         project = gen_fn()
         als_path = str(out_dir / f"DUBFORGE_{name}.als")
         write_als(project, als_path)
-        print(f"  DUBFORGE_{name}.als  ({len(project.tracks)} tracks, {len(project.scenes)} scenes)")
+        paths.append(als_path)
 
         json_path = str(out_dir / f"DUBFORGE_{name}_structure.json")
         write_als_json(project, json_path)
 
-    print(f"ALS Generator complete — {len(ALL_ALS_TEMPLATES)} Ableton sets generated.")
+        # Stem-populated variant
+        stem_path = auto_populate_stems(project, str(Path(output_dir) / "wavetables"),
+                                        str(out_dir))
+        paths.append(stem_path)
+
+    return paths
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════════════════════════════════════
+
+def main() -> None:
+    paths = export_all_als()
+    print(f"ALS Generator complete — {len(paths)} files ({len(ALL_ALS_TEMPLATES)} templates + stems).")
 
 
 if __name__ == "__main__":
