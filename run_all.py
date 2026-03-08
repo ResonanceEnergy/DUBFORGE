@@ -124,6 +124,15 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("ab_tester",          "A/B Tester"),
     ("template_generator", "Template Generator"),
     ("sound_palette",      "Sound Palette"),
+    ("profiler",           "Performance Profiler"),
+    ("error_handling",     "Error Handling & Validation"),
+    ("plugin_scaffold",    "Plugin Scaffold"),
+    ("web_preview",        "Web Preview Server"),
+    ("tutorials",          "Tutorial Scripts"),
+    ("realtime_monitor",   "Real-Time Monitor"),
+    ("full_integration",   "v4.0 Full Integration"),
+    ("final_audit",        "Final Audit"),
+    ("grandmaster",        "GRANDMASTER 144"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]

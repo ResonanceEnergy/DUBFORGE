@@ -153,7 +153,7 @@ class TestManifest(unittest.TestCase):
 
     def test_writes_json(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            manifest = write_arp_manifest(tmpdir)
+            write_arp_manifest(tmpdir)
             manifest_path = os.path.join(tmpdir, "analysis",
                                          "arp_synth_manifest.json")
             self.assertTrue(os.path.exists(manifest_path))

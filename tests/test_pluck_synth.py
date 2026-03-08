@@ -150,7 +150,7 @@ class TestManifest(unittest.TestCase):
 
     def test_writes_json(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            manifest = write_pluck_manifest(tmpdir)
+            write_pluck_manifest(tmpdir)
             manifest_path = os.path.join(tmpdir, "analysis",
                                          "pluck_synth_manifest.json")
             self.assertTrue(os.path.exists(manifest_path))
