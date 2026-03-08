@@ -263,6 +263,104 @@ def synthesize_shimmer(preset: GranularPreset,
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# v2.4 SYNTHESIZERS — dust, reverse, spectral
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def synthesize_dust(preset: GranularPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Dust granular — sparse micro-grain crackles."""
+    n = int(preset.duration_s * sample_rate)
+    rng = np.random.RandomState(42)
+    signal = np.zeros(n)
+    grain_samples = max(1, int(preset.grain_size_ms * sample_rate / 1000))
+    t_grain = np.linspace(0, 1, grain_samples, endpoint=False)
+    num_grains = int(preset.grain_density * n / grain_samples)
+    for _ in range(num_grains):
+        pos = rng.randint(0, max(1, n - grain_samples))
+        freq = preset.frequency * (1 + rng.uniform(-preset.pitch_spread, preset.pitch_spread) / 12)
+        grain = np.sin(2 * np.pi * freq * t_grain / sample_rate * np.arange(grain_samples))
+        grain *= np.hanning(grain_samples)
+        grain *= rng.uniform(0.3, 1.0)
+        end = min(pos + grain_samples, n)
+        signal[pos:end] += grain[:end - pos]
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    env = np.ones(n)
+    att = max(1, int(preset.attack_s * sample_rate))
+    rel = max(1, int(preset.release_s * sample_rate))
+    env[:att] = np.linspace(0, 1, att)
+    if rel < n:
+        env[-rel:] = np.linspace(1, 0, rel)
+    signal *= env
+    mx = np.max(np.abs(signal))
+    if mx > 0:
+        signal /= mx
+    return signal
+
+
+def synthesize_reverse(preset: GranularPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Reverse granular — reversed grain playback."""
+    n = int(preset.duration_s * sample_rate)
+    rng = np.random.RandomState(43)
+    signal = np.zeros(n)
+    grain_samples = max(1, int(preset.grain_size_ms * sample_rate / 1000))
+    t_grain = np.arange(grain_samples)
+    num_grains = int(preset.grain_density * n / grain_samples)
+    for _ in range(num_grains):
+        pos = rng.randint(0, max(1, n - grain_samples))
+        freq = preset.frequency * (1 + rng.uniform(-preset.pitch_spread, preset.pitch_spread) / 12)
+        grain = np.sin(2 * np.pi * freq * t_grain / sample_rate)
+        grain *= np.hanning(grain_samples)
+        grain = grain[::-1]  # reverse
+        end = min(pos + grain_samples, n)
+        signal[pos:end] += grain[:end - pos]
+    env = np.ones(n)
+    att = max(1, int(preset.attack_s * sample_rate))
+    rel = max(1, int(preset.release_s * sample_rate))
+    env[:att] = np.linspace(0, 1, att)
+    if rel < n:
+        env[-rel:] = np.linspace(1, 0, rel)
+    signal *= env
+    mx = np.max(np.abs(signal))
+    if mx > 0:
+        signal /= mx
+    return signal
+
+
+def synthesize_spectral(preset: GranularPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Spectral granular — harmonically-rich spectral grains."""
+    n = int(preset.duration_s * sample_rate)
+    rng = np.random.RandomState(44)
+    signal = np.zeros(n)
+    grain_samples = max(1, int(preset.grain_size_ms * sample_rate / 1000))
+    t_grain = np.arange(grain_samples)
+    num_grains = int(preset.grain_density * n / grain_samples)
+    for _ in range(num_grains):
+        pos = rng.randint(0, max(1, n - grain_samples))
+        freq = preset.frequency * (1 + rng.uniform(-preset.pitch_spread, preset.pitch_spread) / 12)
+        grain = np.zeros(grain_samples)
+        for h in range(1, 6):
+            amp = preset.brightness / h
+            grain += amp * np.sin(2 * np.pi * freq * h * t_grain / sample_rate)
+        grain *= np.hanning(grain_samples)
+        end = min(pos + grain_samples, n)
+        signal[pos:end] += grain[:end - pos]
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    env = np.ones(n)
+    att = max(1, int(preset.attack_s * sample_rate))
+    rel = max(1, int(preset.release_s * sample_rate))
+    env[:att] = np.linspace(0, 1, att)
+    if rel < n:
+        env[-rel:] = np.linspace(1, 0, rel)
+    signal *= env
+    mx = np.max(np.abs(signal))
+    if mx > 0:
+        signal /= mx
+    return signal
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ROUTER
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -276,6 +374,9 @@ def synthesize_granular(preset: GranularPreset,
         "stretch": synthesize_stretch,
         "freeze": synthesize_freeze,
         "shimmer": synthesize_shimmer,
+        "dust": synthesize_dust,
+        "reverse": synthesize_reverse,
+        "spectral": synthesize_spectral,
     }
     fn = synthesizers.get(preset.grain_type)
     if fn is None:
@@ -381,12 +482,79 @@ def shimmer_bank() -> GranularBank:
     )
 
 
+def dust_bank() -> GranularBank:
+    """Dust granular — sparse micro-grain crackles."""
+    return GranularBank(
+        name="DUST_GRAINS",
+        presets=[
+            GranularPreset("dust_sparse_C4", "dust", 261.63, duration_s=5.0,
+                           grain_size_ms=15, grain_density=0.3, pitch_spread=1.0,
+                           brightness=0.4),
+            GranularPreset("dust_dense_A3", "dust", 220.0, duration_s=4.0,
+                           grain_size_ms=10, grain_density=0.8, pitch_spread=0.5,
+                           brightness=0.6),
+            GranularPreset("dust_wide_E3", "dust", 164.81, duration_s=6.0,
+                           grain_size_ms=20, grain_density=0.5, pitch_spread=3.0,
+                           brightness=0.5),
+            GranularPreset("dust_tiny_G4", "dust", 392.00, duration_s=3.0,
+                           grain_size_ms=5, grain_density=0.6, pitch_spread=2.0,
+                           brightness=0.7),
+        ],
+    )
+
+
+def reverse_grain_bank() -> GranularBank:
+    """Reverse granular — reversed grain textures."""
+    return GranularBank(
+        name="REVERSE_GRAINS",
+        presets=[
+            GranularPreset("reverse_slow_C3", "reverse", 130.81, duration_s=6.0,
+                           grain_size_ms=80, grain_density=0.5, pitch_spread=1.0,
+                           brightness=0.5),
+            GranularPreset("reverse_fast_E4", "reverse", 329.63, duration_s=3.0,
+                           grain_size_ms=30, grain_density=0.8, pitch_spread=2.0,
+                           brightness=0.7),
+            GranularPreset("reverse_deep_A2", "reverse", 110.0, duration_s=8.0,
+                           grain_size_ms=100, grain_density=0.4, pitch_spread=0.5,
+                           brightness=0.3),
+            GranularPreset("reverse_bright_G3", "reverse", 196.0, duration_s=5.0,
+                           grain_size_ms=50, grain_density=0.7, pitch_spread=1.5,
+                           brightness=0.8),
+        ],
+    )
+
+
+def spectral_grain_bank() -> GranularBank:
+    """Spectral granular — harmonically-rich spectral layers."""
+    return GranularBank(
+        name="SPECTRAL_GRAINS",
+        presets=[
+            GranularPreset("spectral_rich_C3", "spectral", 130.81, duration_s=5.0,
+                           grain_size_ms=60, grain_density=0.7, pitch_spread=1.0,
+                           brightness=0.8),
+            GranularPreset("spectral_dark_E2", "spectral", 82.41, duration_s=7.0,
+                           grain_size_ms=80, grain_density=0.5, pitch_spread=0.5,
+                           brightness=0.3),
+            GranularPreset("spectral_bright_A3", "spectral", 220.0, duration_s=4.0,
+                           grain_size_ms=40, grain_density=0.8, pitch_spread=2.0,
+                           brightness=0.9),
+            GranularPreset("spectral_wide_G3", "spectral", 196.0, duration_s=6.0,
+                           grain_size_ms=70, grain_density=0.6, pitch_spread=3.0,
+                           brightness=0.6),
+        ],
+    )
+
+
 ALL_GRANULAR_BANKS: dict[str, callable] = {
     "cloud":   cloud_bank,
     "scatter": scatter_bank,
     "stretch": stretch_bank,
     "freeze":  freeze_bank,
     "shimmer": shimmer_bank,
+    # v2.4
+    "dust":     dust_bank,
+    "reverse":  reverse_grain_bank,
+    "spectral": spectral_grain_bank,
 }
 
 

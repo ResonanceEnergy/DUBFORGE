@@ -215,6 +215,87 @@ def synthesize_reverse_swell(preset: RiserPreset,
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# v2.4 SYNTHESIZERS — fm_riser, granular_riser, doppler
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def synthesize_fm_riser(preset: RiserPreset,
+                       sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """FM riser — FM modulation index rises over time."""
+    n = int(preset.duration_s * sample_rate)
+    # Carrier frequency sweeps up
+    freq_curve = np.linspace(preset.start_freq, preset.end_freq, n)
+    # Modulation index rises with intensity
+    mod_index = np.linspace(0.0, preset.intensity * 8, n)
+    mod_freq = freq_curve * 2  # modulator at 2x carrier
+    mod_signal = mod_index * np.sin(2 * math.pi * np.cumsum(mod_freq / sample_rate))
+    phase = np.cumsum(2 * math.pi * (freq_curve + mod_signal) / sample_rate)
+    signal = np.sin(phase)
+    # Add brightness harmonics
+    if preset.brightness > 0.3:
+        signal += preset.brightness * 0.3 * np.sin(phase * 2)
+    # Rising envelope
+    env = np.linspace(0.1, 1.0, n) ** preset.intensity
+    signal *= env
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+    return _normalize(signal)
+
+
+def synthesize_granular_riser(preset: RiserPreset,
+                              sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Granular riser — grain density builds up over time."""
+    n = int(preset.duration_s * sample_rate)
+    rng = np.random.default_rng(88)
+    signal = np.zeros(n)
+    grain_ms = 30
+    grain_n = max(1, int(grain_ms * sample_rate / 1000))
+    env_grain = np.hanning(grain_n)
+    total_grains = int(preset.intensity * n / grain_n * 2)
+    for g in range(total_grains):
+        # Grains cluster toward the end for build-up effect
+        progress = (g / max(1, total_grains - 1)) ** 0.5
+        center = int(progress * (n - grain_n))
+        pos = max(0, min(n - grain_n, center + rng.integers(-grain_n, grain_n)))
+        freq = preset.start_freq + (preset.end_freq - preset.start_freq) * progress
+        freq *= 2 ** (rng.uniform(-0.5, 0.5) / 12)
+        t_grain = np.arange(grain_n) / sample_rate
+        grain = np.sin(2 * math.pi * freq * t_grain) * env_grain
+        if preset.brightness > 0.4:
+            grain += preset.brightness * 0.3 * np.sin(4 * math.pi * freq * t_grain) * env_grain
+        end = min(pos + grain_n, n)
+        signal[pos:end] += grain[:end - pos]
+    # Rising master envelope
+    env = np.linspace(0.05, 1.0, n) ** 0.7
+    signal *= env
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+    return _normalize(signal)
+
+
+def synthesize_doppler(preset: RiserPreset,
+                       sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Doppler riser — frequency Doppler effect rise."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    # Doppler curve: accelerating frequency shift
+    progress = (t / preset.duration_s) ** 2
+    freq_curve = preset.start_freq + (preset.end_freq - preset.start_freq) * progress
+    phase = np.cumsum(2 * math.pi * freq_curve / sample_rate)
+    signal = np.sin(phase)
+    # Add harmonics that also Doppler-shift
+    if preset.brightness > 0.3:
+        signal += preset.brightness * 0.4 * np.sin(phase * 1.5)
+        signal += preset.brightness * 0.2 * np.sin(phase * 3)
+    # Amplitude rises with approach
+    amp_curve = np.linspace(0.1, 1.0, n) ** preset.intensity
+    signal *= amp_curve
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+    return _normalize(signal)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ROUTER
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -228,6 +309,9 @@ def synthesize_riser(preset: RiserPreset,
         "filter_sweep": synthesize_filter_sweep,
         "harmonic_build": synthesize_harmonic_build,
         "reverse_swell": synthesize_reverse_swell,
+        "fm_riser": synthesize_fm_riser,
+        "granular_riser": synthesize_granular_riser,
+        "doppler": synthesize_doppler,
     }
     fn = synthesizers.get(preset.riser_type)
     if fn is None:
@@ -328,12 +412,67 @@ def reverse_swell_bank() -> RiserBank:
     )
 
 
+def fm_riser_bank() -> RiserBank:
+    """FM riser — FM modulation building upward."""
+    return RiserBank(
+        name="FM_RISERS",
+        presets=[
+            RiserPreset("fm_riser_4bar", "fm_riser", duration_s=6.4,
+                        start_freq=200, end_freq=8000, brightness=0.7, intensity=0.8),
+            RiserPreset("fm_riser_8bar", "fm_riser", duration_s=12.8,
+                        start_freq=100, end_freq=12000, brightness=0.8, intensity=0.6),
+            RiserPreset("fm_riser_2bar", "fm_riser", duration_s=3.2,
+                        start_freq=300, end_freq=10000, brightness=0.9, intensity=0.9),
+            RiserPreset("fm_riser_16bar", "fm_riser", duration_s=25.6,
+                        start_freq=80, end_freq=6000, brightness=0.5, intensity=0.5),
+        ],
+    )
+
+
+def granular_riser_bank() -> RiserBank:
+    """Granular riser — grain density build-ups."""
+    return RiserBank(
+        name="GRANULAR_RISERS",
+        presets=[
+            RiserPreset("gran_riser_4bar", "granular_riser", duration_s=6.4,
+                        start_freq=150, end_freq=6000, brightness=0.7, intensity=0.8),
+            RiserPreset("gran_riser_8bar", "granular_riser", duration_s=12.8,
+                        start_freq=100, end_freq=10000, brightness=0.6, intensity=0.7),
+            RiserPreset("gran_riser_2bar", "granular_riser", duration_s=3.2,
+                        start_freq=200, end_freq=8000, brightness=0.8, intensity=0.9),
+            RiserPreset("gran_riser_1bar", "granular_riser", duration_s=1.6,
+                        start_freq=300, end_freq=12000, brightness=0.9, intensity=1.0),
+        ],
+    )
+
+
+def doppler_riser_bank() -> RiserBank:
+    """Doppler riser — accelerating frequency approach."""
+    return RiserBank(
+        name="DOPPLER_RISERS",
+        presets=[
+            RiserPreset("doppler_4bar", "doppler", duration_s=6.4,
+                        start_freq=200, end_freq=4000, brightness=0.7, intensity=0.8),
+            RiserPreset("doppler_8bar", "doppler", duration_s=12.8,
+                        start_freq=100, end_freq=8000, brightness=0.6, intensity=0.7),
+            RiserPreset("doppler_2bar", "doppler", duration_s=3.2,
+                        start_freq=400, end_freq=6000, brightness=0.8, intensity=0.9),
+            RiserPreset("doppler_16bar", "doppler", duration_s=25.6,
+                        start_freq=80, end_freq=3000, brightness=0.5, intensity=0.5),
+        ],
+    )
+
+
 ALL_RISER_BANKS: dict[str, callable] = {
     "noise_sweeps":    noise_sweep_bank,
     "pitch_rises":     pitch_rise_bank,
     "filter_sweeps":   filter_sweep_bank,
     "harmonic_builds": harmonic_build_bank,
     "reverse_swells":  reverse_swell_bank,
+    # v2.4
+    "fm_risers":       fm_riser_bank,
+    "granular_risers":  granular_riser_bank,
+    "doppler_risers":   doppler_riser_bank,
 }
 
 

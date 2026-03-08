@@ -599,6 +599,68 @@ def synthesize_wavetable_bass(preset: BassPreset,
     return _apply_bass_envelope(signal, preset, sample_rate)
 
 
+def synthesize_amplitude_bass(preset: BassPreset,
+                              sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Amplitude-modulated bass — tremolo-style movement."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    carrier = np.sin(2 * math.pi * preset.frequency * t)
+    mod_rate = preset.fm_ratio * 4.0
+    mod = 0.5 + 0.5 * np.sin(2 * math.pi * mod_rate * t)
+    signal = carrier * mod
+
+    signal += 0.3 * np.sin(2 * math.pi * preset.frequency * 0.5 * t)
+    signal *= 0.6
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_octave_bass(preset: BassPreset,
+                           sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Octave bass — fundamental stacked with octave for thickness."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    fund = np.sin(2 * math.pi * preset.frequency * t)
+    octave_up = np.sin(2 * math.pi * preset.frequency * 2 * t) * 0.6
+    octave_down = np.sin(2 * math.pi * preset.frequency * 0.5 * t) * 0.8
+    signal = fund + octave_up + octave_down
+    signal *= 0.35
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
+def synthesize_pulse_width_bass(preset: BassPreset,
+                                sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Pulse-width bass — variable pulse width for tonal movement."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+
+    phase = (preset.frequency * t) % 1.0
+    pw_mod = 0.3 + 0.2 * np.sin(2 * math.pi * 0.5 * t)
+    signal = np.where(phase < pw_mod, 1.0, -1.0).astype(float)
+
+    signal += 0.3 * np.sin(2 * math.pi * preset.frequency * 0.5 * t)
+    signal *= 0.5
+
+    if preset.filter_cutoff < 1.0:
+        cutoff_n = max(1, int(preset.filter_cutoff * 10))
+        kernel = np.ones(cutoff_n) / cutoff_n
+        signal = np.convolve(signal, kernel, mode="same")
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+
+    return _apply_bass_envelope(signal, preset, sample_rate)
+
+
 def synthesize_bass(preset: BassPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct bass synthesizer."""
@@ -621,6 +683,10 @@ def synthesize_bass(preset: BassPreset,
         "formant": synthesize_formant_bass,
         "sync": synthesize_sync_bass,
         "wavetable": synthesize_wavetable_bass,
+        # v2.4
+        "amplitude": synthesize_amplitude_bass,
+        "octave": synthesize_octave_bass,
+        "pulse_width": synthesize_pulse_width_bass,
     }
     fn = synthesizers.get(preset.bass_type)
     if fn is None:
@@ -910,6 +976,53 @@ def wavetable_bass_bank() -> BassBank:
     )
 
 
+def amplitude_bass_bank() -> BassBank:
+    """Amplitude-modulated bass — tremolo-driven movement."""
+    return BassBank(
+        name="AMPLITUDE_BASS",
+        presets=[
+            BassPreset("amplitude_C2", "amplitude", NOTE_C2,
+                       fm_ratio=1.0, distortion=0.1),
+            BassPreset("amplitude_D2", "amplitude", NOTE_D2,
+                       fm_ratio=1.5, distortion=0.2),
+            BassPreset("amplitude_E2", "amplitude", NOTE_E2,
+                       fm_ratio=0.8, distortion=0.15),
+            BassPreset("amplitude_F2", "amplitude", NOTE_F2,
+                       fm_ratio=2.0, distortion=0.3),
+        ],
+    )
+
+
+def octave_bass_bank() -> BassBank:
+    """Octave bass — layered octave stacking."""
+    return BassBank(
+        name="OCTAVE_BASS",
+        presets=[
+            BassPreset("octave_C2", "octave", NOTE_C2, distortion=0.1),
+            BassPreset("octave_D2", "octave", NOTE_D2, distortion=0.2),
+            BassPreset("octave_E2", "octave", NOTE_E2, distortion=0.05),
+            BassPreset("octave_F2", "octave", NOTE_F2, distortion=0.3),
+        ],
+    )
+
+
+def pulse_width_bass_bank() -> BassBank:
+    """Pulse-width bass — PWM tonal movement."""
+    return BassBank(
+        name="PULSE_WIDTH_BASS",
+        presets=[
+            BassPreset("pw_bass_C2", "pulse_width", NOTE_C2,
+                       filter_cutoff=0.7, distortion=0.2),
+            BassPreset("pw_bass_D2", "pulse_width", NOTE_D2,
+                       filter_cutoff=0.6, distortion=0.3),
+            BassPreset("pw_bass_E2", "pulse_width", NOTE_E2,
+                       filter_cutoff=0.8, distortion=0.15),
+            BassPreset("pw_bass_F2", "pulse_width", NOTE_F2,
+                       filter_cutoff=0.5, distortion=0.4),
+        ],
+    )
+
+
 ALL_BASS_BANKS: dict[str, callable] = {
     "sub_sine":    sub_sine_bank,
     "reese":       reese_bank,
@@ -932,6 +1045,10 @@ ALL_BASS_BANKS: dict[str, callable] = {
     "formant_bass":   formant_bass_bank,
     "sync_bass":      sync_bass_bank,
     "wavetable_bass": wavetable_bass_bank,
+    # v2.4
+    "amplitude_bass": amplitude_bass_bank,
+    "octave_bass":    octave_bass_bank,
+    "pulse_width_bass": pulse_width_bass_bank,
 }
 
 

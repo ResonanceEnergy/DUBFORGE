@@ -226,6 +226,103 @@ def synthesize_reverse_hit(preset: ImpactPreset,
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# v2.4 SYNTHESIZERS — layered_hit, glitch_impact, whoosh_impact
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def synthesize_layered_hit(preset: ImpactPreset,
+                           sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Layered hit — multiple impact layers stacked."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(111)
+
+    # Sub layer
+    sub_freq = preset.frequency
+    sub_phase = np.cumsum(2 * math.pi * sub_freq * np.ones(n) / sample_rate)
+    sub = np.sin(sub_phase) * np.exp(-t * 3 / preset.decay_s)
+
+    # Mid punch layer
+    mid_freq = preset.frequency * 3
+    mid_drop = mid_freq * np.exp(-t * 10) + mid_freq
+    mid_phase = np.cumsum(2 * math.pi * mid_drop / sample_rate)
+    mid = np.sin(mid_phase) * np.exp(-t * 5 / preset.decay_s) * 0.6
+
+    # High transient layer
+    noise = rng.standard_normal(n)
+    noise_env = np.exp(-t * 20) * preset.brightness
+    high = noise * noise_env * 0.4
+
+    signal = (sub + mid + high) * preset.intensity
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 5))
+    return _normalize(signal)
+
+
+def synthesize_glitch_impact(preset: ImpactPreset,
+                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Glitch impact — digital glitch artifacts on transient."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(222)
+
+    # Base tone with rapid pitch drop
+    drop_freq = preset.frequency * 5 * np.exp(-t * 12) + preset.frequency
+    phase = np.cumsum(2 * math.pi * drop_freq / sample_rate)
+    signal = np.sin(phase)
+
+    # Glitch: random sample-hold segments
+    glitch_len = max(1, int(0.1 * sample_rate))
+    for _ in range(int(preset.brightness * 20)):
+        pos = rng.integers(0, max(1, n - glitch_len))
+        hold_val = signal[pos]
+        hold_n = rng.integers(10, max(11, glitch_len))
+        end = min(pos + hold_n, n)
+        signal[pos:end] = hold_val
+
+    env = np.exp(-t * 3 / preset.decay_s) * preset.intensity
+    signal *= env
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 6))
+    return _normalize(signal)
+
+
+def synthesize_whoosh_impact(preset: ImpactPreset,
+                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Whoosh impact — noise-based whoosh into hit."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(333)
+
+    # Noise whoosh with rising then falling filter
+    noise = rng.standard_normal(n)
+    peak_pos = int(n * 0.3)  # whoosh peaks at 30% of duration
+    cutoff = np.zeros(n)
+    cutoff[:peak_pos] = np.linspace(200, preset.frequency * 20, peak_pos)
+    cutoff[peak_pos:] = np.linspace(preset.frequency * 20, preset.frequency, n - peak_pos)
+
+    # Simple IIR filter
+    filtered = np.zeros(n)
+    y = 0.0
+    for i in range(n):
+        alpha = min(0.99, cutoff[i] / sample_rate * 2 * math.pi)
+        y = y * (1 - alpha) + noise[i] * alpha
+        filtered[i] = y
+
+    # Impact tone at peak
+    impact_env = np.exp(-np.abs(t - t[peak_pos]) * 10 / preset.decay_s)
+    tone = np.sin(2 * math.pi * preset.frequency * t) * impact_env
+
+    signal = (filtered * 0.6 + tone * 0.8) * preset.intensity
+
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 4))
+    return _normalize(signal)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ROUTER
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -239,6 +336,9 @@ def synthesize_impact(preset: ImpactPreset,
         "cinematic_hit": synthesize_cinematic_hit,
         "distorted_impact": synthesize_distorted_impact,
         "reverse_hit": synthesize_reverse_hit,
+        "layered_hit": synthesize_layered_hit,
+        "glitch_impact": synthesize_glitch_impact,
+        "whoosh_impact": synthesize_whoosh_impact,
     }
     fn = synthesizers.get(preset.impact_type)
     if fn is None:
@@ -336,12 +436,67 @@ def reverse_hit_bank() -> ImpactBank:
     )
 
 
+def layered_hit_bank() -> ImpactBank:
+    """Layered hit — multi-layer stacked impacts."""
+    return ImpactBank(
+        name="LAYERED_HITS",
+        presets=[
+            ImpactPreset("layered_deep", "layered_hit", duration_s=2.0,
+                         frequency=40.0, decay_s=1.5, intensity=1.0),
+            ImpactPreset("layered_punch", "layered_hit", duration_s=1.5,
+                         frequency=60.0, decay_s=1.0, intensity=0.9, brightness=0.7),
+            ImpactPreset("layered_massive", "layered_hit", duration_s=3.0,
+                         frequency=35.0, decay_s=2.5, intensity=1.0, brightness=0.5),
+            ImpactPreset("layered_tight", "layered_hit", duration_s=1.0,
+                         frequency=80.0, decay_s=0.7, intensity=0.8, brightness=0.8),
+        ],
+    )
+
+
+def glitch_impact_bank() -> ImpactBank:
+    """Glitch impact — digital glitch transients."""
+    return ImpactBank(
+        name="GLITCH_IMPACTS",
+        presets=[
+            ImpactPreset("glitch_hard", "glitch_impact", duration_s=1.5,
+                         frequency=70.0, decay_s=1.0, brightness=0.8, distortion=0.5),
+            ImpactPreset("glitch_soft", "glitch_impact", duration_s=2.0,
+                         frequency=50.0, decay_s=1.5, brightness=0.4, distortion=0.2),
+            ImpactPreset("glitch_stutter", "glitch_impact", duration_s=1.0,
+                         frequency=90.0, decay_s=0.8, brightness=1.0, distortion=0.7),
+            ImpactPreset("glitch_deep", "glitch_impact", duration_s=2.5,
+                         frequency=40.0, decay_s=2.0, brightness=0.6, distortion=0.4),
+        ],
+    )
+
+
+def whoosh_impact_bank() -> ImpactBank:
+    """Whoosh impact — noise whoosh into hit."""
+    return ImpactBank(
+        name="WHOOSH_IMPACTS",
+        presets=[
+            ImpactPreset("whoosh_short", "whoosh_impact", duration_s=1.5,
+                         frequency=60.0, decay_s=1.0, intensity=0.9),
+            ImpactPreset("whoosh_long", "whoosh_impact", duration_s=3.0,
+                         frequency=45.0, decay_s=2.0, intensity=0.8),
+            ImpactPreset("whoosh_bright", "whoosh_impact", duration_s=2.0,
+                         frequency=80.0, decay_s=1.5, brightness=0.9, intensity=1.0),
+            ImpactPreset("whoosh_dark", "whoosh_impact", duration_s=2.5,
+                         frequency=35.0, decay_s=2.0, brightness=0.3, intensity=0.7),
+        ],
+    )
+
+
 ALL_IMPACT_BANKS: dict[str, callable] = {
     "sub_booms":          sub_boom_bank,
     "metal_crashes":      metal_crash_bank,
     "cinematic_hits":     cinematic_hit_bank,
     "distorted_impacts":  distorted_impact_bank,
     "reverse_hits":       reverse_hit_bank,
+    # v2.4
+    "layered_hits":       layered_hit_bank,
+    "glitch_impacts":     glitch_impact_bank,
+    "whoosh_impacts":     whoosh_impact_bank,
 }
 
 

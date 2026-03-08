@@ -355,6 +355,55 @@ def synthesize_machine(preset: TexturePreset,
     return _normalize(signal)
 
 
+def synthesize_fire(preset: TexturePreset,
+                    sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Fire texture — crackling flame-like noise patterns."""
+    n = int(preset.duration_s * sample_rate)
+    rng = np.random.RandomState(55)
+    noise = rng.randn(n) * preset.brightness
+    burst_size = max(1, int(0.02 * sample_rate))
+    num_bursts = int(preset.density * n / burst_size)
+    for _ in range(num_bursts):
+        pos = rng.randint(0, max(1, n - burst_size))
+        burst = rng.randn(burst_size) * (0.5 + rng.random() * 0.5)
+        burst *= np.hanning(burst_size)
+        end = min(pos + burst_size, n)
+        noise[pos:end] += burst[:end - pos]
+    mod_rate = preset.modulation_rate if preset.modulation_rate > 0 else PHI
+    mod = 0.6 + 0.4 * np.sin(
+        2 * np.pi * mod_rate * np.linspace(0, preset.duration_s, n)
+    )
+    noise *= mod
+    if preset.distortion > 0:
+        noise = np.tanh(noise * (1 + preset.distortion * 3))
+    noise = _fade_in_out(noise, fade_s=1.0)
+    return _normalize(noise)
+
+
+def synthesize_crystal(preset: TexturePreset,
+                       sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Crystal texture — shimmering tonal particles."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    rng = np.random.RandomState(66)
+    signal = np.zeros(n)
+    num_tones = int(preset.density * 20) + 3
+    for _ in range(num_tones):
+        freq = rng.uniform(2000, 8000)
+        amp = preset.brightness * rng.uniform(0.1, 0.4)
+        phase = rng.uniform(0, 2 * np.pi)
+        tone = amp * np.sin(2 * np.pi * freq * t + phase)
+        env_rate = rng.uniform(0.1, 1.0)
+        tone *= 0.5 + 0.5 * np.sin(
+            2 * np.pi * env_rate * t + rng.uniform(0, 2 * np.pi)
+        )
+        signal += tone
+    mod_rate = preset.modulation_rate if preset.modulation_rate > 0 else PHI
+    signal *= 0.7 + 0.3 * np.sin(2 * np.pi * mod_rate * t)
+    signal = _fade_in_out(signal, fade_s=1.0)
+    return _normalize(signal)
+
+
 def synthesize_texture(preset: TexturePreset,
                        sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct texture synthesizer."""
@@ -367,6 +416,9 @@ def synthesize_texture(preset: TexturePreset,
         "forest": synthesize_forest,
         "cave": synthesize_cave,
         "machine": synthesize_machine,
+        # v2.4
+        "fire": synthesize_fire,
+        "crystal": synthesize_crystal,
     }
     fn = synthesizers.get(preset.texture_type)
     if fn is None:
@@ -530,6 +582,48 @@ def machine_texture_bank() -> TextureBank:
     )
 
 
+def fire_texture_bank() -> TextureBank:
+    """Fire texture — crackling flame ambience."""
+    return TextureBank(
+        name="FIRE_TEXTURES",
+        presets=[
+            TexturePreset("fire_gentle", "fire", 8.0,
+                          brightness=0.3, density=0.3, depth=0.4,
+                          modulation_rate=0.5),
+            TexturePreset("fire_campfire", "fire", 10.0,
+                          brightness=0.5, density=0.5, depth=0.5,
+                          modulation_rate=1.0),
+            TexturePreset("fire_blaze", "fire", 6.0,
+                          brightness=0.7, density=0.8, depth=0.6,
+                          modulation_rate=2.0, distortion=0.3),
+            TexturePreset("fire_embers", "fire", 12.0,
+                          brightness=0.2, density=0.2, depth=0.3,
+                          modulation_rate=0.3),
+        ],
+    )
+
+
+def crystal_texture_bank() -> TextureBank:
+    """Crystal texture — shimmering crystalline particles."""
+    return TextureBank(
+        name="CRYSTAL_TEXTURES",
+        presets=[
+            TexturePreset("crystal_bright", "crystal", 8.0,
+                          brightness=0.8, density=0.6, depth=0.5,
+                          modulation_rate=0.5),
+            TexturePreset("crystal_dark", "crystal", 10.0,
+                          brightness=0.3, density=0.4, depth=0.6,
+                          modulation_rate=0.3),
+            TexturePreset("crystal_shimmer", "crystal", 6.0,
+                          brightness=0.7, density=0.8, depth=0.4,
+                          modulation_rate=PHI),
+            TexturePreset("crystal_sparse", "crystal", 12.0,
+                          brightness=0.5, density=0.2, depth=0.7,
+                          modulation_rate=0.2),
+        ],
+    )
+
+
 ALL_TEXTURE_BANKS: dict[str, callable] = {
     "rain":   rain_texture_bank,
     "wind":   wind_texture_bank,
@@ -540,6 +634,9 @@ ALL_TEXTURE_BANKS: dict[str, callable] = {
     "forest":  forest_texture_bank,
     "cave":    cave_texture_bank,
     "machine": machine_texture_bank,
+    # v2.4
+    "fire":    fire_texture_bank,
+    "crystal": crystal_texture_bank,
 }
 
 

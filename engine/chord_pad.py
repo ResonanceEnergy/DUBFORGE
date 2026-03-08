@@ -223,6 +223,95 @@ def synthesize_power_pad(preset: ChordPadPreset,
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# v2.4 SYNTHESIZERS — aug, add9, stacked
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def synthesize_aug_pad(preset: ChordPadPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Augmented chord pad — root, major 3rd, aug 5th."""
+    import math
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    ratios = [1.0, 2 ** (4/12), 2 ** (8/12)]  # aug triad
+    signal = np.zeros(n)
+    for r in ratios:
+        f = preset.root_freq * r
+        detune = preset.detune_cents / 1200
+        signal += np.sin(2 * math.pi * f * t)
+        signal += 0.5 * np.sin(2 * math.pi * f * (1 + detune) * t)
+    signal *= preset.brightness / len(ratios)
+    env = np.ones(n)
+    att = max(1, int(preset.attack_s * sample_rate))
+    rel = max(1, int(preset.release_s * sample_rate))
+    env[:att] = np.linspace(0, 1, att)
+    if rel < n:
+        env[-rel:] = np.linspace(1, 0, rel)
+    signal *= env
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    mx = np.max(np.abs(signal))
+    if mx > 0:
+        signal /= mx
+    return signal
+
+
+def synthesize_add9_pad(preset: ChordPadPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Add9 chord pad — triad plus 9th interval."""
+    import math
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    ratios = [1.0, 2 ** (4/12), 2 ** (7/12), 2 ** (14/12)]  # major add9
+    signal = np.zeros(n)
+    for r in ratios:
+        f = preset.root_freq * r
+        detune = preset.detune_cents / 1200
+        signal += np.sin(2 * math.pi * f * t)
+        signal += 0.4 * np.sin(2 * math.pi * f * (1 + detune) * t)
+    signal *= preset.brightness / len(ratios)
+    env = np.ones(n)
+    att = max(1, int(preset.attack_s * sample_rate))
+    rel = max(1, int(preset.release_s * sample_rate))
+    env[:att] = np.linspace(0, 1, att)
+    if rel < n:
+        env[-rel:] = np.linspace(1, 0, rel)
+    signal *= env
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    mx = np.max(np.abs(signal))
+    if mx > 0:
+        signal /= mx
+    return signal
+
+
+def synthesize_stacked_pad(preset: ChordPadPreset, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Stacked chord pad — dense octave-stacked voicing."""
+    import math
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    ratios = [0.5, 1.0, 2 ** (7/12), 2.0, 2.0 * 2 ** (7/12)]
+    signal = np.zeros(n)
+    for r in ratios:
+        f = preset.root_freq * r
+        detune = preset.detune_cents / 1200
+        signal += np.sin(2 * math.pi * f * t)
+        signal += 0.3 * np.sin(2 * math.pi * f * (1 + detune) * t)
+    signal *= preset.brightness / len(ratios)
+    env = np.ones(n)
+    att = max(1, int(preset.attack_s * sample_rate))
+    rel = max(1, int(preset.release_s * sample_rate))
+    env[:att] = np.linspace(0, 1, att)
+    if rel < n:
+        env[-rel:] = np.linspace(1, 0, rel)
+    signal *= env
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    mx = np.max(np.abs(signal))
+    if mx > 0:
+        signal /= mx
+    return signal
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ROUTER
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -236,6 +325,9 @@ def synthesize_chord_pad(preset: ChordPadPreset,
         "sus4": synthesize_sus4_pad,
         "dim": synthesize_dim_pad,
         "power": synthesize_power_pad,
+        "aug": synthesize_aug_pad,
+        "add9": synthesize_add9_pad,
+        "stacked": synthesize_stacked_pad,
     }
     fn = synthesizers.get(preset.chord_type)
     if fn is None:
@@ -333,12 +425,67 @@ def power_pad_bank() -> ChordPadBank:
     )
 
 
+def aug_pad_bank() -> ChordPadBank:
+    """Augmented chord pads — tense and shimmering."""
+    return ChordPadBank(
+        name="AUG_PADS",
+        presets=[
+            ChordPadPreset("aug_C3", "aug", 130.81, duration_s=5.0,
+                           detune_cents=10, brightness=0.6),
+            ChordPadPreset("aug_E3", "aug", 164.81, duration_s=4.0,
+                           detune_cents=8, brightness=0.7),
+            ChordPadPreset("aug_G3", "aug", 196.0, duration_s=6.0,
+                           detune_cents=12, brightness=0.5),
+            ChordPadPreset("aug_A3", "aug", 220.0, duration_s=5.0,
+                           detune_cents=6, brightness=0.65),
+        ],
+    )
+
+
+def add9_pad_bank() -> ChordPadBank:
+    """Add9 chord pads — open and airy."""
+    return ChordPadBank(
+        name="ADD9_PADS",
+        presets=[
+            ChordPadPreset("add9_C3", "add9", 130.81, duration_s=5.0,
+                           detune_cents=10, brightness=0.6),
+            ChordPadPreset("add9_D3", "add9", 146.83, duration_s=4.0,
+                           detune_cents=8, brightness=0.7),
+            ChordPadPreset("add9_F3", "add9", 174.61, duration_s=6.0,
+                           detune_cents=12, brightness=0.5),
+            ChordPadPreset("add9_A3", "add9", 220.0, duration_s=5.0,
+                           detune_cents=6, brightness=0.65),
+        ],
+    )
+
+
+def stacked_pad_bank() -> ChordPadBank:
+    """Stacked chord pads — dense octave-layered voicings."""
+    return ChordPadBank(
+        name="STACKED_PADS",
+        presets=[
+            ChordPadPreset("stacked_C2", "stacked", 65.41, duration_s=6.0,
+                           detune_cents=15, brightness=0.6),
+            ChordPadPreset("stacked_E2", "stacked", 82.41, duration_s=5.0,
+                           detune_cents=12, brightness=0.7),
+            ChordPadPreset("stacked_G2", "stacked", 98.0, duration_s=7.0,
+                           detune_cents=10, brightness=0.5),
+            ChordPadPreset("stacked_A2", "stacked", 110.0, duration_s=6.0,
+                           detune_cents=8, brightness=0.65),
+        ],
+    )
+
+
 ALL_CHORD_PAD_BANKS: dict[str, callable] = {
     "minor7": minor7_pad_bank,
     "major7": major7_pad_bank,
     "sus4":   sus4_pad_bank,
     "dim":    dim_pad_bank,
     "power":  power_pad_bank,
+    # v2.4
+    "aug":     aug_pad_bank,
+    "add9":    add9_pad_bank,
+    "stacked": stacked_pad_bank,
 }
 
 

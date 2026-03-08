@@ -509,6 +509,53 @@ def synthesize_sync_lead(preset: LeadPreset,
     return _normalize(signal)
 
 
+def synthesize_chip_lead(preset: LeadPreset,
+                        sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Chip lead — retro chiptune square wave."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    phase = (preset.frequency * t) % 1.0
+    signal = np.where(phase < 0.5, 1.0, -1.0).astype(float)
+    vibrato = np.sin(2 * np.pi * 6.0 * t) * 0.005
+    signal *= (1 + vibrato)
+    signal *= preset.filter_cutoff
+    env = _adsr_envelope(n, preset, sample_rate)
+    signal *= env
+    return _normalize(signal)
+
+
+def synthesize_distorted_lead(preset: LeadPreset,
+                              sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Distorted lead — heavily driven sawtooth."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    phase = (preset.frequency * t) % 1.0
+    signal = 2 * phase - 1
+    signal = np.tanh(signal * (2 + preset.distortion * 6))
+    signal += 0.3 * np.sin(2 * np.pi * preset.frequency * 2 * t)
+    signal *= 0.5
+    env = _adsr_envelope(n, preset, sample_rate)
+    signal *= env
+    return _normalize(signal)
+
+
+def synthesize_harmonic_lead(preset: LeadPreset,
+                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Harmonic lead — additive harmonics with rich tone."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    signal = np.zeros(n)
+    for h in range(1, 8):
+        amp = preset.filter_cutoff / h
+        signal += amp * np.sin(2 * np.pi * preset.frequency * h * t)
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal *= 0.5
+    env = _adsr_envelope(n, preset, sample_rate)
+    signal *= env
+    return _normalize(signal)
+
+
 def synthesize_lead(preset: LeadPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct lead synthesizer."""
@@ -526,6 +573,10 @@ def synthesize_lead(preset: LeadPreset,
         "wavetable": synthesize_wavetable_lead,
         "granular": synthesize_granular_lead,
         "sync": synthesize_sync_lead,
+        # v2.4
+        "chip": synthesize_chip_lead,
+        "distorted_lead": synthesize_distorted_lead,
+        "harmonic_lead": synthesize_harmonic_lead,
     }
     fn = synthesizers.get(preset.lead_type)
     if fn is None:
@@ -758,6 +809,57 @@ def sync_lead_bank() -> LeadBank:
     )
 
 
+def chip_lead_bank() -> LeadBank:
+    """Chip leads — retro chiptune square tones."""
+    return LeadBank(
+        name="CHIP_LEADS",
+        presets=[
+            LeadPreset("chip_C4", "chip", 261.63, duration_s=0.5,
+                       filter_cutoff=0.9),
+            LeadPreset("chip_E4", "chip", 329.63, duration_s=0.5,
+                       filter_cutoff=0.8),
+            LeadPreset("chip_G4", "chip", 392.00, duration_s=0.5,
+                       filter_cutoff=0.7),
+            LeadPreset("chip_A4", "chip", 440.00, duration_s=0.5,
+                       filter_cutoff=0.85),
+        ],
+    )
+
+
+def distorted_lead_bank() -> LeadBank:
+    """Distorted leads — heavily driven sawtooth screamers."""
+    return LeadBank(
+        name="DISTORTED_LEADS",
+        presets=[
+            LeadPreset("dist_lead_C4", "distorted_lead", 261.63, duration_s=0.5,
+                       distortion=0.7, filter_cutoff=0.9),
+            LeadPreset("dist_lead_E4", "distorted_lead", 329.63, duration_s=0.5,
+                       distortion=0.8, filter_cutoff=0.85),
+            LeadPreset("dist_lead_G4", "distorted_lead", 392.00, duration_s=0.5,
+                       distortion=0.6, filter_cutoff=0.95),
+            LeadPreset("dist_lead_A4", "distorted_lead", 440.00, duration_s=0.5,
+                       distortion=0.9, filter_cutoff=0.8),
+        ],
+    )
+
+
+def harmonic_lead_bank() -> LeadBank:
+    """Harmonic leads — rich additive harmonic tones."""
+    return LeadBank(
+        name="HARMONIC_LEADS",
+        presets=[
+            LeadPreset("harmonic_C4", "harmonic_lead", 261.63, duration_s=0.5,
+                       filter_cutoff=0.8),
+            LeadPreset("harmonic_E4", "harmonic_lead", 329.63, duration_s=0.5,
+                       filter_cutoff=0.7),
+            LeadPreset("harmonic_G4", "harmonic_lead", 392.00, duration_s=0.5,
+                       filter_cutoff=0.9, distortion=0.1),
+            LeadPreset("harmonic_A4", "harmonic_lead", 440.00, duration_s=0.5,
+                       filter_cutoff=0.75, distortion=0.15),
+        ],
+    )
+
+
 ALL_LEAD_BANKS: dict[str, callable] = {
     "screech":  screech_lead_bank,
     "pluck":    pluck_lead_bank,
@@ -775,6 +877,10 @@ ALL_LEAD_BANKS: dict[str, callable] = {
     "wavetable":  wavetable_lead_bank,
     "granular":   granular_lead_bank,
     "sync":       sync_lead_bank,
+    # v2.4
+    "chip":           chip_lead_bank,
+    "distorted_lead": distorted_lead_bank,
+    "harmonic_lead":  harmonic_lead_bank,
 }
 
 

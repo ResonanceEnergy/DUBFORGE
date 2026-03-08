@@ -384,6 +384,63 @@ def synthesize_woodblock(preset: PercPreset,
     return signal
 
 
+def synthesize_bongo(preset: PercPreset,
+                    sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Bongo hit — resonant pitched membrane strike."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    rng = np.random.RandomState(50)
+    bend = np.exp(-t * 15)
+    tone = np.sin(2 * np.pi * preset.pitch * (1 + bend * 0.3) * t)
+    noise = rng.randn(n) * 0.3
+    signal = preset.tone_mix * tone + (1 - preset.tone_mix) * noise
+    env = np.exp(-np.linspace(0, 5, n))
+    att = max(1, int(preset.attack_s * sample_rate))
+    env[:att] = np.linspace(0, 1, att)
+    signal *= env * preset.brightness
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal /= np.max(np.abs(signal)) + 1e-10
+    return signal
+
+
+def synthesize_guiro(preset: PercPreset,
+                    sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Guiro scrape — ratchet-like textured scrape."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    rng = np.random.RandomState(51)
+    scrape_rate = preset.pitch / 100
+    scrape = np.sin(2 * np.pi * scrape_rate * t)
+    scrape = np.where(scrape > 0, 1.0, 0.0)
+    noise = rng.randn(n) * preset.brightness
+    signal = scrape * noise
+    env = np.exp(-np.linspace(0, 3, n))
+    signal *= env
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal /= np.max(np.abs(signal)) + 1e-10
+    return signal
+
+
+def synthesize_agogo(preset: PercPreset,
+                    sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Agogo bell — bright metallic dual-bell tone."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    tone1 = np.sin(2 * np.pi * preset.pitch * t)
+    tone2 = np.sin(2 * np.pi * preset.pitch * 1.5 * t)
+    signal = (tone1 + 0.7 * tone2) * preset.brightness
+    env = np.exp(-np.linspace(0, 4, n))
+    att = max(1, int(preset.attack_s * sample_rate))
+    env[:att] = np.linspace(0, 1, att)
+    signal *= env
+    if preset.distortion > 0:
+        signal = np.tanh(signal * (1 + preset.distortion * 3))
+    signal /= np.max(np.abs(signal)) + 1e-10
+    return signal
+
+
 def synthesize_perc(preset: PercPreset,
                     sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct percussion synthesizer."""
@@ -398,6 +455,10 @@ def synthesize_perc(preset: PercPreset,
         "conga": synthesize_conga,
         "shaker": synthesize_shaker,
         "woodblock": synthesize_woodblock,
+        # v2.4
+        "bongo": synthesize_bongo,
+        "guiro": synthesize_guiro,
+        "agogo": synthesize_agogo,
     }
     fn = synthesizers.get(preset.perc_type)
     if fn is None:
@@ -580,6 +641,57 @@ def woodblock_bank() -> PercBank:
     )
 
 
+def bongo_bank() -> PercBank:
+    """Bongo hits — pitched membrane strikes."""
+    return PercBank(
+        name="BONGOS",
+        presets=[
+            PercPreset("bongo_high", "bongo", duration_s=0.2,
+                       pitch=400.0, decay_s=0.1, brightness=0.7),
+            PercPreset("bongo_low", "bongo", duration_s=0.25,
+                       pitch=250.0, decay_s=0.15, brightness=0.5),
+            PercPreset("bongo_slap", "bongo", duration_s=0.15,
+                       pitch=500.0, decay_s=0.08, brightness=0.9),
+            PercPreset("bongo_muted", "bongo", duration_s=0.1,
+                       pitch=350.0, decay_s=0.05, brightness=0.3),
+        ],
+    )
+
+
+def guiro_bank() -> PercBank:
+    """Guiro scrapes — ratchet textures."""
+    return PercBank(
+        name="GUIROS",
+        presets=[
+            PercPreset("guiro_fast", "guiro", duration_s=0.3,
+                       pitch=600.0, decay_s=0.2, brightness=0.7),
+            PercPreset("guiro_slow", "guiro", duration_s=0.5,
+                       pitch=400.0, decay_s=0.35, brightness=0.5),
+            PercPreset("guiro_short", "guiro", duration_s=0.15,
+                       pitch=800.0, decay_s=0.1, brightness=0.8),
+            PercPreset("guiro_long", "guiro", duration_s=0.7,
+                       pitch=500.0, decay_s=0.5, brightness=0.6),
+        ],
+    )
+
+
+def agogo_bank() -> PercBank:
+    """Agogo bells — bright metallic bell tones."""
+    return PercBank(
+        name="AGOGOS",
+        presets=[
+            PercPreset("agogo_high", "agogo", duration_s=0.2,
+                       pitch=1200.0, decay_s=0.1, brightness=0.8),
+            PercPreset("agogo_low", "agogo", duration_s=0.3,
+                       pitch=800.0, decay_s=0.15, brightness=0.6),
+            PercPreset("agogo_bright", "agogo", duration_s=0.15,
+                       pitch=1500.0, decay_s=0.08, brightness=0.9),
+            PercPreset("agogo_dark", "agogo", duration_s=0.25,
+                       pitch=700.0, decay_s=0.12, brightness=0.4),
+        ],
+    )
+
+
 ALL_PERC_BANKS: dict[str, callable] = {
     "kicks":  kick_bank,
     "snares": snare_bank,
@@ -593,6 +705,10 @@ ALL_PERC_BANKS: dict[str, callable] = {
     "congas":       conga_bank,
     "shakers":      shaker_bank,
     "woodblocks":   woodblock_bank,
+    # v2.4
+    "bongos":  bongo_bank,
+    "guiros":  guiro_bank,
+    "agogos":  agogo_bank,
 }
 
 

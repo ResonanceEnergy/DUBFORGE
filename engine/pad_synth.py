@@ -487,6 +487,41 @@ def synthesize_vocal_pad(preset: PadPreset,
     return _normalize(signal)
 
 
+def synthesize_ambient_pad(preset: PadPreset,
+                           sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Ambient pad — soft evolving ambient wash."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    lfo = preset.lfo_rate if preset.lfo_rate > 0 else 1.0 / PHI
+    signal = np.zeros(n)
+    for i in range(5):
+        detune = preset.detune_cents * (i - 2) / 1200
+        f = preset.frequency * (1 + detune)
+        signal += np.sin(2 * math.pi * f * t) * (1.0 / (i + 1))
+    mod = 0.7 + 0.3 * np.sin(2 * math.pi * lfo * t)
+    signal *= mod * preset.brightness
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
+def synthesize_fm_pad(preset: PadPreset,
+                      sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """FM pad — frequency modulated bell-like texture."""
+    n = int(preset.duration_s * sample_rate)
+    t = np.linspace(0, preset.duration_s, n, endpoint=False)
+    lfo = preset.lfo_rate if preset.lfo_rate > 0 else 1.0 / PHI
+    mod_freq = preset.frequency * PHI
+    mod_index = 2.0 * preset.brightness
+    modulator = np.sin(2 * math.pi * mod_freq * t) * mod_index
+    signal = np.sin(2 * math.pi * preset.frequency * t + modulator)
+    detune = preset.detune_cents / 1200
+    signal += 0.5 * np.sin(2 * math.pi * preset.frequency * (1 + detune) * t + modulator * 0.5)
+    signal *= 0.5
+    signal *= 0.8 + 0.2 * np.sin(2 * math.pi * lfo * t)
+    signal = _apply_pad_envelope(signal, preset, sample_rate)
+    return _normalize(signal)
+
+
 def synthesize_pad(preset: PadPreset,
                    sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Route to the correct pad synthesizer."""
@@ -504,6 +539,9 @@ def synthesize_pad(preset: PadPreset,
         "noise": synthesize_noise_pad,
         "spectral": synthesize_spectral_pad,
         "vocal": synthesize_vocal_pad,
+        # v2.4
+        "ambient_pad": synthesize_ambient_pad,
+        "fm_pad": synthesize_fm_pad,
     }
     fn = synthesizers.get(preset.pad_type)
     if fn is None:
@@ -736,6 +774,40 @@ def vocal_pad_bank() -> PadBank:
     )
 
 
+def ambient_pad_bank() -> PadBank:
+    """Ambient pads — soft evolving ambient washes."""
+    return PadBank(
+        name="AMBIENT_PADS",
+        presets=[
+            PadPreset("ambient_C3", "ambient_pad", 130.81, duration_s=6.0,
+                      brightness=0.4, attack_s=1.0, lfo_rate=0.08),
+            PadPreset("ambient_E3", "ambient_pad", 164.81, duration_s=5.0,
+                      brightness=0.5, attack_s=0.8, lfo_rate=0.1),
+            PadPreset("ambient_G3", "ambient_pad", 196.00, duration_s=7.0,
+                      brightness=0.35, attack_s=1.2, lfo_rate=0.06),
+            PadPreset("ambient_A3", "ambient_pad", 220.00, duration_s=5.0,
+                      brightness=0.45, attack_s=0.9, lfo_rate=0.12),
+        ],
+    )
+
+
+def fm_pad_bank() -> PadBank:
+    """FM pads — frequency modulated bell-like textures."""
+    return PadBank(
+        name="FM_PADS",
+        presets=[
+            PadPreset("fm_pad_C3", "fm_pad", 130.81, duration_s=5.0,
+                      brightness=0.6, attack_s=0.5, lfo_rate=0.1),
+            PadPreset("fm_pad_E3", "fm_pad", 164.81, duration_s=4.0,
+                      brightness=0.7, attack_s=0.4, lfo_rate=0.15),
+            PadPreset("fm_pad_G3", "fm_pad", 196.00, duration_s=6.0,
+                      brightness=0.5, attack_s=0.6, lfo_rate=0.08),
+            PadPreset("fm_pad_A3", "fm_pad", 220.00, duration_s=5.0,
+                      brightness=0.65, attack_s=0.45, lfo_rate=0.12),
+        ],
+    )
+
+
 ALL_PAD_BANKS: dict[str, callable] = {
     "lush":     lush_pad_bank,
     "dark":     dark_pad_bank,
@@ -753,6 +825,9 @@ ALL_PAD_BANKS: dict[str, callable] = {
     "noise":    noise_pad_bank,
     "spectral": spectral_pad_bank,
     "vocal":    vocal_pad_bank,
+    # v2.4
+    "ambient_pad": ambient_pad_bank,
+    "fm_pad":      fm_pad_bank,
 }
 
 
