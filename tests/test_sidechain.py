@@ -10,6 +10,7 @@ from engine.sidechain import (
     SidechainPreset,
     apply_sidechain,
     bounce_sidechain_bank,
+    export_sidechain_demos,
     generate_bounce_envelope,
     generate_hard_cut_envelope,
     generate_phi_curve_envelope,
@@ -124,6 +125,44 @@ class TestManifest(unittest.TestCase):
             self.assertEqual(len(manifest["banks"]), 5)
             total = sum(b["preset_count"] for b in manifest["banks"].values())
             self.assertEqual(total, 20)
+
+
+class TestExportSidechainDemos(unittest.TestCase):
+    def test_export_creates_wav_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_sidechain_demos(td)
+            self.assertEqual(len(paths), 20)
+            for p in paths:
+                self.assertTrue(p.endswith(".wav"))
+
+    def test_export_wav_valid(self):
+        import wave as wave_mod
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_sidechain_demos(td)
+            with wave_mod.open(paths[0], "r") as wf:
+                self.assertEqual(wf.getnchannels(), 1)
+                self.assertEqual(wf.getsampwidth(), 2)
+                self.assertEqual(wf.getframerate(), 44100)
+                self.assertGreater(wf.getnframes(), 0)
+
+    def test_export_all_banks_represented(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_sidechain_demos(td)
+            names = [p.split("/")[-1] for p in paths]
+            for bank_name in ALL_SIDECHAIN_BANKS:
+                bank = ALL_SIDECHAIN_BANKS[bank_name]()
+                for preset in bank.presets:
+                    self.assertIn(f"sc_{preset.name}.wav", names)
+
+    def test_export_wav_nonzero_audio(self):
+        import struct
+        import wave as wave_mod
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_sidechain_demos(td)
+            with wave_mod.open(paths[0], "r") as wf:
+                frames = wf.readframes(wf.getnframes())
+                samples = struct.unpack(f"<{wf.getnframes()}h", frames)
+                self.assertTrue(any(s != 0 for s in samples))
 
 
 if __name__ == "__main__":

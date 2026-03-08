@@ -11,6 +11,7 @@ from engine.multiband_distortion import (
     aggressive_distortion_bank,
     apply_multiband_distortion,
     digital_distortion_bank,
+    export_distortion_demos,
     tape_distortion_bank,
     tube_distortion_bank,
     warm_distortion_bank,
@@ -95,6 +96,44 @@ class TestManifest(unittest.TestCase):
             self.assertEqual(len(manifest["banks"]), 5)
             total = sum(b["preset_count"] for b in manifest["banks"].values())
             self.assertEqual(total, 20)
+
+
+class TestExportDistortionDemos(unittest.TestCase):
+    def test_export_creates_wav_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_distortion_demos(td)
+            self.assertEqual(len(paths), 20)
+            for p in paths:
+                self.assertTrue(p.endswith(".wav"))
+
+    def test_export_wav_valid(self):
+        import wave as wave_mod
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_distortion_demos(td)
+            with wave_mod.open(paths[0], "r") as wf:
+                self.assertEqual(wf.getnchannels(), 1)
+                self.assertEqual(wf.getsampwidth(), 2)
+                self.assertEqual(wf.getframerate(), 44100)
+                self.assertGreater(wf.getnframes(), 0)
+
+    def test_export_all_banks_represented(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_distortion_demos(td)
+            names = [p.split("/")[-1] for p in paths]
+            for bank_name in ALL_MULTIBAND_DIST_BANKS:
+                bank = ALL_MULTIBAND_DIST_BANKS[bank_name]()
+                for preset in bank.presets:
+                    self.assertIn(f"dist_{preset.name}.wav", names)
+
+    def test_export_wav_nonzero_audio(self):
+        import struct
+        import wave as wave_mod
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_distortion_demos(td)
+            with wave_mod.open(paths[0], "r") as wf:
+                frames = wf.readframes(wf.getnframes())
+                samples = struct.unpack(f"<{wf.getnframes()}h", frames)
+                self.assertTrue(any(s != 0 for s in samples))
 
 
 if __name__ == "__main__":

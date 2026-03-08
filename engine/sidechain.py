@@ -14,7 +14,9 @@ Shapes:
 Banks: 5 shape types × 4 presets = 20 presets
 """
 
+import wave
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -299,6 +301,44 @@ ALL_SIDECHAIN_BANKS: dict[str, callable] = {
 }
 
 
+# --- WAV Export ---------------------------------------------------------------
+
+def _write_wav(path: Path, samples: np.ndarray,
+               sample_rate: int = SAMPLE_RATE) -> None:
+    """Write 16-bit mono WAV."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pcm = np.clip(samples, -1.0, 1.0)
+    pcm = (pcm * 32767).astype(np.int16)
+    with wave.open(str(path), "w") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm.tobytes())
+
+
+def _test_signal(duration_s: float = 1.0, freq: float = 200.0,
+                 sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Generate a test sine for processing demos."""
+    t = np.linspace(0, duration_s, int(sample_rate * duration_s), endpoint=False)
+    return 0.8 * np.sin(2.0 * np.pi * freq * t)
+
+
+def export_sidechain_demos(output_dir: str = "output") -> list[str]:
+    """Render all sidechain presets applied to a test signal and write .wav."""
+    sig = _test_signal(duration_s=2.0)
+    out = Path(output_dir) / "wavetables" / "sidechain"
+    out.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+    for bank_name, bank_fn in ALL_SIDECHAIN_BANKS.items():
+        bank = bank_fn()
+        for preset in bank.presets:
+            processed = apply_sidechain(sig, preset, SAMPLE_RATE)
+            fname = f"sc_{preset.name}.wav"
+            _write_wav(out / fname, processed)
+            paths.append(str(out / fname))
+    return paths
+
+
 # --- Manifest -------------------------------------------------------------
 
 def write_sidechain_manifest(output_dir: str = "output") -> dict:
@@ -327,7 +367,8 @@ def write_sidechain_manifest(output_dir: str = "output") -> dict:
 def main() -> None:
     manifest = write_sidechain_manifest()
     total = sum(b["preset_count"] for b in manifest["banks"].values())
-    print(f"Sidechain Engine: {len(manifest['banks'])} banks, {total} presets")
+    wavs = export_sidechain_demos()
+    print(f"Sidechain Engine: {len(manifest['banks'])} banks, {total} presets, {len(wavs)} .wav")
 
 
 if __name__ == "__main__":

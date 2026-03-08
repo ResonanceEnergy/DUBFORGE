@@ -14,7 +14,9 @@ Types:
 Banks: 5 types × 4 presets = 20 presets
 """
 
+import wave
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -289,6 +291,44 @@ ALL_STEREO_BANKS: dict[str, callable] = {
 }
 
 
+# --- WAV Export ---------------------------------------------------------------
+
+def _write_wav_stereo(path: Path, samples: np.ndarray,
+                      sample_rate: int = SAMPLE_RATE) -> None:
+    """Write 16-bit stereo WAV. *samples* shape ``(n, 2)``."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pcm = np.clip(samples, -1.0, 1.0)
+    pcm = (pcm * 32767).astype(np.int16)
+    with wave.open(str(path), "w") as wf:
+        wf.setnchannels(2)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm.tobytes())
+
+
+def _test_signal(duration_s: float = 1.0, freq: float = 200.0,
+                 sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Generate a test sine for processing demos."""
+    t = np.linspace(0, duration_s, int(sample_rate * duration_s), endpoint=False)
+    return 0.8 * np.sin(2.0 * np.pi * freq * t)
+
+
+def export_stereo_demos(output_dir: str = "output") -> list[str]:
+    """Render all stereo imaging presets and write stereo .wav."""
+    sig = _test_signal()
+    out = Path(output_dir) / "wavetables" / "stereo_imager"
+    out.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+    for bank_name, bank_fn in ALL_STEREO_BANKS.items():
+        bank = bank_fn()
+        for preset in bank.presets:
+            processed = apply_stereo_imaging(sig, preset, SAMPLE_RATE)
+            fname = f"stereo_{preset.name}.wav"
+            _write_wav_stereo(out / fname, processed)
+            paths.append(str(out / fname))
+    return paths
+
+
 # --- Manifest -------------------------------------------------------------
 
 def write_stereo_imager_manifest(output_dir: str = "output") -> dict:
@@ -317,7 +357,8 @@ def write_stereo_imager_manifest(output_dir: str = "output") -> dict:
 def main() -> None:
     manifest = write_stereo_imager_manifest()
     total = sum(b["preset_count"] for b in manifest["banks"].values())
-    print(f"Stereo Imager: {len(manifest['banks'])} banks, {total} presets")
+    wavs = export_stereo_demos()
+    print(f"Stereo Imager: {len(manifest['banks'])} banks, {total} presets, {len(wavs)} .wav")
 
 
 if __name__ == "__main__":

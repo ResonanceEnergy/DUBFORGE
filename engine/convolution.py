@@ -12,7 +12,9 @@ Types:
   custom_ir     — user-defined impulse response convolution
 """
 
+import wave
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -430,6 +432,65 @@ ALL_CONVOLUTION_BANKS: dict[str, callable] = {
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# WAV EXPORT
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _write_wav(path: Path, samples: np.ndarray,
+               sample_rate: int = SAMPLE_RATE) -> None:
+    """Write 16-bit mono WAV."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pcm = np.clip(samples, -1.0, 1.0)
+    pcm = (pcm * 32767).astype(np.int16)
+    with wave.open(str(path), "w") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm.tobytes())
+
+
+def _test_signal(duration_s: float = 1.0, freq: float = 200.0,
+                 sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Generate a test sine for processing demos."""
+    t = np.linspace(0, duration_s, int(sample_rate * duration_s), endpoint=False)
+    return 0.8 * np.sin(2.0 * np.pi * freq * t)
+
+
+def export_convolution_demos(output_dir: str = "output") -> list[str]:
+    """Render IRs + convolved demos for every preset and write .wav."""
+    sig = _test_signal()
+    out = Path(output_dir) / "wavetables" / "convolution"
+    ir_dir = out / "irs"
+    out.mkdir(parents=True, exist_ok=True)
+    ir_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+
+    ir_generators = {
+        "room_ir": generate_room_ir,
+        "cabinet_ir": generate_cabinet_ir,
+        "plate_ir": generate_plate_ir,
+        "custom_ir": generate_custom_ir,
+    }
+
+    for bank_name, bank_fn in ALL_CONVOLUTION_BANKS.items():
+        bank = bank_fn()
+        for preset in bank.presets:
+            # Export processed audio
+            processed = apply_convolution(sig, preset, SAMPLE_RATE)
+            fname = f"conv_{preset.name}.wav"
+            _write_wav(out / fname, processed)
+            paths.append(str(out / fname))
+
+            # Also export the IR itself if generator exists
+            gen = ir_generators.get(bank_name)
+            if gen is not None:
+                ir = gen(preset, SAMPLE_RATE)
+                ir_fname = f"ir_{preset.name}.wav"
+                _write_wav(ir_dir / ir_fname, ir)
+                paths.append(str(ir_dir / ir_fname))
+    return paths
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # MANIFEST + MAIN
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -459,7 +520,8 @@ def write_convolution_manifest(output_dir: str = "output") -> dict:
 def main() -> None:
     manifest = write_convolution_manifest()
     total = sum(b["preset_count"] for b in manifest["banks"].values())
-    print(f"Convolution: {len(manifest['banks'])} banks, {total} presets")
+    wavs = export_convolution_demos()
+    print(f"Convolution: {len(manifest['banks'])} banks, {total} presets, {len(wavs)} .wav")
 
 
 if __name__ == "__main__":

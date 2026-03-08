@@ -11,6 +11,7 @@ from engine.stereo_imager import (
     apply_haas,
     apply_mid_side,
     apply_stereo_imaging,
+    export_stereo_demos,
     freq_split_stereo_bank,
     haas_stereo_bank,
     mid_side_stereo_bank,
@@ -93,6 +94,44 @@ class TestManifest(unittest.TestCase):
             self.assertEqual(len(manifest["banks"]), 5)
             total = sum(b["preset_count"] for b in manifest["banks"].values())
             self.assertEqual(total, 20)
+
+
+class TestExportStereoDemos(unittest.TestCase):
+    def test_export_creates_wav_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_stereo_demos(td)
+            self.assertEqual(len(paths), 20)
+            for p in paths:
+                self.assertTrue(p.endswith(".wav"))
+
+    def test_export_wav_stereo(self):
+        import wave as wave_mod
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_stereo_demos(td)
+            with wave_mod.open(paths[0], "r") as wf:
+                self.assertEqual(wf.getnchannels(), 2)
+                self.assertEqual(wf.getsampwidth(), 2)
+                self.assertEqual(wf.getframerate(), 44100)
+                self.assertGreater(wf.getnframes(), 0)
+
+    def test_export_all_banks_represented(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_stereo_demos(td)
+            names = [p.split("/")[-1] for p in paths]
+            for bank_name in ALL_STEREO_BANKS:
+                bank = ALL_STEREO_BANKS[bank_name]()
+                for preset in bank.presets:
+                    self.assertIn(f"stereo_{preset.name}.wav", names)
+
+    def test_export_wav_nonzero_audio(self):
+        import struct
+        import wave as wave_mod
+        with tempfile.TemporaryDirectory() as td:
+            paths = export_stereo_demos(td)
+            with wave_mod.open(paths[0], "r") as wf:
+                frames = wf.readframes(wf.getnframes())
+                samples = struct.unpack(f"<{wf.getnframes() * 2}h", frames)
+                self.assertTrue(any(s != 0 for s in samples))
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from engine.convolution import (
     cabinet_ir_bank,
     convolve_signal,
     custom_ir_bank,
+    export_convolution_demos,
     generate_cabinet_ir,
     generate_custom_ir,
     generate_inverse_ir,
@@ -176,3 +177,37 @@ class TestManifest:
         assert len(m["banks"]) == 5
         total = sum(b["preset_count"] for b in m["banks"].values())
         assert total == 20
+
+
+# ─── WAV EXPORT ─────────────────────────────────────────────────────────
+class TestExportConvolutionDemos:
+    def test_export_creates_wav_files(self, tmp_path):
+        paths = export_convolution_demos(str(tmp_path))
+        assert len(paths) >= 20
+        for p in paths:
+            assert p.endswith(".wav")
+
+    def test_export_wav_valid(self, tmp_path):
+        import wave as wave_mod
+        paths = export_convolution_demos(str(tmp_path))
+        conv_paths = [p for p in paths if "/irs/" not in p]
+        with wave_mod.open(conv_paths[0], "r") as wf:
+            assert wf.getnchannels() == 1
+            assert wf.getsampwidth() == 2
+            assert wf.getframerate() == 44100
+            assert wf.getnframes() > 0
+
+    def test_export_irs_exist(self, tmp_path):
+        paths = export_convolution_demos(str(tmp_path))
+        ir_paths = [p for p in paths if "/irs/" in p]
+        assert len(ir_paths) > 0
+
+    def test_export_wav_nonzero(self, tmp_path):
+        import struct
+        import wave as wave_mod
+        paths = export_convolution_demos(str(tmp_path))
+        conv_paths = [p for p in paths if "/irs/" not in p]
+        with wave_mod.open(conv_paths[0], "r") as wf:
+            frames = wf.readframes(wf.getnframes())
+            samples = struct.unpack(f"<{wf.getnframes()}h", frames)
+            assert any(s != 0 for s in samples)

@@ -14,6 +14,7 @@ from engine.reverb_delay import (
     apply_room,
     apply_shimmer,
     delay_bank,
+    export_reverb_delay_demos,
     hall_bank,
     plate_bank,
     room_bank,
@@ -166,3 +167,38 @@ class TestManifest:
         assert len(m["banks"]) == 5
         total = sum(b["preset_count"] for b in m["banks"].values())
         assert total == 20
+
+
+# ─── WAV EXPORT ─────────────────────────────────────────────────────────
+class TestExportReverbDelayDemos:
+    def test_export_creates_wav_files(self, tmp_path):
+        paths = export_reverb_delay_demos(str(tmp_path))
+        assert len(paths) == 20
+        for p in paths:
+            assert p.endswith(".wav")
+
+    def test_export_wav_valid(self, tmp_path):
+        import wave as wave_mod
+        paths = export_reverb_delay_demos(str(tmp_path))
+        with wave_mod.open(paths[0], "r") as wf:
+            assert wf.getnchannels() == 1
+            assert wf.getsampwidth() == 2
+            assert wf.getframerate() == 44100
+            assert wf.getnframes() > 0
+
+    def test_export_all_banks_represented(self, tmp_path):
+        paths = export_reverb_delay_demos(str(tmp_path))
+        names = [p.split("/")[-1] for p in paths]
+        for bank_name in ALL_REVERB_DELAY_BANKS:
+            bank = ALL_REVERB_DELAY_BANKS[bank_name]()
+            for preset in bank.presets:
+                assert f"rvb_{preset.name}.wav" in names
+
+    def test_export_wav_nonzero(self, tmp_path):
+        import struct
+        import wave as wave_mod
+        paths = export_reverb_delay_demos(str(tmp_path))
+        with wave_mod.open(paths[0], "r") as wf:
+            frames = wf.readframes(wf.getnframes())
+            samples = struct.unpack(f"<{wf.getnframes()}h", frames)
+            assert any(s != 0 for s in samples)
