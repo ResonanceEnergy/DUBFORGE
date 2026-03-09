@@ -110,7 +110,14 @@ def _apply_pad_envelope(signal: np.ndarray, preset: PadPreset,
 
 def synthesize_lush_pad(preset: PadPreset,
                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Lush pad — detuned saw layers with slow filter sweep."""
+    """Lush pad — detuned saw layers with slow filter sweep.
+
+    UPGRADED: Bandlimited saw voices, SVF lowpass with LFO modulation,
+    chorus for stereo width.
+    """
+    from engine.dsp_core import (osc_saw_np, svf_lowpass,
+                                 chorus as dsp_chorus)
+
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
@@ -118,23 +125,20 @@ def synthesize_lush_pad(preset: PadPreset,
     freqs = [preset.frequency, preset.frequency * detune,
              preset.frequency / detune]
 
+    # Bandlimited saw voices
     signal = np.zeros(n)
     for f in freqs:
-        for h in range(1, 8):
-            if f * h > sample_rate / 2:
-                break
-            signal += ((-1) ** h / h) * np.sin(2 * math.pi * f * h * t) / 3
+        signal += osc_saw_np(f, preset.duration_s, sample_rate) / 3.0
 
-    # Slow filter sweep using LFO
+    # SVF lowpass with LFO modulation on cutoff
     lfo_r = preset.lfo_rate if preset.lfo_rate > 0 else 1 / PHI
-    cutoff_mod = preset.filter_cutoff + 0.2 * np.sin(2 * math.pi * lfo_r * t)
-    cutoff_mod = np.clip(cutoff_mod, 0.01, 0.99)
+    base_cutoff = 300 + preset.filter_cutoff * 4000
+    cutoff_mod = base_cutoff + 1500 * np.sin(2 * math.pi * lfo_r * t)
+    cutoff_mod = np.clip(cutoff_mod, 100, 10000)
+    signal = svf_lowpass(signal, cutoff_mod, 0.2, sample_rate)
 
-    # Simple lowpass approximation
-    y = 0.0
-    for i in range(n):
-        y = y * (1 - cutoff_mod[i]) + signal[i] * cutoff_mod[i]
-        signal[i] = y
+    # Chorus for lushness
+    signal = dsp_chorus(signal, sample_rate, depth=0.004, rate=0.5, voices=4)
 
     signal = _apply_pad_envelope(signal, preset, sample_rate)
     return _normalize(signal)
@@ -142,27 +146,43 @@ def synthesize_lush_pad(preset: PadPreset,
 
 def synthesize_dark_pad(preset: PadPreset,
                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Dark pad — low-register drone with harmonic movement."""
+    """Dark pad — low-register drone with harmonic movement.
+
+    UPGRADED: Bandlimited detuned saw voices, white noise layer,
+    SVF lowpass for darkness, chorus for width, Schroeder reverb for depth.
+    """
+    from engine.dsp_core import (osc_saw_np, svf_lowpass, white_noise,
+                                 chorus as dsp_chorus, reverb_schroeder)
+
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Sub fundamental + detuned pair
+    # Three detuned bandlimited saw voices for richness
     detune = 2 ** (preset.detune_cents / 1200)
-    signal = 0.5 * np.sin(2 * math.pi * preset.frequency * t)
-    signal += 0.3 * np.sin(2 * math.pi * preset.frequency * detune * t)
-    signal += 0.3 * np.sin(2 * math.pi * preset.frequency / detune * t)
+    sig1 = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
+    sig2 = osc_saw_np(preset.frequency * detune, preset.duration_s, sample_rate)
+    sig3 = osc_saw_np(preset.frequency / detune, preset.duration_s, sample_rate)
+    signal = (sig1 + sig2 + sig3) / 3.0
 
-    # Slow amplitude modulation
+    # Noise layer for texture
+    signal += white_noise(n) * 0.03
+
+    # Slow amplitude modulation for organic movement
     am_rate = 1 / (PHI * 2)
     am = 0.7 + 0.3 * np.sin(2 * math.pi * am_rate * t)
     signal *= am
 
-    # Darkness: aggressive lowpass
-    alpha = max(0.01, preset.filter_cutoff * 0.3)
-    y = 0.0
-    for i in range(n):
-        y = y * (1 - alpha) + signal[i] * alpha
-        signal[i] = y
+    # SVF lowpass for darkness (preset.filter_cutoff drives cutoff)
+    cutoff_hz = 200 + preset.filter_cutoff * 1500
+    signal = svf_lowpass(signal, cutoff_hz, 0.15, sample_rate)
+
+    # Chorus for stereo width and thickness
+    signal = dsp_chorus(signal, sample_rate, depth=0.003, rate=0.3, voices=3)
+
+    # Reverb for depth (use preset.reverb_amount if available)
+    rev_amt = getattr(preset, 'reverb_amount', 0.4)
+    if rev_amt > 0:
+        signal = reverb_schroeder(signal, sample_rate, decay=1.5, mix=rev_amt)
 
     signal = _apply_pad_envelope(signal, preset, sample_rate)
     return _normalize(signal)
@@ -170,28 +190,36 @@ def synthesize_dark_pad(preset: PadPreset,
 
 def synthesize_shimmer_pad(preset: PadPreset,
                            sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Shimmer pad — high-register sparkle with pitched delays."""
+    """Shimmer pad — high-register sparkle with pitched delays.
+
+    UPGRADED: Bandlimited saw voices at f/2f/3f, pitched octave delay,
+    SVF highpass for shimmer, reverb for depth.
+    """
+    from engine.dsp_core import (osc_saw_np, svf_highpass,
+                                 reverb_schroeder)
+
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Build from sine + octave above
-    signal = 0.5 * np.sin(2 * math.pi * preset.frequency * t)
-    signal += 0.35 * np.sin(2 * math.pi * preset.frequency * 2 * t)
-    signal += 0.2 * np.sin(2 * math.pi * preset.frequency * 3 * t)
+    # Layered bandlimited saws at fundamental + octave + 5th
+    signal = 0.5 * osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
+    signal += 0.35 * osc_saw_np(preset.frequency * 2, preset.duration_s, sample_rate)
+    signal += 0.2 * osc_saw_np(preset.frequency * 3, preset.duration_s, sample_rate)
 
-    # Pitch-shifted delay (simulated octave delay effect)
+    # Pitch-shifted delay (octave up shimmer effect)
     delay_samples = max(1, int(sample_rate * (1 / PHI)))
     delayed = np.zeros(n)
     if delay_samples < n:
         delayed[delay_samples:] = signal[:-delay_samples] * 0.4
     signal += delayed
 
-    # Brightness filter
-    alpha = max(0.01, preset.brightness * 0.6 + 0.1)
-    y = 0.0
-    for i in range(n):
-        y = y * (1 - alpha) + signal[i] * alpha
-        signal[i] = y
+    # SVF highpass for shimmer brightness
+    hp_cutoff = 500 + preset.brightness * 2000
+    signal = svf_highpass(signal, hp_cutoff, 0.1, sample_rate)
+
+    # Reverb for ethereal depth
+    rev_amt = getattr(preset, 'reverb_amount', 0.5)
+    if rev_amt > 0:
+        signal = reverb_schroeder(signal, sample_rate, decay=2.0, mix=rev_amt)
 
     signal = _apply_pad_envelope(signal, preset, sample_rate)
     return _normalize(signal)
@@ -199,35 +227,36 @@ def synthesize_shimmer_pad(preset: PadPreset,
 
 def synthesize_evolving_pad(preset: PadPreset,
                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Evolving pad — cross-fading waveform morph."""
+    """Evolving pad — cross-fading waveform morph.
+
+    UPGRADED: Bandlimited saw via osc_saw_np, SVF filter sweep
+    instead of single-pole, chorus for width.
+    """
+    from engine.dsp_core import osc_saw_np, svf_lowpass, chorus as dsp_chorus
+
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Morph between sine → saw over time
+    # Morph between sine → bandlimited saw over time
     progress = np.linspace(0, 1, n)
     sine = np.sin(2 * math.pi * preset.frequency * t)
-
-    saw = np.zeros(n)
-    for h in range(1, 10):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        saw += ((-1) ** h / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    saw = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
 
     # Phi-timed crossfade
     morph = progress ** (1 / PHI)
     signal = sine * (1 - morph) + saw * morph
 
-    # Detuned doubler
+    # Detuned doubler (bandlimited)
     detune = 2 ** (preset.detune_cents / 1200)
-    doubler = np.sin(2 * math.pi * preset.frequency * detune * t)
+    doubler = osc_saw_np(preset.frequency * detune, preset.duration_s, sample_rate)
     signal = 0.7 * signal + 0.3 * doubler
 
-    # Sweeping filter
-    cutoff = 0.1 + 0.4 * morph
-    y = 0.0
-    for i in range(n):
-        y = y * (1 - cutoff[i]) + signal[i] * cutoff[i]
-        signal[i] = y
+    # SVF lowpass sweeping open with morph
+    cutoff = 300 + 4000 * morph
+    signal = svf_lowpass(signal, cutoff, 0.15, sample_rate)
+
+    # Chorus for stereo width
+    signal = dsp_chorus(signal, sample_rate, depth=0.003, rate=0.4, voices=3)
 
     signal = _apply_pad_envelope(signal, preset, sample_rate)
     return _normalize(signal)
@@ -235,31 +264,27 @@ def synthesize_evolving_pad(preset: PadPreset,
 
 def synthesize_choir_pad(preset: PadPreset,
                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Choir pad — formant-filtered layers simulating vocal tones."""
+    """Choir pad — formant-filtered layers simulating vocal tones.
+
+    UPGRADED: Bandlimited saw source for rich harmonics,
+    proper SVF bandpass at formant frequencies with resonance.
+    """
+    from engine.dsp_core import osc_saw_np, svf_bandpass
+
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Rich source (many harmonics)
-    source = np.zeros(n)
-    for h in range(1, 12):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        source += (1.0 / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    # Bandlimited saw — provides all the harmonics needed for formant filtering
+    source = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
 
-    # Formant frequencies (simplified vowel 'ah')
+    # Proper SVF bandpass at vocal formant frequencies ('ah' vowel)
     formants = [730, 1090, 2440]
     signal = np.zeros(n)
     for fc in formants:
-        # Bandpass via resonator
-        bw = fc * 0.1  # 10% bandwidth
-        alpha_bp = min(0.99, bw / (sample_rate / 2))
-        y1, y2 = 0.0, 0.0
-        bp = np.zeros(n)
-        for i in range(n):
-            y1 = y1 + alpha_bp * (source[i] - y1)
-            y2 = y2 + alpha_bp * (y1 - y2)
-            bp[i] = y1 - y2
-        signal += bp
+        signal += svf_bandpass(source, float(fc), 0.5, sample_rate) * 0.4
+
+    # Sub fundamental for body
+    signal += 0.25 * np.sin(2 * math.pi * preset.frequency * t)
 
     # Slow vibrato
     vib_depth = preset.frequency * 0.005
@@ -304,31 +329,28 @@ def synthesize_glass_pad(preset: PadPreset,
 
 def synthesize_warm_pad(preset: PadPreset,
                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Warm pad — analog-style triangle + filtered saw with chorus."""
+    """Warm pad — analog-style detuned saw layers with chorus.
+
+    UPGRADED: Bandlimited saw voices, SVF lowpass for warmth, chorus.
+    """
+    from engine.dsp_core import (osc_saw_np, svf_lowpass,
+                                 chorus as dsp_chorus)
+
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Triangle wave (odd harmonics, alternating sign)
-    tri = np.zeros(n)
-    for h in range(1, 8, 2):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        tri += ((-1) ** ((h - 1) // 2)) / (h * h) * np.sin(
-            2 * math.pi * preset.frequency * h * t)
-
-    # Detuned chorus layer
+    # Detuned bandlimited saw voices for analog warmth
     detune = 2 ** (preset.detune_cents / 1200)
-    chorus = np.sin(2 * math.pi * preset.frequency * detune * t)
-    chorus += np.sin(2 * math.pi * preset.frequency / detune * t)
+    sig1 = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
+    sig2 = osc_saw_np(preset.frequency * detune, preset.duration_s, sample_rate)
+    sig3 = osc_saw_np(preset.frequency / detune, preset.duration_s, sample_rate)
+    signal = (sig1 * 0.5 + sig2 * 0.25 + sig3 * 0.25)
 
-    signal = 0.6 * tri + 0.2 * chorus
+    # SVF lowpass for warmth
+    cutoff_hz = 300 + preset.filter_cutoff * 3000
+    signal = svf_lowpass(signal, cutoff_hz, 0.15, sample_rate)
 
-    # Warm lowpass
-    alpha = max(0.01, preset.filter_cutoff * 0.4)
-    y = 0.0
-    for i in range(n):
-        y = y * (1 - alpha) + signal[i] * alpha
-        signal[i] = y
+    # Chorus for stereo width
+    signal = dsp_chorus(signal, sample_rate, depth=0.004, rate=0.5, voices=4)
 
     signal = _apply_pad_envelope(signal, preset, sample_rate)
     return _normalize(signal)
@@ -412,26 +434,31 @@ def synthesize_metallic_pad(preset: PadPreset,
 
 def synthesize_noise_pad(preset: PadPreset,
                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Noise pad — filtered noise with tonal coloring."""
+    """Noise pad — filtered noise with tonal coloring.
+
+    UPGRADED: Pink noise source, SVF bandpass at fundamental, reverb.
+    """
+    from engine.dsp_core import pink_noise, svf_bandpass, reverb_schroeder
+
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
-    rng = np.random.default_rng(42)
 
-    noise = rng.standard_normal(n)
+    # Pink noise (more natural than white)
+    noise = pink_noise(n)
 
-    # Bandpass filter around fundamental
-    alpha = min(0.99, preset.frequency / sample_rate * 2 * math.pi)
-    y = 0.0
-    signal = np.zeros(n)
-    for i in range(n):
-        y = y * (1 - alpha) + noise[i] * alpha
-        signal[i] = y
+    # SVF bandpass around fundamental for tonal coloring
+    signal = svf_bandpass(noise, preset.frequency * 2, 0.3, sample_rate)
 
-    # Add tonal reference
+    # Add tonal reference sine
     signal += 0.3 * np.sin(2 * math.pi * preset.frequency * t)
 
+    # LFO modulation
     mod = 1.0 + 0.15 * np.sin(2 * math.pi * preset.lfo_rate * t)
     signal *= mod
+
+    # Reverb for space
+    signal = reverb_schroeder(signal, sample_rate, decay=1.8, mix=0.4)
+
     signal = _apply_pad_envelope(signal, preset, sample_rate)
     return _normalize(signal)
 

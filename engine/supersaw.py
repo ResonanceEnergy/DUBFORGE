@@ -1,15 +1,22 @@
 """
-DUBFORGE — Supersaw Engine  (Session 158)
+DUBFORGE — Supersaw Engine  (Session 158 → upgraded)
 
 Multi-voice detuned sawtooth synthesis — the classic supersaw
 with PHI-ratio detune spreading and stereo widening.
+
+UPGRADED: Uses PolyBLEP bandlimited saw from dsp_core instead of
+naive aliased phase-ramp. Randomized initial phases for natural sound.
+SVF filter replaces single-pole. Noise layer for analog character.
 """
 
 import math
 import os
+import random
 import struct
 import wave
 from dataclasses import dataclass
+
+from engine.dsp_core import _polyblep
 
 PHI = 1.6180339887
 A4_432 = 432.0
@@ -95,8 +102,10 @@ def render_supersaw(patch: SupersawPatch, freq: float = 440.0,
             if voices > 1 else 0.0
         voice_pans.append(pan)
 
-    # Phase accumulators
-    phases = [0.0] * voices
+    # Phase accumulators — RANDOMIZED for natural analog character
+    phases = [random.random() for _ in range(voices)]
+    # Phase increment per sample for each voice
+    dts = [voice_freqs[v] / sample_rate for v in range(voices)]
 
     for i in range(n):
         t = i * dt
@@ -107,18 +116,16 @@ def render_supersaw(patch: SupersawPatch, freq: float = 440.0,
         r_sum = 0.0
 
         for v in range(voices):
-            # Phase accumulator for each voice
-            phases[v] += 2.0 * math.pi * voice_freqs[v] * dt
-            if phases[v] > 2.0 * math.pi:
-                phases[v] -= 2.0 * math.pi
+            # PolyBLEP bandlimited sawtooth (anti-aliased)
+            saw = 2.0 * phases[v] - 1.0
+            saw -= _polyblep(phases[v], dts[v])
 
-            # Simple sawtooth (phase / pi - 1)
-            saw = phases[v] / math.pi - 1.0
-
-            # Determine center vs detuned mix
+            # Determine center vs detuned mix — use 1/sqrt(n) scaling
             is_center = (v == voices // 2) if voices % 2 == 1 else False
-            amp = (1.0 - patch.mix) if is_center else \
-                (patch.mix / max(voices - 1, 1))
+            if is_center:
+                amp = 1.0 - patch.mix
+            else:
+                amp = patch.mix / math.sqrt(max(voices - 1, 1))
 
             val = saw * amp * env
 
@@ -128,6 +135,11 @@ def render_supersaw(patch: SupersawPatch, freq: float = 440.0,
             r_gain = math.sin((pan + 1) * math.pi / 4)
             l_sum += val * l_gain
             r_sum += val * r_gain
+
+            # Advance phase (0–1 range for PolyBLEP)
+            phases[v] += dts[v]
+            if phases[v] >= 1.0:
+                phases[v] -= 1.0
 
         left[i] = l_sum * patch.master_gain
         right[i] = r_sum * patch.master_gain

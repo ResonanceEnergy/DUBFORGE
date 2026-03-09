@@ -169,11 +169,12 @@ def fade_out(sig: list[float], dur_s: float = 0.5) -> list[float]:
 
 
 def lowpass(sig: list[float], cutoff: float = 0.3) -> list[float]:
-    out = [0.0] * len(sig)
-    out[0] = sig[0] * cutoff
-    for i in range(1, len(sig)):
-        out[i] = out[i - 1] + cutoff * (sig[i] - out[i - 1])
-    return out
+    """SVF lowpass filter (12 dB/oct) — cutoff is 0-1 mapped to Hz."""
+    from engine.dsp_core import svf_lowpass
+    arr = np.array(sig, dtype=np.float64)
+    cutoff_hz = max(20, cutoff * 10000)
+    filtered = svf_lowpass(arr, cutoff_hz, 0.1, SR)
+    return filtered.tolist()
 
 
 def highpass(sig: list[float], cutoff: float = 0.95) -> list[float]:
@@ -187,20 +188,21 @@ def highpass(sig: list[float], cutoff: float = 0.95) -> list[float]:
 
 
 def distort(sig: list[float], drive: float = 2.0) -> list[float]:
-    return [math.tanh(s * drive) for s in sig]
+    """Oversampled warm saturation via dsp_core."""
+    from engine.dsp_core import saturate_warm
+    arr = np.array(sig, dtype=np.float64)
+    out = saturate_warm(arr, drive, SR)
+    return out.tolist()
 
 
 def wavefold(sig: list[float], threshold: float = 0.6) -> list[float]:
-    """Wavefolder distortion — folds signal back when exceeding threshold."""
-    out = []
-    for s in sig:
-        while abs(s) > threshold:
-            if s > threshold:
-                s = 2 * threshold - s
-            elif s < -threshold:
-                s = -2 * threshold - s
-        out.append(s)
-    return out
+    """Wavefolder distortion — oversampled via dsp_core."""
+    from engine.dsp_core import distort_foldback, oversample_2x, downsample_2x
+    arr = np.array(sig, dtype=np.float64)
+    up = oversample_2x(arr)
+    up = distort_foldback(up, threshold)
+    down = downsample_2x(up)
+    return down.tolist()
 
 
 def bitcrush(sig: list[float], bits: int = 8) -> list[float]:
@@ -2104,11 +2106,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
     master_L = mastered[:, 0].tolist()
     master_R = mastered[:, 1].tolist()
 
-    # Master drive — DNA-driven saturation
-    _drive = 1.0 + md.master_drive * 0.08
-    for i in range(len(master_L)):
-        master_L[i] = math.tanh(master_L[i] * _drive)
-        master_R[i] = math.tanh(master_R[i] * _drive)
+    # NOTE: Post-limiter saturation REMOVED — replaced by soft_clip
+    # inside mastering_chain.master() which runs BEFORE the limiter,
+    # avoiding aliased harmonics above the ceiling.
 
     out_path = str(OUTPUT / f"{safe_name}.wav")
     write_stereo_wav(out_path, master_L, master_R)

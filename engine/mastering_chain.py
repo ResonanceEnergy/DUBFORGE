@@ -352,10 +352,13 @@ def master(audio: np.ndarray, sr: int = SAMPLE_RATE,
            settings: MasterSettings | None = None) -> tuple[np.ndarray, MasterReport]:
     """
     Run the full mastering chain:
-        EQ → Compress → Stereo Width → Loudness Normalize → Limit
+        EQ → Multiband Compress → Compress → Stereo Width →
+        Loudness Normalize → Soft Clip → Limit
 
     Returns (mastered_audio, report).
     """
+    from engine.dsp_core import multiband_compress, soft_clip
+
     if settings is None:
         settings = MasterSettings()
 
@@ -367,17 +370,35 @@ def master(audio: np.ndarray, sr: int = SAMPLE_RATE,
     # 1. EQ
     out = apply_eq(audio.astype(np.float64), settings, sr)
 
-    # 2. Compress
+    # 2. Multiband compression (essential for dubstep — glue + control)
+    if out.ndim == 2:
+        for ch in range(out.shape[1]):
+            out[:, ch] = multiband_compress(
+                out[:, ch], sr,
+                low_xover=120.0, high_xover=4000.0,
+                threshold_db=-12.0, ratio=3.0
+            )
+    else:
+        out = multiband_compress(
+            out, sr,
+            low_xover=120.0, high_xover=4000.0,
+            threshold_db=-12.0, ratio=3.0
+        )
+
+    # 3. Bus compression
     out = compress(out, settings, sr)
 
-    # 3. Stereo width
+    # 4. Stereo width
     out = stereo_widen(out, settings.stereo_width)
 
-    # 4. Loudness normalize
+    # 5. Loudness normalize
     out, gain = loudness_normalize(out, settings.target_lufs, sr)
     report.gain_applied_db = gain
 
-    # 5. Limit
+    # 6. Soft clip before limiter (catches transients, adds warmth)
+    out = soft_clip(out)
+
+    # 7. Limit
     if settings.limiter_enabled:
         out = limit(out, settings.ceiling_db, sr=sr)
 

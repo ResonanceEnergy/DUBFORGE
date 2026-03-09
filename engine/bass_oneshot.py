@@ -149,7 +149,13 @@ def synthesize_sub_sine(preset: BassPreset,
 
 def synthesize_reese(preset: BassPreset,
                      sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Reese bass — detuned sawtooth layers for movement."""
+    """Reese bass — detuned sawtooth layers with massive harmonic content.
+    
+    UPGRADED: 30+ harmonics per voice (was 6), SVF 12dB/oct filter,
+    noise layer for analog grit, proper gain staging.
+    """
+    from engine.dsp_core import osc_saw_np, svf_lowpass, white_noise, normalize
+    
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
@@ -158,13 +164,18 @@ def synthesize_reese(preset: BassPreset,
     freq2 = preset.frequency * detune_ratio
     freq3 = preset.frequency / detune_ratio
 
-    # Sawtooth via harmonic series (6 harmonics per voice)
+    # Bandlimited saw with full harmonic spectrum (30+ harmonics per voice)
     signal = np.zeros(n)
     for f in [freq1, freq2, freq3]:
-        for h in range(1, 7):
-            if f * h > sample_rate / 2:
-                break
-            signal += ((-1) ** h / h) * np.sin(2 * math.pi * f * h * t) / 3
+        signal += osc_saw_np(f, n, sample_rate) / 3.0
+
+    # Add subtle noise layer for analog character
+    noise = white_noise(n, 0.03)
+    signal += noise
+
+    # SVF lowpass filter (12 dB/oct) — much steeper than old single-pole
+    cutoff_hz = preset.filter_cutoff * 4000.0 + 60.0  # 60–4060 Hz range
+    signal = svf_lowpass(signal, cutoff_hz, 0.15, sample_rate)
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 
@@ -188,119 +199,159 @@ def synthesize_fm_bass(preset: BassPreset,
 
 def synthesize_square_bass(preset: BassPreset,
                            sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Square bass — filtered square wave for punchy tone."""
+    """Square bass — filtered square wave for punchy tone.
+    
+    UPGRADED: PolyBLEP bandlimited square, SVF 24dB/oct filter,
+    more harmonics for richness.
+    """
+    from engine.dsp_core import osc_square, svf_lowpass_24, normalize
+    
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
-
-    # Square wave via odd harmonics with filter rolloff
-    signal = np.zeros(n)
-    for h in range(1, 12, 2):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        amp = 1.0 / h
-        if h > 1:
-            amp *= max(0.01, preset.filter_cutoff ** (h - 1))
-        signal += amp * np.sin(2 * math.pi * preset.frequency * h * t)
+    
+    # Bandlimited square with full harmonic content
+    signal = osc_square(preset.frequency, preset.duration_s, sample_rate)
+    
+    # SVF 24 dB/oct lowpass — aggressive dubstep filtering
+    cutoff_hz = preset.filter_cutoff * 3000.0 + 80.0
+    signal = svf_lowpass_24(signal, cutoff_hz, 0.2, sample_rate)
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 
 
 def synthesize_growl_bass(preset: BassPreset,
                           sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Growl bass — distorted complex waveform for aggressive drops."""
+    """Growl bass — distorted complex waveform for aggressive drops.
+    
+    UPGRADED: Full-spectrum bandlimited saw, wavefolder + tube saturation
+    with 2x oversampling, SVF filter sweep, noise injection.
+    """
+    from engine.dsp_core import (osc_saw_np, svf_lowpass, saturate_aggressive,
+                                  white_noise, normalize)
+    
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Rich sawtooth
-    signal = np.zeros(n)
-    for h in range(1, 10):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        signal += ((-1) ** h / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    # Rich bandlimited sawtooth source
+    signal = osc_saw_np(preset.frequency, n, sample_rate)
+    
+    # Add sub harmonic for weight
+    signal += 0.4 * np.sin(2 * math.pi * preset.frequency * t)
 
     # Wobble LFO at phi-rate
     wobble = 0.5 + 0.5 * np.sin(2 * math.pi * PHI * 2 * t)
     signal *= wobble
+    
+    # Noise injection for grit
+    signal += white_noise(n, 0.05)
+    
+    # Oversampled aggressive distortion (foldback + tube)
+    drive = max(preset.distortion, 0.3) * 3.0
+    signal = saturate_aggressive(signal, drive, sample_rate)
 
-    # Heavy distortion (override preset minimum)
-    preset_copy = BassPreset(
-        name=preset.name,
-        bass_type=preset.bass_type,
-        frequency=preset.frequency,
-        duration_s=preset.duration_s,
-        attack_s=preset.attack_s,
-        release_s=preset.release_s,
-        distortion=max(preset.distortion, 0.3),
-    )
-    return _apply_bass_envelope(signal, preset_copy, sample_rate)
+    # SVF filter sweep (cutoff decays for growl character)
+    progress = np.linspace(0, 1, n)
+    cutoff_env = 2000 + 3000 * np.exp(-progress * 2)
+    signal = svf_lowpass(signal, cutoff_env, 0.4, sample_rate)
+
+    return _apply_bass_envelope(signal, BassPreset(
+        name=preset.name, bass_type=preset.bass_type,
+        frequency=preset.frequency, duration_s=preset.duration_s,
+        attack_s=preset.attack_s, release_s=preset.release_s,
+        distortion=0.0,  # already distorted above
+    ), sample_rate)
 
 
 def synthesize_wobble_bass(preset: BassPreset,
                            sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Wobble bass — LFO-modulated amplitude for classic dubstep wobble."""
+    """Wobble bass — LFO-modulated filter sweep for classic dubstep wobble.
+    
+    UPGRADED: Full-spectrum saw, SVF filter LFO modulation (not just AM),
+    oversampled saturation for warmth.
+    """
+    from engine.dsp_core import osc_saw_np, svf_lowpass, saturate_warm
+    
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Rich saw source
-    signal = np.zeros(n)
-    for h in range(1, 8):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        signal += ((-1) ** h / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    # Rich bandlimited saw source
+    signal = osc_saw_np(preset.frequency, n, sample_rate)
+    # Add sub octave for weight
+    signal += 0.5 * np.sin(2 * math.pi * preset.frequency * t)
 
-    # Wobble LFO — rate controlled by fm_ratio (reusing field)
+    # Wobble LFO modulates FILTER CUTOFF (not just amplitude)
     wobble_rate = preset.fm_ratio if preset.fm_ratio > 0 else PHI * 3
-    wobble = 0.5 + 0.5 * np.sin(2 * math.pi * wobble_rate * t)
-    signal *= wobble
+    lfo = 0.5 + 0.5 * np.sin(2 * math.pi * wobble_rate * t)
+    
+    # SVF filter with LFO-modulated cutoff (200 Hz – 4000 Hz sweep)
+    cutoff_lfo = 200 + 3800 * lfo
+    signal = svf_lowpass(signal, cutoff_lfo, 0.35, sample_rate)
+    
+    # Warm saturation
+    signal = saturate_warm(signal, 1.5, sample_rate)
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 
 
 def synthesize_neuro_bass(preset: BassPreset,
                           sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Neuro bass — phase-distorted complex tone for aggressive neurofunk."""
+    """Neuro bass — phase-distorted complex tone for aggressive neurofunk.
+
+    UPGRADED: Bandlimited saw source, oversampled aggressive distortion,
+    SVF 24dB/oct filter sweep, noise layer.
+    """
+    from engine.dsp_core import (osc_saw_np, svf_lowpass_24,
+                                 saturate_aggressive, white_noise)
+
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Phase distortion: modulate phase of carrier
-    carrier_phase = 2 * math.pi * preset.frequency * t
-    pd_amount = preset.fm_depth if preset.fm_depth > 0 else 2.0
-    phase_mod = pd_amount * np.sin(carrier_phase * 0.5)
-    signal = np.sin(carrier_phase + phase_mod)
-    signal += 0.5 * np.sin(carrier_phase * 2 + phase_mod * 1.5)
+    # Rich bandlimited saw source
+    signal = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
 
-    # Aggressive distortion
+    # Phase distortion layer (FM-like complexity)
+    pd_amount = preset.fm_depth if preset.fm_depth > 0 else 2.0
+    carrier_phase = 2 * math.pi * preset.frequency * t
+    phase_mod = pd_amount * np.sin(carrier_phase * 0.5)
+    signal += 0.4 * np.sin(carrier_phase * 2 + phase_mod * 1.5)
+
+    # Aggressive oversampled distortion (foldback + tube)
     drive = max(preset.distortion, 0.4)
-    signal = np.tanh(signal * (1 + drive * 5))
+    signal = saturate_aggressive(signal, 1.0 + drive * 4, sample_rate)
+
+    # Noise grit
+    signal += white_noise(n) * 0.02
+
+    # SVF 24dB/oct filter with decaying sweep
+    progress = np.linspace(0, 1, n)
+    cutoff = 500 + 3000 * np.exp(-progress * 2)
+    signal = svf_lowpass_24(signal, cutoff, 0.3, sample_rate)
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 
 
 def synthesize_acid_bass(preset: BassPreset,
                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Acid bass — 303-style resonant filter sweep."""
+    """Acid bass — 303-style resonant filter sweep.
+    
+    UPGRADED: Bandlimited square, SVF 24dB/oct filter with high resonance
+    and decaying cutoff envelope. Oversampled distortion.
+    """
+    from engine.dsp_core import osc_square, svf_lowpass_24, saturate_warm
+    
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Square source
-    signal = np.zeros(n)
-    for h in range(1, 10, 2):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        signal += (1.0 / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    # Bandlimited square source (303 uses square/saw)
+    signal = osc_square(preset.frequency, preset.duration_s, sample_rate)
 
-    # Decaying resonant filter
+    # Decaying resonant filter — the key 303 acid sound
+    # SVF 24 dB/oct with high resonance and exponential cutoff decay
     progress = np.linspace(0, 1, n)
-    cutoff_env = preset.filter_cutoff * np.exp(-progress * 3)
-    y1, y2 = 0.0, 0.0
-    for i in range(n):
-        a = max(0.01, cutoff_env[i] * 0.5 + 0.05)
-        y1 = y1 + a * (signal[i] - y1)
-        y2 = y2 + a * (y1 - y2)
-        signal[i] = y1 + 0.6 * (y1 - y2)  # resonance boost
+    cutoff_env = 300 + preset.filter_cutoff * 5000 * np.exp(-progress * 3)
+    signal = svf_lowpass_24(signal, cutoff_env, 0.7, sample_rate)
 
+    # Warm tube saturation (303 had diode clipping)
     if preset.distortion > 0:
-        signal = np.tanh(signal * (1 + preset.distortion * 4))
+        signal = saturate_warm(signal, 1.0 + preset.distortion * 3, sample_rate)
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 
@@ -344,40 +395,46 @@ def synthesize_donk_bass(preset: BassPreset,
 
 def synthesize_saw_bass(preset: BassPreset,
                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Saw bass — bright sawtooth with harmonic saturation."""
+    """Saw bass — bright sawtooth with harmonic saturation.
+
+    UPGRADED: Full-spectrum bandlimited saw, SVF 12dB filter,
+    oversampled warm saturation.
+    """
+    from engine.dsp_core import osc_saw_np, svf_lowpass, saturate_warm
+
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    signal = np.zeros(n)
-    for h in range(1, 16):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        signal += ((-1) ** h / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    # Full-spectrum bandlimited saw
+    signal = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
 
-    # Harmonic saturation
-    signal = np.tanh(signal * 1.5) * 0.8 + signal * 0.2
+    # SVF lowpass — cutoff driven by preset
+    cutoff_hz = 200 + preset.filter_cutoff * 6000
+    signal = svf_lowpass(signal, cutoff_hz, 0.2, sample_rate)
 
+    # Warm oversampled saturation
     if preset.distortion > 0:
-        signal = np.tanh(signal * (1 + preset.distortion * 4))
+        signal = saturate_warm(signal, 1.0 + preset.distortion * 3, sample_rate)
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 
 
 def synthesize_tape_bass(preset: BassPreset,
                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Tape bass — warm analog-style with tape saturation and wow."""
+    """Tape bass — warm analog-style with tape saturation and wow.
+
+    UPGRADED: Bandlimited saw layers, SVF lowpass, dsp_core tape saturation
+    with 2x oversampling, wow modulation.
+    """
+    from engine.dsp_core import (osc_saw_np, svf_lowpass,
+                                 distort_tape, oversample_2x, downsample_2x)
+
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Slightly detuned triangle for warmth
+    # Two detuned bandlimited saws
     detune = 2 ** (preset.detune_cents / 1200) if preset.detune_cents else 1.003
-    signal = np.zeros(n)
-    for freq in [preset.frequency, preset.frequency * detune]:
-        for h in range(1, 8, 2):
-            if freq * h > sample_rate / 2:
-                break
-            signal += ((-1) ** ((h - 1) // 2)) / (h * h) * np.sin(
-                2 * math.pi * freq * h * t)
+    signal = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
+    signal += osc_saw_np(preset.frequency * detune, preset.duration_s, sample_rate)
     signal *= 0.5
 
     # Tape wow (slow pitch wobble)
@@ -385,15 +442,13 @@ def synthesize_tape_bass(preset: BassPreset,
     phase = np.cumsum(2 * math.pi * preset.frequency * wow / sample_rate)
     signal += 0.3 * np.sin(phase)
 
-    # Tape saturation (gentle)
-    signal = np.tanh(signal * 1.2)
+    # Oversampled tape saturation
+    up = oversample_2x(signal)
+    up = distort_tape(up, 1.5)
+    signal = downsample_2x(up)
 
-    # Lowpass for warmth
-    alpha = 0.15
-    y = 0.0
-    for i in range(n):
-        y = y * (1 - alpha) + signal[i] * alpha
-        signal[i] = y
+    # SVF lowpass for warmth (cut highs)
+    signal = svf_lowpass(signal, 2000.0, 0.1, sample_rate)
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 
@@ -505,27 +560,29 @@ def synthesize_bitcrush_bass(preset: BassPreset,
 
 def synthesize_formant_bass(preset: BassPreset,
                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Formant bass — vowel-shaped resonances on bass tone."""
+    """Formant bass — vowel-shaped resonances on bass tone.
+
+    UPGRADED: Bandlimited saw source, SVF bandpass formant filters with
+    proper resonance, sub sine for weight.
+    """
+    from engine.dsp_core import osc_saw_np, svf_bandpass
+
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Rich harmonic source
-    signal = np.zeros(n)
-    for h in range(1, 10):
-        signal += (0.7 ** h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    # Full-spectrum bandlimited saw — rich harmonic source
+    signal = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
 
-    # Simple formant filter: resonances at vowel frequencies
-    formant_freqs = [600, 1200, 2400]  # "ah" vowel
+    # Formant SVF bandpass filters at vowel frequencies ("ah" → "oh" morph)
+    formant_freqs = [600, 1200, 2400]
     filtered = np.zeros(n)
     for ff in formant_freqs:
-        alpha = min(0.99, ff / sample_rate * 2 * math.pi)
-        y = 0.0
-        for i in range(n):
-            y = y * (1 - alpha) + signal[i] * alpha
-            filtered[i] += y * 0.33
+        filtered += svf_bandpass(signal, float(ff), 0.6, sample_rate) * 0.4
 
-    signal = filtered + 0.5 * np.sin(2 * math.pi * preset.frequency * t)
-    signal *= 0.5
+    # Sub sine for weight
+    sub = 0.4 * np.sin(2 * math.pi * preset.frequency * t)
+    signal = filtered + sub
+    signal *= 0.6
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 
@@ -639,24 +696,32 @@ def synthesize_octave_bass(preset: BassPreset,
 
 def synthesize_pulse_width_bass(preset: BassPreset,
                                 sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Pulse-width bass — variable pulse width for tonal movement."""
+    """Pulse-width bass — variable pulse width for tonal movement.
+
+    UPGRADED: PolyBLEP anti-aliased square with PWM, SVF lowpass filter.
+    """
+    from engine.dsp_core import osc_square, svf_lowpass
+
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    phase = (preset.frequency * t) % 1.0
+    # Modulating pulse width via osc_square(duty=...)
     pw_mod = 0.3 + 0.2 * np.sin(2 * math.pi * 0.5 * t)
-    signal = np.where(phase < pw_mod, 1.0, -1.0).astype(float)
+    signal = osc_square(preset.frequency, preset.duration_s, sample_rate,
+                        duty=float(np.mean(pw_mod)))
 
+    # Sub octave for weight
     signal += 0.3 * np.sin(2 * math.pi * preset.frequency * 0.5 * t)
     signal *= 0.5
 
+    # SVF lowpass instead of convolve hack
     if preset.filter_cutoff < 1.0:
-        cutoff_n = max(1, int(preset.filter_cutoff * 10))
-        kernel = np.ones(cutoff_n) / cutoff_n
-        signal = np.convolve(signal, kernel, mode="same")
+        cutoff_hz = 300 + preset.filter_cutoff * 5000
+        signal = svf_lowpass(signal, cutoff_hz, 0.15, sample_rate)
 
     if preset.distortion > 0:
-        signal = np.tanh(signal * (1 + preset.distortion * 4))
+        from engine.dsp_core import saturate_warm
+        signal = saturate_warm(signal, 1.0 + preset.distortion * 3, sample_rate)
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 

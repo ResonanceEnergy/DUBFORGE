@@ -133,29 +133,27 @@ def _adsr_envelope(n: int, preset: LeadPreset,
 
 def synthesize_screech_lead(preset: LeadPreset,
                             sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Screech lead — aggressive distorted mid-range tone."""
+    """Screech lead — aggressive distorted mid-range tone.
+
+    UPGRADED: Bandlimited square source, oversampled tube distortion,
+    SVF 24dB/oct filter with resonance.
+    """
+    from engine.dsp_core import (osc_square, svf_lowpass_24,
+                                 saturate_aggressive)
+
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Square-ish tone (odd harmonics with bright character)
-    signal = np.zeros(n)
-    for h in range(1, 14, 2):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        signal += (1.0 / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    # Bandlimited square source (odd harmonics)
+    signal = osc_square(preset.frequency, preset.duration_s, sample_rate)
 
-    # Aggressive distortion
+    # Aggressive oversampled distortion
     drive = max(preset.distortion, 0.3)
-    signal = np.tanh(signal * (1 + drive * 5))
+    signal = saturate_aggressive(signal, 1.0 + drive * 4, sample_rate)
 
-    # Resonant filter (emphasis at cutoff)
-    cutoff = preset.filter_cutoff
-    alpha = min(0.99, cutoff * 0.5 + 0.1)
-    y1, y2 = 0.0, 0.0
-    for i in range(n):
-        y1 = y1 + alpha * (signal[i] - y1)
-        y2 = y2 + alpha * (y1 - y2)
-        signal[i] = y1 + preset.resonance * (y1 - y2)
+    # SVF 24dB/oct with resonance
+    cutoff_hz = 500 + preset.filter_cutoff * 6000
+    signal = svf_lowpass_24(signal, cutoff_hz, preset.resonance * 0.8,
+                            sample_rate)
 
     env = _adsr_envelope(n, preset, sample_rate)
     signal *= env
@@ -164,31 +162,28 @@ def synthesize_screech_lead(preset: LeadPreset,
 
 def synthesize_pluck_lead(preset: LeadPreset,
                           sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Pluck lead — short percussive attack with fast decay."""
+    """Pluck lead — short percussive attack with fast decay.
+
+    UPGRADED: Bandlimited saw source, SVF lowpass with decaying cutoff
+    envelope (pluck character), oversampled saturation.
+    """
+    from engine.dsp_core import osc_saw_np, svf_lowpass, saturate_warm
+
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Bright sawtooth
-    signal = np.zeros(n)
-    for h in range(1, 10):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        signal += ((-1) ** h / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    # Bandlimited saw source
+    signal = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
 
-    # Filter with decaying cutoff (pluck character)
+    # SVF lowpass with decaying cutoff envelope (pluck character)
     progress = np.linspace(0, 1, n)
-    filter_env = preset.filter_cutoff * np.exp(-progress * 4)
-    y = 0.0
-    for i in range(n):
-        a = max(0.01, filter_env[i] * 0.6 + 0.05)
-        y = y * (1 - a) + signal[i] * a
-        signal[i] = y
+    cutoff_env = 500 + preset.filter_cutoff * 8000 * np.exp(-progress * 4)
+    signal = svf_lowpass(signal, cutoff_env, 0.2, sample_rate)
 
     env = _adsr_envelope(n, preset, sample_rate)
     signal *= env
 
     if preset.distortion > 0:
-        signal = np.tanh(signal * (1 + preset.distortion * 3))
+        signal = saturate_warm(signal, 1.0 + preset.distortion * 3, sample_rate)
 
     return _normalize(signal)
 
@@ -220,9 +215,14 @@ def synthesize_fm_lead(preset: LeadPreset,
 
 def synthesize_supersaw_lead(preset: LeadPreset,
                              sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Supersaw lead — stacked detuned saws for massive sound."""
+    """Supersaw lead — stacked detuned saws for massive sound.
+
+    UPGRADED: Bandlimited saw via osc_saw_np, 1/sqrt(n) scaling,
+    SVF lowpass filter, oversampled saturation.
+    """
+    from engine.dsp_core import osc_saw_np, svf_lowpass, saturate_warm
+
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
     # 7 voices, detuned symmetrically
     detune = preset.detune_cents if preset.detune_cents > 0 else 15
@@ -232,58 +232,49 @@ def synthesize_supersaw_lead(preset: LeadPreset,
     for offset in offsets:
         cents = offset * (detune / 3)
         freq = preset.frequency * (2 ** (cents / 1200))
-        voice = np.zeros(n)
-        for h in range(1, 8):
-            if freq * h > sample_rate / 2:
-                break
-            voice += ((-1) ** h / h) * np.sin(2 * math.pi * freq * h * t)
-        signal += voice / 7
+        signal += osc_saw_np(freq, preset.duration_s, sample_rate)
 
-    # Filter
-    alpha = min(0.99, preset.filter_cutoff * 0.5 + 0.1)
-    y = 0.0
-    for i in range(n):
-        y = y * (1 - alpha) + signal[i] * alpha
-        signal[i] = y
+    # 1/sqrt(n) scaling instead of /7
+    signal /= math.sqrt(len(offsets))
+
+    # SVF lowpass
+    cutoff_hz = 500 + preset.filter_cutoff * 6000
+    signal = svf_lowpass(signal, cutoff_hz, 0.15, sample_rate)
 
     env = _adsr_envelope(n, preset, sample_rate)
     signal *= env
 
     if preset.distortion > 0:
-        signal = np.tanh(signal * (1 + preset.distortion * 3))
+        signal = saturate_warm(signal, 1.0 + preset.distortion * 3, sample_rate)
 
     return _normalize(signal)
 
 
 def synthesize_acid_lead(preset: LeadPreset,
                          sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Acid lead — resonant filter sweep (303-inspired)."""
+    """Acid lead — resonant filter sweep (303-inspired).
+
+    UPGRADED: PolyBLEP square source, SVF 24dB/oct with high resonance
+    and decaying filter sweep, oversampled saturation.
+    """
+    from engine.dsp_core import osc_square, svf_lowpass_24, saturate_warm
+
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Square wave source
-    signal = np.zeros(n)
-    for h in range(1, 12, 2):
-        if preset.frequency * h > sample_rate / 2:
-            break
-        signal += (1.0 / h) * np.sin(2 * math.pi * preset.frequency * h * t)
+    # Bandlimited square source
+    signal = osc_square(preset.frequency, preset.duration_s, sample_rate)
 
-    # Sweeping resonant filter (key acid character)
+    # SVF 24dB/oct with resonance and decaying filter sweep
     progress = np.linspace(0, 1, n)
-    filter_sweep = preset.filter_cutoff * np.exp(-progress * 3)
-
-    y1, y2 = 0.0, 0.0
-    for i in range(n):
-        a = max(0.01, filter_sweep[i] * 0.5 + 0.05)
-        y1 = y1 + a * (signal[i] - y1)
-        y2 = y2 + a * (y1 - y2)
-        signal[i] = y1 + preset.resonance * 2 * (y1 - y2)
+    cutoff_env = 400 + preset.filter_cutoff * 5000 * np.exp(-progress * 3)
+    signal = svf_lowpass_24(signal, cutoff_env,
+                            min(0.85, preset.resonance * 0.9), sample_rate)
 
     env = _adsr_envelope(n, preset, sample_rate)
     signal *= env
 
     if preset.distortion > 0:
-        signal = np.tanh(signal * (1 + preset.distortion * 4))
+        signal = saturate_warm(signal, 1.0 + preset.distortion * 3, sample_rate)
 
     return _normalize(signal)
 
@@ -294,56 +285,52 @@ def synthesize_acid_lead(preset: LeadPreset,
 
 def synthesize_saw_lead(preset: LeadPreset,
                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Saw lead — raw bright sawtooth with subtle detune."""
+    """Saw lead — raw bright sawtooth with subtle detune.
+
+    UPGRADED: Bandlimited saw via osc_saw_np, SVF lowpass with resonance.
+    """
+    from engine.dsp_core import osc_saw_np, svf_lowpass, saturate_warm
+
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
     detune = 2 ** (preset.detune_cents / 1200) if preset.detune_cents else 1.002
-    signal = np.zeros(n)
-    for voice_f in [preset.frequency, preset.frequency * detune]:
-        for h in range(1, 16):
-            if voice_f * h > sample_rate / 2:
-                break
-            signal += ((-1) ** h / h) * np.sin(2 * math.pi * voice_f * h * t)
+    signal = osc_saw_np(preset.frequency, preset.duration_s, sample_rate)
+    signal += osc_saw_np(preset.frequency * detune, preset.duration_s, sample_rate)
     signal *= 0.5
 
-    # Bright resonant filter
-    alpha = min(0.99, preset.filter_cutoff * 0.6 + 0.1)
-    y1, y2 = 0.0, 0.0
-    for i in range(n):
-        y1 = y1 + alpha * (signal[i] - y1)
-        y2 = y2 + alpha * (y1 - y2)
-        signal[i] = y1 + preset.resonance * (y1 - y2)
+    # SVF lowpass with resonance
+    cutoff_hz = 500 + preset.filter_cutoff * 6000
+    signal = svf_lowpass(signal, cutoff_hz, preset.resonance * 0.6, sample_rate)
 
     env = _adsr_envelope(n, preset, sample_rate)
     signal *= env
     if preset.distortion > 0:
-        signal = np.tanh(signal * (1 + preset.distortion * 3))
+        signal = saturate_warm(signal, 1.0 + preset.distortion * 3, sample_rate)
     return _normalize(signal)
 
 
 def synthesize_pwm_lead(preset: LeadPreset,
                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """PWM lead — pulse-width modulated square with movement."""
+    """PWM lead — pulse-width modulated square with movement.
+
+    UPGRADED: PolyBLEP anti-aliased square, SVF lowpass filter.
+    """
+    from engine.dsp_core import osc_square, svf_lowpass, saturate_warm
+
     n = int(preset.duration_s * sample_rate)
-    t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    # Pulse width modulated via LFO
-    lfo = 0.3 + 0.2 * np.sin(2 * math.pi * 3.0 * t)  # width 0.1–0.5
-    phase = (preset.frequency * t) % 1.0
-    signal = np.where(phase < lfo, 1.0, -1.0).astype(np.float64)
+    # PolyBLEP square (anti-aliased)
+    signal = osc_square(preset.frequency, preset.duration_s, sample_rate,
+                        duty=0.35)
 
-    # Lowpass to tame aliasing
-    alpha = min(0.99, preset.filter_cutoff * 0.5 + 0.15)
-    y = 0.0
-    for i in range(n):
-        y = y * (1 - alpha) + signal[i] * alpha
-        signal[i] = y
+    # SVF lowpass filter
+    cutoff_hz = 500 + preset.filter_cutoff * 5000
+    signal = svf_lowpass(signal, cutoff_hz, 0.2, sample_rate)
 
     env = _adsr_envelope(n, preset, sample_rate)
     signal *= env
     if preset.distortion > 0:
-        signal = np.tanh(signal * (1 + preset.distortion * 3))
+        signal = saturate_warm(signal, 1.0 + preset.distortion * 3, sample_rate)
     return _normalize(signal)
 
 
