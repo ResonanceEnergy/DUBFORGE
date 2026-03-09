@@ -133,6 +133,7 @@ MODULE_REGISTRY: list[tuple[str, str]] = [
     ("full_integration",   "v4.0 Full Integration"),
     ("final_audit",        "Final Audit"),
     ("grandmaster",        "GRANDMASTER 144"),
+    ("subphonics",         "SUBPHONICS — Project Director"),
 ]
 
 MODULE_NAMES = [m[0] for m in MODULE_REGISTRY]

@@ -452,6 +452,13 @@ from engine.harmonic_analysis import (
     spectral_peaks_bank,
     write_harmonic_analysis_manifest,
 )
+from engine.subphonics import (
+    ChatMessage,
+    ChatSession,
+    CommandResult,
+    SubphonicsEngine,
+    get_engine,
+)
 from engine.impact_hit import (
     ALL_IMPACT_BANKS,
     ImpactBank,
@@ -1733,4 +1740,10 @@ __all__ = [
     "spectral_flux_bank",
     "roughness_bank",
     "write_harmonic_analysis_manifest",
+    # subphonics
+    "SubphonicsEngine",
+    "ChatMessage",
+    "ChatSession",
+    "CommandResult",
+    "get_engine",
 ]

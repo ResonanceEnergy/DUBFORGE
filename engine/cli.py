@@ -147,6 +147,14 @@ def cmd_info(_args: argparse.Namespace) -> None:
         print(f"    {m}")
 
 
+def cmd_subphonics(args: argparse.Namespace) -> None:
+    """Launch the SUBPHONICS chatbot server."""
+    from engine.subphonics_server import start_server
+    port = args.port
+    print(f"Launching SUBPHONICS on port {port}...")
+    start_server(port=port)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════════════
@@ -186,6 +194,11 @@ def main() -> None:
     # --- info ---
     sub.add_parser("info", help="Show engine info")
 
+    # --- subphonics ---
+    p_sub = sub.add_parser("subphonics", help="Launch SUBPHONICS chatbot server")
+    p_sub.add_argument("--port", "-p", type=int, default=8433,
+                       help="Server port (default: 8433)")
+
     args = parser.parse_args()
     if args.command is None:
         parser.print_help()
@@ -196,6 +209,7 @@ def main() -> None:
         "export": cmd_export,
         "analyze": cmd_analyze,
         "info": cmd_info,
+        "subphonics": cmd_subphonics,
     }
     handlers[args.command](args)
 

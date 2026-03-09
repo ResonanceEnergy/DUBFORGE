@@ -35,6 +35,7 @@ dev = [
 [project.scripts]
 dubforge = "run_all:main"
 dubforge-cli = "engine.cli:main"
+subphonics = "engine.subphonics_server:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
