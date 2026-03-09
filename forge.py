@@ -98,6 +98,8 @@ from engine.groove import GrooveEngine, GROOVE_TEMPLATES, NoteEvent
 from engine.vocal_processor import VocalPreset, apply_vocal_processing
 from engine.variation_engine import (
     VariationEngine, SongBlueprint, SongDNA, forge_song_dna, save_dna,
+    DrumDNA, BassDNA, LeadDNA, AtmosphereDNA, FxDNA, MixDNA,
+    ArrangementSection, SCALE_INTERVALS, NOTES,
 )
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -738,11 +740,94 @@ def generate_presets():
 
 
 
+def _scale_note(root_freq: float, scale: str, degree: int, octave: int) -> float:
+    """Get Hz for scale degree at octave (1-based from root).
+
+    Example: _scale_note(43.65, "minor", 0, 1) → F1 = 43.65
+             _scale_note(43.65, "minor", 2, 3) → Ab3 = 207.65
+             _scale_note(43.65, "minor", 4, 3) → C4 = 261.63
+    """
+    intervals = SCALE_INTERVALS.get(scale, [0, 2, 3, 5, 7, 8, 10])
+    semi = intervals[degree % len(intervals)]
+    return root_freq * (2.0 ** (octave - 1)) * (2.0 ** (semi / 12.0))
+
+
+def _default_v5_dna() -> SongDNA:
+    """Build a SongDNA that reproduces the V5 hardcoded defaults."""
+    return SongDNA(
+        name="Dubstep Track V5",
+        style="dubstep",
+        theme="aggressive dubstep",
+        mood_name="aggressive",
+        tags=["dubstep", "aggressive", "high_energy"],
+        seed=0,
+        key="F",
+        scale="minor",
+        bpm=140,
+        root_freq=43.65,
+        freq_table=dict(FREQ),
+        arrangement=[
+            ArrangementSection("intro", 8, 0.2, ["drone", "pad", "hats_sparse"]),
+            ArrangementSection("build", 4, 0.5, ["kick", "snare_roll", "riser", "pad"]),
+            ArrangementSection("drop1", 16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops"]),
+            ArrangementSection("break", 8, 0.35, ["pad", "plucks", "sub_long"]),
+            ArrangementSection("build2", 4, 0.55, ["kick", "snare_roll", "riser"]),
+            ArrangementSection("drop2", 16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops", "extra_bass"]),
+            ArrangementSection("outro", 8, 0.15, ["kick_fade", "pad_fade"]),
+        ],
+        total_bars=64,
+        drums=DrumDNA(
+            kick_pitch=42.0, kick_fm_depth=3.0, kick_drive=0.55,
+            kick_sub_weight=0.65, kick_attack=3.0,
+            snare_pitch=230.0, snare_noise_mix=0.5, snare_metallic=0.2,
+            snare_compression=8.0, snare_ott=0.35,
+            hat_frequency=8000.0, hat_metallic=0.15, hat_brightness=0.95,
+            clap_brightness=0.95, clap_reverb=0.15, hat_density=16,
+        ),
+        bass=BassDNA(
+            primary_type="dist_fm", secondary_type="sync", tertiary_type="neuro",
+            fm_depth=10.0, fm_feedback=0.6, distortion=0.9,
+            filter_cutoff=0.8, acid_resonance=0.0, growl_resampler=True,
+            lfo_rate=2.5, lfo_depth=0.8, sub_weight=0.9, mid_drive=0.85,
+            pitch_dive_semi=12.0, wavefold_thresh=0.6, bitcrush_bits=0,
+            ott_amount=0.4, ring_mod_freq=0.0,
+        ),
+        lead=LeadDNA(
+            use_additive=True, additive_partials=16, additive_rolloff="sawtooth",
+            use_fm=True, fm_operators=2, fm_depth=3.0,
+            brightness=0.7, reverb_decay=0.5, shimmer=0.0,
+            supersaw_voices=7, supersaw_detune=35.0, supersaw_cutoff=5500.0,
+            ott_amount=0.3,
+        ),
+        atmosphere=AtmosphereDNA(
+            pad_type="dark", pad_attack=2.0, pad_brightness=0.25,
+            reverb_decay=3.5, stereo_width=1.5, shimmer=0.0,
+            granular_density=0.45, drone_voices=7, drone_movement=0.45,
+            use_karplus_drone=True, noise_bed_type="pink", noise_bed_level=0.15,
+        ),
+        fx=FxDNA(
+            riser_intensity=0.85, impact_intensity=0.95, glitch_amount=0.0,
+            tape_degrade=0.0, stutter_rate=16.0, pitch_dive_range=12.0,
+            vocal_chop_distortion=0.35, beat_repeat_probability=0.25,
+            riser_start_freq=150.0, riser_end_freq=8000.0, boom_decay=2.0,
+        ),
+        mix=MixDNA(
+            target_lufs=-7.0, stereo_width=1.5, master_drive=0.55,
+            eq_low_boost=3.5, eq_high_boost=2.5, compression_ratio=3.5,
+            sidechain_depth=0.7, ceiling_db=-0.2, eq_low_freq=70.0,
+            eq_high_freq=10000.0, compression_threshold=-14.0,
+            limiter_enabled=True,
+        ),
+        bass_rotation=["fm_growl", "growl_wt", "dist_fm", "sync", "acid", "neuro", "formant"],
+        chop_vowels=["ah", "oh", "ee", "oo"],
+    )
+
+
 # ═══════════════════════════════════════════
 
 
 # ═══════════════════════════════════════════
-#  5. FULL MIXED TRACK (V5 — Pro Sound Design)
+#  5. FULL MIXED TRACK (V6 — DNA-Driven Sound Design)
 # ═══════════════════════════════════════════
 
 def _ott_simulate(sig: list[float], amount: float = 0.4) -> list[float]:
@@ -796,35 +881,93 @@ def _wavetable_to_audio(frames: list[np.ndarray], freq: float,
     return out
 
 
-def render_full_track():
-    """Render V5 dubstep track — professional sound design.
+def render_full_track(dna: 'SongDNA | None' = None):
+    """Render DNA-driven dubstep track — V6 full integration.
 
-    V5 philosophy: Push every synthesis parameter HARD.
-    - Drums: Layered multi-source synthesis, not just perc_synth
-    - Kick: FM body + noise click + sub sine + Karplus-Strong attack
-    - Snare: Pink noise + Karplus metallic + tonal body + parallel compression
-    - Hats: Karplus-Strong metallic modeling + noise + inharmonic partials
-    - Bass: growl_resample_pipeline evolving wavetables + dist_fm + sync + acid
-    - Bass: FM synth growl preset (3-op, mod_index=8, feedback=0.5)
-    - Leads: Additive synth 16-partial sawtooth + FM metallic + processing
-    - All parameters cranked: high distortion, high FM depth, aggressive processing
+    When dna is None, falls back to V5 defaults (F minor, 140 BPM).
+    When dna is provided, EVERY synthesis parameter is driven by SongDNA:
+      - Key, scale, BPM from DNA
+      - Drum layer params from DrumDNA
+      - Bass types + processing from BassDNA
+      - Lead synthesis from LeadDNA
+      - Pad/atmosphere from AtmosphereDNA
+      - Transition FX from FxDNA
+      - Mix/master from MixDNA
+      - Arrangement sections from DNA arrangement
+      - Bass rotation order from DNA
+      - Vocal chop vowels from DNA
     """
-    print("\n═══ STEP 5: Full Mastered Track (V5 — Pro Sound Design) ═══")
+    # ═══ DNA SETUP ═══════════════════════════════════
+    if dna is None:
+        dna = _default_v5_dna()
 
-    INTRO = 8
-    BUILD = 4
-    DROP1 = 16
-    BREAK_ = 8
-    BUILD2 = 4
-    DROP2 = 16
-    OUTRO = 8
-    total_bars = INTRO + BUILD + DROP1 + BREAK_ + BUILD2 + DROP2 + OUTRO
+    # Shadow module-level timing constants with DNA values
+    BEAT = 60.0 / dna.bpm
+    BAR = BEAT * 4
+
+    def samples(beats: float) -> int:
+        return int(beats * BEAT * SR)
+
+    # Scale-degree frequency helper
+    intervals = SCALE_INTERVALS.get(dna.scale, [0, 2, 3, 5, 7, 8, 10])
+
+    def n(degree: int, octave: int) -> float:
+        """Scale degree → Hz. n(0,1)=root@oct1, n(2,3)=3rd@oct3."""
+        semi = intervals[degree % len(intervals)]
+        return dna.root_freq * (2.0 ** (octave - 1)) * (2.0 ** (semi / 12.0))
+
+    # Build FREQ lookup from DNA (shadows module-level FREQ)
+    # Maps same keys V5 code used → DNA-key frequencies
+    FREQ = {
+        "F1": n(0, 1), "F2": n(0, 2), "F3": n(0, 3), "F4": n(0, 4),
+        "G2": n(1, 2), "G3": n(1, 3), "G4": n(1, 4),
+        "Ab1": n(2, 1), "Ab2": n(2, 2), "Ab3": n(2, 3), "Ab4": n(2, 4),
+        "Bb1": n(3, 1), "Bb2": n(3, 2), "Bb3": n(3, 3),
+        "C2": n(4, 1), "C3": n(4, 2), "C4": n(4, 3),
+        "Db2": n(5, 1), "Db3": n(5, 2), "Db4": n(5, 3),
+        "Eb2": n(6, 1), "Eb3": n(6, 2), "Eb4": n(6, 3),
+    }
+
+    # Shorthand aliases for DNA sub-specifications
+    dd = dna.drums
+    bd = dna.bass
+    ld = dna.lead
+    ad = dna.atmosphere
+    fd = dna.fx
+    md = dna.mix
+
+    # Derive note names for vocal chops from DNA key
+    _root_idx = NOTES.index(dna.key) if dna.key in NOTES else 5
+    _fifth_idx = (_root_idx + intervals[4 % len(intervals)]) % 12
+    _root_note3 = f"{dna.key}3"
+    _fifth_note3 = f"{NOTES[_fifth_idx]}3"
+
+    # Extract arrangement section bars
+    sec_map = {s.name: s.bars for s in dna.arrangement}
+    INTRO = sec_map.get("intro", 8)
+    BUILD = sec_map.get("build", 4)
+    DROP1 = sec_map.get("drop1", sec_map.get("drop1b", 16))
+    BREAK_ = sec_map.get("break", 8)
+    BUILD2 = sec_map.get("build2", 4)
+    DROP2 = sec_map.get("drop2", sec_map.get("drop2b", 16))
+    OUTRO = sec_map.get("outro", 8)
+    total_bars = dna.total_bars
     total_s = samples(total_bars * 4)
-    print(f"  {total_bars} bars = {total_bars * BAR:.0f}s at {BPM} BPM")
+
+    song_label = dna.name or "dubstep_track"
+    safe_name = song_label.lower().replace(" ", "_").replace("'", "")
+
+    print(f"\n═══ RENDERING: {dna.name} ═══")
+    print(f"  {dna.key} {dna.scale} @ {dna.bpm} BPM | {total_bars} bars | Mood: {dna.mood_name}")
+    print(f"  Bass: {' → '.join(dna.bass_rotation[:5])}")
+    print(f"  Arrangement: {' → '.join(s.name for s in dna.arrangement)}")
+    print(f"  Drums: kick@{dd.kick_pitch:.0f}Hz drive={dd.kick_drive:.2f} | snare@{dd.snare_pitch:.0f}Hz")
+    print(f"  Bass: FM depth={bd.fm_depth:.1f} dist={bd.distortion:.2f} | Lead: {ld.additive_partials}p {ld.additive_rolloff}")
+    print(f"  Mix: {md.target_lufs:.1f} LUFS target | ceiling={md.ceiling_db:.1f} dB")
 
     sat = SaturationEngine(sample_rate=SR)
     panner = PanningEngine(sample_rate=SR)
-    groove_eng = GrooveEngine(bpm=BPM, sample_rate=SR)
+    groove_eng = GrooveEngine(bpm=dna.bpm, sample_rate=SR)
 
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Drums (LAYERED, MULTI-SOURCE)
@@ -832,24 +975,25 @@ def render_full_track():
     print("  [1/9] Drums — layered synthesis...")
 
     # ── KICK ──────────────────────────────────────────
-    # Layer 1: Sub body — perc_synth kick with heavy pitch sweep
+    # Layer 1: Sub body — perc_synth kick with DNA-driven pitch sweep
     kick_sub = to_list(synthesize_kick(PercPreset(
-        name="KSub", perc_type="kick", pitch=42.0, duration_s=0.6,
-        decay_s=0.45, tone_mix=0.95, brightness=0.1, distortion=0.2
+        name="KSub", perc_type="kick", pitch=dd.kick_pitch, duration_s=0.6,
+        decay_s=0.45, tone_mix=0.95, brightness=0.1 + (1 - dd.kick_sub_weight) * 0.15,
+        distortion=dd.kick_drive * 0.36
     )))
 
-    # Layer 2: FM body — 2-op FM for harmonic richness in the body
+    # Layer 2: FM body — DNA-driven mod_index and feedback
     kick_fm_patch = FMPatch(
         name="KickFM",
         operators=[
-            FMOperator(freq_ratio=1.0, amplitude=1.0, mod_index=3.0,
-                       feedback=0.2, envelope=(0.001, 0.08, 0.0, 0.05)),
-            FMOperator(freq_ratio=2.0, amplitude=0.8, mod_index=2.0,
+            FMOperator(freq_ratio=1.0, amplitude=1.0, mod_index=dd.kick_fm_depth,
+                       feedback=dd.kick_drive * 0.36, envelope=(0.001, 0.08, 0.0, 0.05)),
+            FMOperator(freq_ratio=2.0, amplitude=0.8, mod_index=dd.kick_fm_depth * 0.67,
                        feedback=0.0, envelope=(0.001, 0.04, 0.0, 0.02)),
         ],
         algorithm=0, master_gain=0.85,
     )
-    kick_fm = render_fm(kick_fm_patch, freq=55.0, duration=0.3)
+    kick_fm = render_fm(kick_fm_patch, freq=dd.kick_pitch * 1.3, duration=0.3)
 
     # Layer 3: Click transient — Karplus-Strong with very high freq, short
     kick_click = render_ks(KarplusStrongPatch(
@@ -875,34 +1019,38 @@ def render_full_track():
     for i in range(len(kick_rumble)):
         kick[i] += kick_rumble[i] * 0.2
 
-    # Process kick — HEAVY
-    kick = transient_shape(kick, attack_gain=3.0, sustain_gain=0.6)
+    # Process kick — DNA-driven intensity
+    kick = transient_shape(kick, attack_gain=dd.kick_attack, sustain_gain=0.6)
     kick = compress(kick, CompressorSettings(
         threshold_db=-4.0, ratio=10.0, attack_ms=0.2, release_ms=35.0, makeup_db=4.0
     ))
-    kick = sat.saturate(kick, SatConfig(sat_type="tape", drive=0.55, mix=0.5))
-    kick = apply_eq_band(kick, center_hz=55.0, gain_db=4.0, q=0.5)   # sub weight
+    kick = sat.saturate(kick, SatConfig(sat_type="tape", drive=dd.kick_drive, mix=0.5))
+    kick = apply_eq_band(kick, center_hz=dd.kick_pitch * 1.3, gain_db=4.0, q=0.5)   # sub weight
     kick = apply_eq_band(kick, center_hz=3500.0, gain_db=4.0, q=1.2)  # click
     kick = apply_eq_band(kick, center_hz=300.0, gain_db=-3.0, q=1.0)  # scoop mud
     kick = normalize(kick, 0.98)
 
     # ── SNARE ─────────────────────────────────────────
-    # Layer 1: Tonal body — perc_synth snare
+    # Layer 1: Tonal body — DNA-driven pitch and mix
     snare_body = to_list(synthesize_snare(PercPreset(
-        name="SBody", perc_type="snare", pitch=230.0, duration_s=0.3,
-        decay_s=0.15, tone_mix=0.5, brightness=0.5, distortion=0.2
+        name="SBody", perc_type="snare", pitch=dd.snare_pitch, duration_s=0.3,
+        decay_s=0.15, tone_mix=dd.snare_noise_mix, brightness=0.5,
+        distortion=dd.snare_metallic * 0.67
     )))
 
-    # Layer 2: Pink noise tail — fat noise body
+    # Layer 2: Pink noise tail
     snare_noise = to_list(synthesize_noise(NoisePreset(
         name="SNoise", noise_type="pink", duration_s=0.25,
-        brightness=0.7, gain=0.7, attack_s=0.001, release_s=0.18
+        brightness=0.5 + dd.snare_noise_mix * 0.4, gain=0.7,
+        attack_s=0.001, release_s=0.18
     )))
 
-    # Layer 3: Metallic Karplus ring — the "ting" in a pro snare
+    # Layer 3: Metallic Karplus ring — DNA metallic control
     snare_ring = render_ks(KarplusStrongPatch(
-        frequency=800.0, duration=0.12, damping=0.4, brightness=0.85,
-        stretch=0.2, feedback=0.7, noise_mix=0.8
+        frequency=dd.snare_pitch * 3.5, duration=0.12,
+        damping=0.4, brightness=dd.hat_brightness,
+        stretch=0.2 + dd.snare_metallic * 0.3,
+        feedback=0.5 + dd.snare_metallic * 0.3, noise_mix=0.8
     ))
 
     # Layer 4: White noise top (transient)
@@ -932,10 +1080,10 @@ def render_full_track():
     for i in range(len(snare_dry)):
         snare_pc[i] = snare_dry[i] * 0.5 + (snr_compressed[i] if i < len(snr_compressed) else 0.0) * 0.5
 
-    snare_pc = transient_shape(snare_pc, attack_gain=2.2, sustain_gain=0.55)
-    snare_pc = _ott_simulate(snare_pc, 0.35)
-    snare_pc = sat.saturate(snare_pc, SatConfig(sat_type="transistor", drive=0.4, mix=0.35))
-    snare_pc = apply_eq_band(snare_pc, center_hz=200.0, gain_db=2.5, q=1.0)  # body
+    snare_pc = transient_shape(snare_pc, attack_gain=1.5 + dd.snare_compression * 0.1, sustain_gain=0.55)
+    snare_pc = _ott_simulate(snare_pc, dd.snare_ott)
+    snare_pc = sat.saturate(snare_pc, SatConfig(sat_type="transistor", drive=dd.snare_metallic + 0.2, mix=0.35))
+    snare_pc = apply_eq_band(snare_pc, center_hz=dd.snare_pitch * 0.87, gain_db=2.5, q=1.0)  # body
     snare_pc = apply_eq_band(snare_pc, center_hz=5000.0, gain_db=3.0, q=0.8)  # crack
     # Plate reverb
     snr_np = apply_reverb_delay(to_np(snare_pc), ReverbDelayPreset(
@@ -945,16 +1093,17 @@ def render_full_track():
     snare = to_list(snr_np)
     snare = normalize(snare, 0.93)
 
-    # ── HATS — Karplus-Strong metallic ────────────────
-    # Closed hat: Karplus-Strong with high stretch (metallic)
+    # ── HATS — DNA-driven Karplus-Strong metallic ─────
     hat_c_ks = render_ks(KarplusStrongPatch(
-        frequency=8000.0, duration=0.06, damping=0.85, brightness=0.95,
-        stretch=0.15, feedback=0.3, noise_mix=0.9, pluck_position=0.3
+        frequency=dd.hat_frequency, duration=0.06,
+        damping=0.85, brightness=dd.hat_brightness,
+        stretch=0.1 + dd.hat_metallic * 0.3,
+        feedback=0.2 + dd.hat_metallic * 0.3, noise_mix=0.9, pluck_position=0.3
     ))
-    # Also layer perc_synth hat (6 inharmonic partials)
     hat_c_perc = to_list(synthesize_hat(PercPreset(
-        name="HC", perc_type="hat", pitch=9500.0, duration_s=0.04,
-        decay_s=0.025, tone_mix=0.06, brightness=0.97
+        name="HC", perc_type="hat", pitch=dd.hat_frequency * 1.19,
+        duration_s=0.04, decay_s=0.025, tone_mix=0.06,
+        brightness=dd.hat_brightness
     )))
     # Mix
     hc_len = max(len(hat_c_ks), len(hat_c_perc))
@@ -967,14 +1116,17 @@ def render_full_track():
     hat_c = sat.saturate(hat_c, SatConfig(sat_type="tape", drive=0.3, mix=0.25))
     hat_c = normalize(hat_c, 0.85)
 
-    # Open hat: longer Karplus + noise
+    # Open hat: longer Karplus + noise — DNA-driven
     hat_o_ks = render_ks(KarplusStrongPatch(
-        frequency=6500.0, duration=0.25, damping=0.3, brightness=0.9,
-        stretch=0.12, feedback=0.6, noise_mix=0.85
+        frequency=dd.hat_frequency * 0.81, duration=0.25,
+        damping=0.3, brightness=dd.hat_brightness * 0.95,
+        stretch=0.08 + dd.hat_metallic * 0.2,
+        feedback=0.4 + dd.hat_metallic * 0.3, noise_mix=0.85
     ))
     hat_o_noise = to_list(synthesize_noise(NoisePreset(
         name="HO", noise_type="white", duration_s=0.2,
-        brightness=0.85, gain=0.5, attack_s=0.001, release_s=0.15
+        brightness=dd.hat_brightness * 0.9, gain=0.5,
+        attack_s=0.001, release_s=0.15
     )))
     ho_len = max(len(hat_o_ks), len(hat_o_noise))
     hat_o = [0.0] * ho_len
@@ -984,179 +1136,193 @@ def render_full_track():
         hat_o[i] += hat_o_noise[i] * 0.45
     hat_o = normalize(hat_o, 0.78)
 
-    # ── CLAP — noise micro-bursts + processing ───────
+    # ── CLAP — DNA-driven brightness + reverb ────────
     clap = to_list(synthesize_clap(PercPreset(
-        name="CL", perc_type="clap", pitch=250.0, duration_s=0.3,
-        decay_s=0.18, tone_mix=0.1, brightness=0.95
+        name="CL", perc_type="clap", pitch=dd.snare_pitch * 1.09,
+        duration_s=0.3, decay_s=0.18, tone_mix=0.1,
+        brightness=dd.clap_brightness
     )))
     clap = compress(clap, CompressorSettings(
         threshold_db=-8.0, ratio=5.0, attack_ms=0.3, release_ms=25.0, makeup_db=3.5
     ))
     clap = sat.harmonic_exciter(clap, amount=0.3, frequency=4000)
     clap_np = apply_reverb_delay(to_np(clap), ReverbDelayPreset(
-        name="ClapVerb", effect_type="plate", decay_time=0.3,
-        diffusion=0.7, damping=0.6, mix=0.15
+        name="ClapVerb", effect_type="plate", decay_time=0.3 + dd.clap_reverb,
+        diffusion=0.7, damping=0.6, mix=dd.clap_reverb
     ))
     clap = to_list(clap_np)
     clap = normalize(clap, 0.82)
 
     # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Bass (AGGRESSIVE, 7 types)
+    #  SOUND DESIGN — Bass (DNA-DRIVEN, 7 types)
     # ═══════════════════════════════════════════
-    print("  [2/9] Bass — aggressive synthesis...")
+    print(f"  [2/9] Bass — {bd.primary_type}/{bd.secondary_type}/{bd.tertiary_type}...")
 
-    # SUB — clean F1 sub with 2nd harmonic
+    # SUB — clean root sub with DNA sub_weight
     sub = to_list(synthesize_bass(BassPreset(
         name="Sub", bass_type="sub_sine", frequency=FREQ["F1"],
         duration_s=BEAT * 2, attack_s=0.002, release_s=0.1
     )))
-    sub = apply_eq_band(sub, center_hz=45.0, gain_db=3.0, q=0.6)
+    sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 4.0, q=0.6)
     sub = normalize(sub, 0.97)
 
-    # BASS 1: FM Growl — 3-operator FM with extreme mod_index
-    print("    FM Growl...")
+    # BASS 1: FM Growl — DNA-driven mod_index, feedback, depth
+    print(f"    FM Growl (depth={bd.fm_depth:.1f})...")
     fm_growl_patch = FMPatch(
         name="GrowlFM",
         operators=[
-            FMOperator(freq_ratio=1.0, amplitude=1.0, mod_index=10.0,
-                       feedback=0.6, envelope=(0.005, 0.08, 0.85, 0.15)),
-            FMOperator(freq_ratio=2.0, amplitude=0.9, mod_index=7.0,
-                       feedback=0.35, envelope=(0.003, 0.1, 0.75, 0.12)),
-            FMOperator(freq_ratio=PHI, amplitude=0.5, mod_index=4.0,
+            FMOperator(freq_ratio=1.0, amplitude=1.0, mod_index=bd.fm_depth,
+                       feedback=bd.fm_feedback, envelope=(0.005, 0.08, 0.85, 0.15)),
+            FMOperator(freq_ratio=2.0, amplitude=0.9, mod_index=bd.fm_depth * 0.7,
+                       feedback=bd.fm_feedback * 0.58, envelope=(0.003, 0.1, 0.75, 0.12)),
+            FMOperator(freq_ratio=PHI, amplitude=0.5, mod_index=bd.fm_depth * 0.4,
                        feedback=0.0, envelope=(0.001, 0.06, 0.55, 0.08)),
         ],
         algorithm=0, master_gain=0.8,
     )
     fm_growl_raw = render_fm(fm_growl_patch, freq=FREQ["F2"], duration=BEAT * 2)
     fm_growl_np = to_np(fm_growl_raw)
-    # LFO wobble
+    # LFO wobble — DNA rate and depth
     lfo_fg = generate_lfo(LFOPreset(
-        name="FMLfo", lfo_type="sine", rate_hz=2.5,
-        depth=0.8, polarity="unipolar", sync_bpm=float(BPM), sync_division=2.0
+        name="FMLfo", lfo_type="sine", rate_hz=bd.lfo_rate,
+        depth=bd.lfo_depth, polarity="unipolar", sync_bpm=float(dna.bpm),
+        sync_division=2.0
     ), duration_s=BEAT * 2)
     fm_growl_np = fm_growl_np * (0.2 + 0.8 * lfo_fg[:len(fm_growl_np)])
-    # Multiband distortion — extreme mids
+    # Multiband distortion — DNA-driven mids
     fm_growl_np = apply_multiband_distortion(fm_growl_np, MultibandDistPreset(
-        name="FMDist", dist_type="aggressive", low_drive=0.3, mid_drive=0.95,
-        high_drive=0.4, crossover_low=130.0, crossover_high=3000.0, output_gain=0.8
+        name="FMDist", dist_type="aggressive", low_drive=0.3,
+        mid_drive=bd.mid_drive, high_drive=0.4,
+        crossover_low=130.0, crossover_high=3000.0, output_gain=0.8
     ))
     fm_growl = to_list(fm_growl_np)
-    fm_growl = _ott_simulate(fm_growl, 0.4)
-    fm_growl = sat.saturate(fm_growl, SatConfig(sat_type="transistor", drive=0.7, mix=0.6))
+    fm_growl = _ott_simulate(fm_growl, bd.ott_amount)
+    fm_growl = sat.saturate(fm_growl, SatConfig(
+        sat_type="transistor", drive=bd.distortion * 0.78, mix=bd.distortion * 0.67))
     fm_growl = normalize(fm_growl, 0.88)
 
-    # BASS 2: Growl Resampler wavetable — evolving spectral bass
+    # BASS 2: Growl Resampler — DNA fm_depth drives wavetable character
     print("    Growl Resampler wavetable...")
-    growl_source = generate_fm_source(size=WAVETABLE_SIZE, fm_ratio=PHI, fm_depth=4.0)
+    growl_source = generate_fm_source(size=WAVETABLE_SIZE, fm_ratio=PHI,
+                                       fm_depth=bd.fm_depth * 0.4)
     growl_frames = growl_resample_pipeline(growl_source, n_output_frames=256)
-    # Convert wavetable frames to playable audio
     growl_wt_np = _wavetable_to_audio(growl_frames, freq=FREQ["F2"],
                                        duration_s=BEAT * 2, sr=SR)
     growl_wt_np = apply_multiband_distortion(growl_wt_np, MultibandDistPreset(
-        name="GrlWTDist", dist_type="tube", low_drive=0.4, mid_drive=0.85,
-        high_drive=0.3, crossover_low=120.0, crossover_high=2800.0, output_gain=0.82
+        name="GrlWTDist", dist_type="tube", low_drive=0.4,
+        mid_drive=bd.mid_drive, high_drive=0.3,
+        crossover_low=120.0, crossover_high=2800.0, output_gain=0.82
     ))
     growl_wt = to_list(growl_wt_np)
-    growl_wt = _ott_simulate(growl_wt, 0.4)
-    growl_wt = sat.saturate(growl_wt, SatConfig(sat_type="tape", drive=0.6, mix=0.55))
+    growl_wt = _ott_simulate(growl_wt, bd.ott_amount)
+    growl_wt = sat.saturate(growl_wt, SatConfig(
+        sat_type="tape", drive=bd.distortion * 0.67, mix=bd.distortion * 0.61))
     growl_wt = normalize(growl_wt, 0.87)
 
-    # BASS 3: Dist FM bass — double tanh distortion
-    print("    Dist FM bass...")
+    # BASS 3: Dist FM — DNA distortion + filter
+    print(f"    Dist FM (dist={bd.distortion:.2f})...")
     dist_fm = to_list(synthesize_bass(BassPreset(
         name="DistFM", bass_type="dist_fm", frequency=FREQ["F2"],
-        duration_s=BEAT, fm_ratio=2.5, fm_depth=4.0,
-        distortion=0.9, filter_cutoff=0.8
+        duration_s=BEAT, fm_ratio=2.5, fm_depth=bd.fm_depth * 0.4,
+        distortion=bd.distortion, filter_cutoff=bd.filter_cutoff
     )))
     dist_fm_np = to_np(dist_fm)
     dist_fm_np = apply_multiband_distortion(dist_fm_np, MultibandDistPreset(
-        name="DFMDist", dist_type="aggressive", low_drive=0.25, mid_drive=0.9,
-        high_drive=0.4, output_gain=0.8
+        name="DFMDist", dist_type="aggressive", low_drive=0.25,
+        mid_drive=bd.mid_drive, high_drive=0.4, output_gain=0.8
     ))
     dist_fm = to_list(dist_fm_np)
-    dist_fm = _ott_simulate(dist_fm, 0.4)
+    dist_fm = _ott_simulate(dist_fm, bd.ott_amount)
     dist_fm = normalize(dist_fm, 0.86)
 
-    # BASS 4: Sync bass — hard oscillator sync (rich swept harmonics)
+    # BASS 4: Sync bass — DNA lfo_rate drives sweep
     print("    Sync bass...")
     sync_bass = to_list(synthesize_bass(BassPreset(
         name="Sync", bass_type="sync", frequency=FREQ["F2"],
-        duration_s=BEAT * 1.5, distortion=0.7, filter_cutoff=0.85
+        duration_s=BEAT * 1.5, distortion=bd.distortion * 0.78,
+        filter_cutoff=bd.filter_cutoff
     )))
     sync_np = to_np(sync_bass)
     lfo_sync = generate_lfo(LFOPreset(
-        name="SyncLFO", lfo_type="triangle", rate_hz=3.0,
-        depth=0.7, polarity="unipolar"
+        name="SyncLFO", lfo_type="triangle", rate_hz=bd.lfo_rate * 1.2,
+        depth=bd.lfo_depth * 0.88, polarity="unipolar"
     ), duration_s=BEAT * 1.5)
     sync_np = sync_np * (0.3 + 0.7 * lfo_sync[:len(sync_np)])
     sync_np = apply_multiband_distortion(sync_np, MultibandDistPreset(
-        name="SyncDist", dist_type="tube", low_drive=0.35, mid_drive=0.8,
-        high_drive=0.3, output_gain=0.82
+        name="SyncDist", dist_type="tube", low_drive=0.35,
+        mid_drive=bd.mid_drive, high_drive=0.3, output_gain=0.82
     ))
     sync_bass = to_list(sync_np)
-    sync_bass = _ott_simulate(sync_bass, 0.35)
-    sync_bass = sat.saturate(sync_bass, SatConfig(sat_type="transistor", drive=0.6, mix=0.5))
+    sync_bass = _ott_simulate(sync_bass, bd.ott_amount * 0.88)
+    sync_bass = sat.saturate(sync_bass, SatConfig(
+        sat_type="transistor", drive=bd.distortion * 0.67, mix=0.5))
     sync_bass = normalize(sync_bass, 0.86)
 
-    # BASS 5: Acid bass — resonant filter sweep
-    print("    Acid bass...")
+    # BASS 5: Acid bass — DNA acid_resonance drives filter character
+    print(f"    Acid bass (res={bd.acid_resonance:.2f})...")
     acid = to_list(synthesize_bass(BassPreset(
         name="Acid", bass_type="acid", frequency=FREQ["F2"],
-        duration_s=BEAT * 2, distortion=0.65, filter_cutoff=0.9
+        duration_s=BEAT * 2, distortion=bd.distortion * 0.72,
+        filter_cutoff=bd.filter_cutoff * 1.12
     )))
     acid_np = to_np(acid)
     acid_np = apply_multiband_distortion(acid_np, MultibandDistPreset(
-        name="AcidDist", dist_type="tube", low_drive=0.3, mid_drive=0.7,
-        high_drive=0.2, output_gain=0.85
+        name="AcidDist", dist_type="tube", low_drive=0.3,
+        mid_drive=bd.mid_drive * 0.82, high_drive=0.2, output_gain=0.85
     ))
     acid = to_list(acid_np)
-    acid = _ott_simulate(acid, 0.3)
+    acid = _ott_simulate(acid, bd.ott_amount * 0.75)
     acid = normalize(acid, 0.85)
 
-    # BASS 6: Neuro — phase distortion with aggressive processing
-    print("    Neuro bass...")
+    # BASS 6: Neuro — DNA fm_depth + lfo_rate for phase distortion chaos
+    print(f"    Neuro bass (fm={bd.fm_depth:.1f})...")
     neuro = to_list(synthesize_bass(BassPreset(
         name="Neuro", bass_type="neuro", frequency=FREQ["F2"],
-        duration_s=BEAT, fm_ratio=3.0, fm_depth=6.0,
-        distortion=0.9, filter_cutoff=0.7
+        duration_s=BEAT, fm_ratio=3.0, fm_depth=bd.fm_depth * 0.6,
+        distortion=bd.distortion, filter_cutoff=bd.filter_cutoff * 0.88
     )))
     neuro_np = to_np(neuro)
     lfo_n = generate_lfo(LFOPreset(
-        name="NroLFO", lfo_type="square", rate_hz=4.0,
-        depth=0.75, polarity="unipolar", pulse_width=0.3
+        name="NroLFO", lfo_type="square", rate_hz=bd.lfo_rate * 1.6,
+        depth=bd.lfo_depth * 0.94, polarity="unipolar", pulse_width=0.3
     ), duration_s=BEAT)
     neuro_np = neuro_np * (0.25 + 0.75 * lfo_n[:len(neuro_np)])
     neuro_np = apply_multiband_distortion(neuro_np, MultibandDistPreset(
-        name="NroDist", dist_type="aggressive", low_drive=0.15, mid_drive=0.98,
-        high_drive=0.5, crossover_low=100.0, crossover_high=3500.0, output_gain=0.75
+        name="NroDist", dist_type="aggressive", low_drive=0.15,
+        mid_drive=min(0.99, bd.mid_drive * 1.15),
+        high_drive=0.5, crossover_low=100.0, crossover_high=3500.0,
+        output_gain=0.75
     ))
     neuro = to_list(neuro_np)
-    neuro = _ott_simulate(neuro, 0.45)
+    neuro = _ott_simulate(neuro, bd.ott_amount * 1.12)
     neuro = normalize(neuro, 0.86)
 
-    # BASS 7: Formant "yoi" — vocal talking bass
+    # BASS 7: Formant "yoi" — DNA distortion + brightness
     print("    Formant bass...")
     formant_raw = synthesize_morph_formant(FormantPreset(
         name="Yoi", formant_type="morph", frequency=FREQ["F2"],
-        duration_s=BEAT * 2, bandwidth=110.0, brightness=0.8,
-        distortion=0.4
+        duration_s=BEAT * 2, bandwidth=110.0,
+        brightness=0.5 + bd.filter_cutoff * 0.38,
+        distortion=bd.distortion * 0.44
     ))
     form_np = to_np(formant_raw)
     form_np = apply_multiband_distortion(form_np, MultibandDistPreset(
-        name="FormDist", dist_type="tube", low_drive=0.4, mid_drive=0.75,
-        high_drive=0.25, output_gain=0.82
+        name="FormDist", dist_type="tube", low_drive=0.4,
+        mid_drive=bd.mid_drive * 0.88, high_drive=0.25, output_gain=0.82
     ))
     formant = to_list(form_np)
-    formant = _ott_simulate(formant, 0.35)
-    formant = sat.saturate(formant, SatConfig(sat_type="tape", drive=0.5, mix=0.45))
+    formant = _ott_simulate(formant, bd.ott_amount * 0.88)
+    formant = sat.saturate(formant, SatConfig(
+        sat_type="tape", drive=bd.distortion * 0.56, mix=0.45))
     formant = normalize(formant, 0.84)
 
-    # Pitch-dive variant of FM growl
-    dive_raw = to_list(fm_growl)  # copy the rich FM growl
+    # Pitch-dive variant — DNA pitch_dive_semi
+    dive_raw = to_list(fm_growl)
     dive_np = to_np(dive_raw)
     dive_np = apply_pitch_automation(dive_np, PitchAutoPreset(
         name="BassDive", auto_type="dive", start_semitones=0.0,
-        end_semitones=-12.0, duration_s=BEAT * 2, curve_exp=3.0
+        end_semitones=-bd.pitch_dive_semi, duration_s=BEAT * 2,
+        curve_exp=3.0
     ), base_freq=FREQ["F2"])
     dive_bass = to_list(dive_np)
     dive_bass = normalize(dive_bass, 0.85)
@@ -1170,53 +1336,102 @@ def render_full_track():
     reese = sat.warmth(reese, amount=0.5)
     reese = normalize(reese, 0.72)
 
-    # Bass fills
+    # Bass fills — DNA stutter_rate
     bass_repeat = apply_beat_repeat(dist_fm, BeatRepeatPatch(
         name="BassGlitch", grid="1/16", repeats=8, decay=0.15,
-        pitch_shift=-3.0, reverse_probability=0.25, gate=0.75
-    ), bpm=float(BPM))
+        pitch_shift=-3.0, reverse_probability=fd.beat_repeat_probability,
+        gate=0.75
+    ), bpm=float(dna.bpm))
     bass_repeat = normalize(bass_repeat, 0.7)
 
     # Arsenal for rotation
     bass_arsenal = [fm_growl, growl_wt, dist_fm, sync_bass, acid, neuro, formant]
 
-    # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Leads (RICH)
-    # ═══════════════════════════════════════════
-    print("  [3/9] Leads — additive + FM...")
+    # ── Cutting-edge: wavefold + bitcrush if DNA demands it ──
+    if bd.wavefold_thresh > 0.0 and bd.wavefold_thresh < 1.0:
+        def _wavefold(sig, thresh):
+            """Analog-style wavefolding — creates dense harmonics."""
+            out = list(sig)
+            inv_t = 1.0 / max(thresh, 0.01)
+            for i in range(len(out)):
+                x = out[i] * inv_t
+                # Triangle-fold: keeps within [-1, 1] while adding harmonics
+                x = 4 * abs((x / 4 + 0.25) % 1 - 0.5) - 1
+                out[i] = x * thresh
+            return out
+        bass_arsenal = [_wavefold(b, bd.wavefold_thresh) for b in bass_arsenal]
+        fm_growl = _wavefold(fm_growl, bd.wavefold_thresh)
+        neuro = _wavefold(neuro, bd.wavefold_thresh)
+        dist_fm = _wavefold(dist_fm, bd.wavefold_thresh)
+        print(f"    wavefold @ {bd.wavefold_thresh:.2f} thresh")
 
-    # Additive lead — 16 harmonic sawtooth partials
+    if bd.bitcrush_bits > 0:
+        def _bitcrush(sig, bits):
+            """Digital degradation — quantize to N bits."""
+            levels = 2 ** bits
+            out = list(sig)
+            for i in range(len(out)):
+                out[i] = round(out[i] * levels) / levels
+            return out
+        bass_arsenal = [_bitcrush(b, bd.bitcrush_bits) for b in bass_arsenal]
+        fm_growl = _bitcrush(fm_growl, bd.bitcrush_bits)
+        neuro = _bitcrush(neuro, bd.bitcrush_bits)
+        dist_fm = _bitcrush(dist_fm, bd.bitcrush_bits)
+        print(f"    bitcrush @ {bd.bitcrush_bits} bits")
+
+    # ═══════════════════════════════════════════
+    #  SOUND DESIGN — Leads (DNA-DRIVEN)
+    # ═══════════════════════════════════════════
+    print(f"  [3/9] Leads — {ld.additive_partials}p {ld.additive_rolloff} + FM...")
+
+    # Lead maker — DNA-driven partial count, rolloff, FM depth
     def make_lead(freq, dur):
-        # Rich additive sawtooth
-        add_patch = AdditivePatch(
-            name="Lead",
-            partials=harmonic_partials(16, rolloff="sawtooth"),
-            master_gain=0.7,
-        )
-        ld_add = render_additive(add_patch, freq=freq, duration=dur)
-        # FM metallic layer
-        fm_ld = render_fm(FMPatch(
-            name="LeadFM",
-            operators=[
-                FMOperator(freq_ratio=1.0, amplitude=0.7, mod_index=3.0,
+        ld_parts = []
+        if ld.use_additive:
+            add_patch = AdditivePatch(
+                name="Lead",
+                partials=harmonic_partials(ld.additive_partials, rolloff=ld.additive_rolloff),
+                master_gain=0.7,
+            )
+            ld_parts.append(("add", render_additive(add_patch, freq=freq, duration=dur)))
+
+        if ld.use_fm:
+            fm_ops = [
+                FMOperator(freq_ratio=1.0, amplitude=0.7, mod_index=ld.fm_depth,
                            feedback=0.15, envelope=(0.003, 0.1, 0.5, 0.15)),
-                FMOperator(freq_ratio=PHI, amplitude=0.4, mod_index=2.0,
+                FMOperator(freq_ratio=PHI, amplitude=0.4, mod_index=ld.fm_depth * 0.67,
                            feedback=0.0, envelope=(0.005, 0.08, 0.3, 0.1)),
-            ],
-            algorithm=0, master_gain=0.5,
-        ), freq=freq, duration=dur)
-        # Mix additive + FM
-        ld_len = max(len(ld_add), len(fm_ld))
-        ld = [0.0] * ld_len
-        for i in range(len(ld_add)):
-            ld[i] += ld_add[i] * 0.6
-        for i in range(len(fm_ld)):
-            ld[i] += fm_ld[i] * 0.4
-        # Process
-        ld = _ott_simulate(ld, 0.3)
-        ld = sat.harmonic_exciter(ld, amount=0.4, frequency=3500)
-        ld_np = apply_reverb_delay(to_np(ld), ReverbDelayPreset(
-            name="LdVerb", effect_type="plate", decay_time=0.5,
+            ]
+            if ld.fm_operators >= 3:
+                fm_ops.append(FMOperator(
+                    freq_ratio=PHI * 2, amplitude=0.2, mod_index=ld.fm_depth * 0.33,
+                    feedback=0.05, envelope=(0.002, 0.06, 0.2, 0.08)))
+            fm_ld = render_fm(FMPatch(
+                name="LeadFM", operators=fm_ops,
+                algorithm=0, master_gain=0.5,
+            ), freq=freq, duration=dur)
+            ld_parts.append(("fm", fm_ld))
+
+        # Mix layers
+        if len(ld_parts) == 2:
+            mix_a, mix_b = 0.6, 0.4
+        elif len(ld_parts) == 1:
+            mix_a, mix_b = 1.0, 0.0
+        else:
+            mix_a, mix_b = 0.5, 0.5
+
+        max_len = max(len(p[1]) for p in ld_parts) if ld_parts else 0
+        ld_sig = [0.0] * max_len
+        for idx_p, (_, sig) in enumerate(ld_parts):
+            gain = mix_a if idx_p == 0 else mix_b
+            for i in range(len(sig)):
+                ld_sig[i] += sig[i] * gain
+
+        # Process — DNA-driven OTT and brightness
+        ld_sig = _ott_simulate(ld_sig, ld.ott_amount)
+        ld_sig = sat.harmonic_exciter(ld_sig, amount=ld.brightness * 0.57, frequency=3500)
+        ld_np = apply_reverb_delay(to_np(ld_sig), ReverbDelayPreset(
+            name="LdVerb", effect_type="plate", decay_time=ld.reverb_decay,
             diffusion=0.75, damping=0.5, mix=0.18
         ))
         return to_list(ld_np)
@@ -1226,16 +1441,17 @@ def render_full_track():
     lead_c = make_lead(FREQ["C4"], BEAT * 0.75)
     lead_ab = make_lead(FREQ["Ab4"], BEAT * 0.5)
 
-    # Supersaw chord stabs
+    # Supersaw chord stabs — DNA-driven voices + detune
     def make_chord(freq, dur=BEAT * 0.75):
         cl, cr = render_supersaw(SupersawPatch(
-            name="Chord", n_voices=7, detune_cents=35.0, mix=0.8,
-            stereo_width=0.9, cutoff_hz=5500.0, resonance=0.38,
-            attack=0.003, decay=0.12, sustain=0.55, release=0.22,
-            master_gain=0.72
+            name="Chord", n_voices=ld.supersaw_voices,
+            detune_cents=ld.supersaw_detune, mix=0.8,
+            stereo_width=0.9, cutoff_hz=ld.supersaw_cutoff,
+            resonance=0.38, attack=0.003, decay=0.12,
+            sustain=0.55, release=0.22, master_gain=0.72
         ), freq=freq, duration=dur)
         cl_np = apply_reverb_delay(to_np(cl), ReverbDelayPreset(
-            name="ChVerb", effect_type="room", decay_time=0.4,
+            name="ChVerb", effect_type="room", decay_time=ld.reverb_decay * 0.8,
             diffusion=0.6, damping=0.6, mix=0.12
         ))
         return to_list(cl_np), cr
@@ -1245,32 +1461,39 @@ def render_full_track():
     chord_c_l, chord_c_r = make_chord(FREQ["C3"])
 
     # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Vocal chops
+    #  SOUND DESIGN — Vocal chops (DNA-driven vowels)
     # ═══════════════════════════════════════════
-    print("  [4/9] Vocal chops...")
+    print(f"  [4/9] Vocal chops — {' '.join(dna.chop_vowels[:4])}...")
+
+    # Map DNA vowels to chops
+    _vowel_list = dna.chop_vowels if dna.chop_vowels else ["ah", "oh", "ee", "oo"]
 
     chop_ah = to_list(synthesize_chop(VocalChop(
-        name="ah", vowel="ah", note="F3", duration_s=0.2,
-        distortion=0.35, stutter_count=0
+        name=_vowel_list[0], vowel=_vowel_list[0], note=_root_note3,
+        duration_s=0.2, distortion=fd.vocal_chop_distortion, stutter_count=0
     )))
     chop_ah = _ott_simulate(chop_ah, 0.3)
     chop_ah = normalize(chop_ah, 0.72)
 
     chop_oh = to_list(synthesize_chop(VocalChop(
-        name="oh", vowel="oh", note="C3", duration_s=0.15,
-        distortion=0.3, stutter_count=0
+        name=_vowel_list[1], vowel=_vowel_list[1], note=_fifth_note3,
+        duration_s=0.15, distortion=fd.vocal_chop_distortion * 0.86,
+        stutter_count=0
     )))
     chop_oh = normalize(chop_oh, 0.68)
 
     chop_ee_stut = to_list(synthesize_chop(VocalChop(
-        name="ee_stut", vowel="ee", note="F3", duration_s=0.4,
-        distortion=0.4, stutter_count=4
+        name="stutter", vowel=_vowel_list[2] if len(_vowel_list) > 2 else "ee",
+        note=_root_note3, duration_s=0.4,
+        distortion=fd.vocal_chop_distortion * 1.14, stutter_count=4
     )))
     chop_ee_stut = normalize(chop_ee_stut, 0.72)
 
+    _yoi_vowel = _vowel_list[3] if len(_vowel_list) > 3 else "oo"
     chop_yoi = to_list(synthesize_chop(VocalChop(
-        name="yoi", vowel="oo", note="F3", duration_s=0.3,
-        formant_shift=3.0, distortion=0.35, stutter_count=2
+        name="yoi", vowel=_yoi_vowel, note=_root_note3,
+        duration_s=0.3, formant_shift=3.0,
+        distortion=fd.vocal_chop_distortion, stutter_count=2
     )))
     chop_yoi_np = apply_reverb_delay(to_np(chop_yoi), ReverbDelayPreset(
         name="ChopVerb", effect_type="plate", decay_time=0.3, mix=0.15
@@ -1281,141 +1504,169 @@ def render_full_track():
     vocal_chops = [chop_ah, chop_oh, chop_ee_stut, chop_yoi]
 
     # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Pads & atmosphere
+    #  SOUND DESIGN — Pads & atmosphere (DNA-driven)
     # ═══════════════════════════════════════════
-    print("  [5/9] Pads & atmosphere...")
+    print(f"  [5/9] Pads — {ad.pad_type} pad, verb={ad.reverb_decay:.1f}s...")
 
-    # Dark pad — additive PHI-spaced partials + granular
+    # Pad — DNA-driven type, attack, brightness
     pad_add = render_additive(AdditivePatch(
         name="DarkPad", partials=phi_partials(12, base_amp=0.6),
         master_gain=0.5,
     ), freq=FREQ["F3"], duration=BAR * 8)
 
-    dark_pad_raw = to_list(synthesize_dark_pad(PadPreset(
-        name="DP", pad_type="dark", frequency=FREQ["F3"],
-        duration_s=BAR * 8, detune_cents=18.0, filter_cutoff=0.3,
-        attack_s=2.0, release_s=3.0, brightness=0.25
+    _pad_synth = synthesize_dark_pad if ad.pad_type == "dark" else synthesize_lush_pad
+    dark_pad_raw = to_list(_pad_synth(PadPreset(
+        name="DP", pad_type=ad.pad_type, frequency=FREQ["F3"],
+        duration_s=BAR * 8, detune_cents=18.0,
+        filter_cutoff=ad.pad_brightness + 0.05,
+        attack_s=ad.pad_attack, release_s=ad.pad_attack * 1.5,
+        brightness=ad.pad_brightness
     )))
 
     gran_tex = to_list(synthesize_cloud(GranularPreset(
         name="Tex", grain_type="cloud", frequency=FREQ["F3"],
-        duration_s=BAR * 8, grain_size_ms=90.0, grain_density=0.45,
-        pitch_spread=5.0, brightness=0.3, reverb_amount=0.5
+        duration_s=BAR * 8, grain_size_ms=90.0,
+        grain_density=ad.granular_density,
+        pitch_spread=5.0, brightness=ad.pad_brightness + 0.05,
+        reverb_amount=0.5
     )))
 
-    # Mix all three
+    # Mix — DNA stereo_width drives the blend
     pad_len = min(len(dark_pad_raw), len(gran_tex), len(pad_add))
     dark_pad = [0.0] * pad_len
     for i in range(pad_len):
         dark_pad[i] = dark_pad_raw[i] * 0.4 + gran_tex[i] * 0.3 + pad_add[i] * 0.3
+
+    _pad_verb_type = "shimmer" if ad.shimmer > 0.3 else "hall"
     pad_np = apply_reverb_delay(to_np(dark_pad), ReverbDelayPreset(
-        name="PadShim", effect_type="shimmer", decay_time=3.5,
+        name="PadShim", effect_type=_pad_verb_type,
+        decay_time=ad.reverb_decay,
         pre_delay_ms=35.0, diffusion=0.9, damping=0.35,
-        shimmer_pitch=12.0, shimmer_feedback=0.45, mix=0.35
+        shimmer_pitch=12.0 if ad.shimmer > 0.3 else 0.0,
+        shimmer_feedback=ad.shimmer if ad.shimmer > 0.3 else 0.0,
+        mix=0.35
     ))
     dark_pad = to_list(pad_np)
     dark_pad = normalize(dark_pad, 0.6)
 
-    # Drone — Karplus-Strong PHI string cluster
-    drone_ks = render_ks(KarplusStrongPatch(
-        frequency=FREQ["F1"], duration=BAR * INTRO,
-        damping=0.2, brightness=0.3, stretch=0.05,
-        feedback=0.999, noise_mix=0.7
-    ))
-    drone_synth = to_list(synthesize_dark_drone(DronePreset(
+    # Drone — DNA voices + movement + Karplus-Strong option
+    drone_parts = []
+    if ad.use_karplus_drone:
+        drone_ks = render_ks(KarplusStrongPatch(
+            frequency=FREQ["F1"], duration=BAR * INTRO,
+            damping=0.2, brightness=ad.pad_brightness + 0.05,
+            stretch=0.05, feedback=0.999, noise_mix=0.7
+        ))
+        drone_parts.append((drone_ks, 0.35))
+
+    drone_synth_sig = to_list(synthesize_dark_drone(DronePreset(
         name="Drone", drone_type="dark", frequency=FREQ["F1"],
-        duration_s=BAR * INTRO, num_voices=7, detune_cents=12.0,
-        brightness=0.2, movement=0.45, distortion=0.15, reverb_amount=0.55
+        duration_s=BAR * INTRO, num_voices=ad.drone_voices,
+        detune_cents=12.0, brightness=ad.pad_brightness,
+        movement=ad.drone_movement, distortion=0.15,
+        reverb_amount=0.55
     )))
-    drone_len = min(len(drone_ks), len(drone_synth))
+    drone_parts.append((drone_synth_sig, 0.65 if ad.use_karplus_drone else 1.0))
+
+    drone_len = min(len(p[0]) for p in drone_parts)
     drone = [0.0] * drone_len
-    for i in range(drone_len):
-        drone[i] = drone_ks[i] * 0.35 + drone_synth[i] * 0.65
+    for sig, gain in drone_parts:
+        for i in range(drone_len):
+            drone[i] += sig[i] * gain if i < len(sig) else 0.0
     drone = normalize(drone, 0.45)
 
-    # Breakdown lush pad
-    lush = to_list(synthesize_lush_pad(PadPreset(
-        name="LP", pad_type="lush", frequency=FREQ["Ab3"],
-        duration_s=BAR * BREAK_, filter_cutoff=0.55, brightness=0.55,
-        attack_s=0.5, release_s=2.0
+    # Breakdown pad — DNA atmosphere personality
+    _break_type = "lush" if ad.pad_type == "dark" else "dark"
+    _break_synth = synthesize_lush_pad if _break_type == "lush" else synthesize_dark_pad
+    lush = to_list(_break_synth(PadPreset(
+        name="LP", pad_type=_break_type, frequency=FREQ["Ab3"],
+        duration_s=BAR * BREAK_, filter_cutoff=ad.pad_brightness + 0.3,
+        brightness=ad.pad_brightness + 0.3,
+        attack_s=ad.pad_attack * 0.25, release_s=ad.pad_attack
     )))
     lush_np = apply_reverb_delay(to_np(lush), ReverbDelayPreset(
-        name="LushVerb", effect_type="hall", decay_time=2.8,
+        name="LushVerb", effect_type="hall",
+        decay_time=ad.reverb_decay * 0.8,
         diffusion=0.88, damping=0.35, mix=0.3
     ))
     lush = to_list(lush_np)
     lush = normalize(lush, 0.55)
 
-    # White noise layer for drops
+    # Noise bed — DNA type and level
     drop_noise_raw = to_list(synthesize_noise(NoisePreset(
-        name="DropNoise", noise_type="pink", duration_s=BAR * 4,
-        brightness=0.3, gain=0.35
+        name="DropNoise", noise_type=ad.noise_bed_type,
+        duration_s=BAR * 4, brightness=0.3,
+        gain=ad.noise_bed_level * 2.33
     )))
     drop_noise = apply_eq_band(drop_noise_raw, center_hz=8000.0, gain_db=3.0, q=0.3)
     drop_noise = apply_eq_band(drop_noise, center_hz=200.0, gain_db=-6.0, q=0.5)
     drop_noise = normalize(drop_noise, 0.15)
 
     # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Transition FX
+    #  SOUND DESIGN — Transition FX (DNA-driven)
     # ═══════════════════════════════════════════
-    print("  [6/9] Transition FX...")
+    print(f"  [6/9] Transition FX — riser {fd.riser_start_freq:.0f}→{fd.riser_end_freq:.0f}Hz...")
 
     riser = to_list(synthesize_noise_sweep(RiserPreset(
         name="Riser", riser_type="noise_sweep", duration_s=BAR * 4,
-        start_freq=150.0, end_freq=8000.0, brightness=0.8,
-        intensity=0.85, reverb_amount=0.3
+        start_freq=fd.riser_start_freq, end_freq=fd.riser_end_freq,
+        brightness=0.8, intensity=fd.riser_intensity, reverb_amount=0.3
     )))
-    riser = normalize(riser, 0.75)
+    riser = normalize(riser, fd.riser_intensity * 0.88)
 
     boom = to_list(synthesize_sub_boom(ImpactPreset(
-        name="Boom", impact_type="sub_boom", duration_s=2.5,
-        frequency=FREQ["F1"], decay_s=2.0, intensity=1.0
+        name="Boom", impact_type="sub_boom", duration_s=fd.boom_decay + 0.5,
+        frequency=FREQ["F1"], decay_s=fd.boom_decay,
+        intensity=fd.impact_intensity
     )))
     boom = compress(boom, CompressorSettings(
         threshold_db=-4.0, ratio=10.0, attack_ms=0.3, release_ms=80.0, makeup_db=4.0
     ))
-    boom = normalize(boom, 0.97)
+    boom = normalize(boom, fd.impact_intensity * 1.02)
 
     hit = to_list(synthesize_cinematic_hit(ImpactPreset(
         name="Hit", impact_type="cinematic_hit", duration_s=2.0,
-        frequency=75.0, decay_s=1.5, intensity=0.95
+        frequency=FREQ["F1"] * 2, decay_s=1.5,
+        intensity=fd.impact_intensity
     )))
     hit_np = apply_reverb_delay(to_np(hit), ReverbDelayPreset(
         name="HitVerb", effect_type="plate", decay_time=1.2,
         diffusion=0.8, mix=0.22
     ))
     hit = to_list(hit_np)
-    hit = normalize(hit, 0.88)
+    hit = normalize(hit, fd.impact_intensity * 0.92)
 
     tape_stop = to_list(synthesize_transition(TransitionPreset(
         name="TapeStop", fx_type="tape_stop", duration_s=0.8,
-        start_freq=300.0, end_freq=30.0, brightness=0.6
+        start_freq=fd.riser_start_freq * 2, end_freq=30.0, brightness=0.6
     )))
-    tape_stop = normalize(tape_stop, 0.65)
+    tape_stop = normalize(tape_stop, fd.impact_intensity * 0.68)
 
     pitch_dive = to_list(synthesize_transition(TransitionPreset(
         name="Dive", fx_type="pitch_dive", duration_s=1.5,
-        start_freq=500.0, end_freq=25.0, brightness=0.5, reverb_amount=0.2
+        start_freq=fd.riser_start_freq * 3.33, end_freq=25.0,
+        brightness=0.5, reverb_amount=0.2
     )))
-    pitch_dive = normalize(pitch_dive, 0.6)
+    pitch_dive = normalize(pitch_dive, fd.impact_intensity * 0.63)
 
     rev_crash = to_list(synthesize_transition(TransitionPreset(
         name="RevCrash", fx_type="reverse_crash", duration_s=2.0,
-        brightness=0.7, reverb_amount=0.3
+        brightness=fd.riser_intensity * 0.82, reverb_amount=0.3
     )))
-    rev_crash = normalize(rev_crash, 0.55)
+    rev_crash = normalize(rev_crash, fd.riser_intensity * 0.65)
 
     stutter = to_list(synthesize_stutter(GlitchPreset(
         name="Stut", glitch_type="stutter", frequency=FREQ["F3"],
-        duration_s=BEAT * 2, rate=16.0, depth=0.9, distortion=0.4
+        duration_s=BEAT * 2, rate=fd.stutter_rate,
+        depth=0.9, distortion=fd.vocal_chop_distortion * 0.8
     )))
-    stutter = normalize(stutter, 0.65)
+    stutter = normalize(stutter, fd.impact_intensity * 0.68)
 
     gate_chop = to_list(synthesize_transition(TransitionPreset(
         name="GateChop", fx_type="gate_chop", duration_s=BAR * 2,
-        gate_divisions=16, brightness=0.5
+        gate_divisions=int(fd.stutter_rate), brightness=0.5
     )))
-    gate_chop = normalize(gate_chop, 0.45)
+    gate_chop = normalize(gate_chop, fd.riser_intensity * 0.53)
 
     # ═══════════════════════════════════════════
     #  GROOVE — Grooved hat patterns
@@ -1647,7 +1898,7 @@ def render_full_track():
             ))
             plk_np = apply_reverb_delay(to_np(plk), ReverbDelayPreset(
                 name="PlkDly", effect_type="delay", decay_time=0.5,
-                bpm=float(BPM), delay_feedback=0.35, num_taps=3, mix=0.22
+                bpm=float(dna.bpm), delay_feedback=0.35, num_taps=3, mix=0.22
             ))
             plk = to_list(plk_np)
             pan = -0.45 + 0.9 * (q / 3)
@@ -1687,8 +1938,10 @@ def render_full_track():
     mx_wide(r2, cursor, 0.6)
 
     swell_l, swell_r = render_supersaw(SupersawPatch(
-        name="Swell", n_voices=7, detune_cents=38.0, mix=0.8,
-        stereo_width=0.92, cutoff_hz=3500.0, resonance=0.42,
+        name="Swell", n_voices=ld.supersaw_voices,
+        detune_cents=ld.supersaw_detune, mix=0.8,
+        stereo_width=md.stereo_width * 0.61,
+        cutoff_hz=ld.supersaw_cutoff * 0.64, resonance=0.42,
         attack=2.5, decay=0.1, sustain=0.9, release=0.5,
         master_gain=0.5
     ), freq=FREQ["F3"], duration=BAR * BUILD2)
@@ -1831,31 +2084,33 @@ def render_full_track():
 
     stereo = apply_stereo_imaging(stereo, StereoPreset(
         name="MasterImg", image_type="frequency_split",
-        width=1.5, crossover_hz=180.0, mix=0.85
+        width=md.stereo_width, crossover_hz=180.0, mix=0.85
     ))
 
     settings = dubstep_master_settings()
-    settings.target_lufs = -7.0
-    settings.ceiling_db = -0.2
-    settings.eq_low_shelf_db = 3.5
-    settings.eq_low_shelf_freq = 70.0
-    settings.eq_high_shelf_db = 2.5
-    settings.eq_high_shelf_freq = 10000.0
-    settings.compression_ratio = 3.5
-    settings.compression_threshold_db = -14.0
-    settings.stereo_width = 1.2
-    settings.limiter_enabled = True
+    settings.target_lufs = md.target_lufs
+    settings.ceiling_db = md.ceiling_db
+    settings.eq_low_shelf_db = md.eq_low_boost
+    settings.eq_low_shelf_freq = md.eq_low_freq
+    settings.eq_high_shelf_db = md.eq_high_boost
+    settings.eq_high_shelf_freq = md.eq_high_freq
+    settings.compression_ratio = md.compression_ratio
+    settings.compression_threshold_db = md.compression_threshold
+    settings.stereo_width = md.stereo_width
+    settings.limiter_enabled = md.limiter_enabled
 
     mastered, report = master(stereo, sr=SR, settings=settings)
 
     master_L = mastered[:, 0].tolist()
     master_R = mastered[:, 1].tolist()
 
+    # Master drive — DNA-driven saturation
+    _drive = 1.0 + md.master_drive * 0.08
     for i in range(len(master_L)):
-        master_L[i] = math.tanh(master_L[i] * 1.01)
-        master_R[i] = math.tanh(master_R[i] * 1.01)
+        master_L[i] = math.tanh(master_L[i] * _drive)
+        master_R[i] = math.tanh(master_R[i] * _drive)
 
-    out_path = str(OUTPUT / "dubstep_track_v5.wav")
+    out_path = str(OUTPUT / f"{safe_name}.wav")
     write_stereo_wav(out_path, master_L, master_R)
 
     duration = len(master_L) / SR
@@ -1905,10 +2160,8 @@ def main():
         dna_path = save_dna(dna)
         print(f"\n  DNA saved: {dna_path}")
 
-        # Render track with this DNA
-        # (V5 render uses hardcoded params — for now we render default
-        #  and print the DNA. Full DNA→render integration is next.)
-        render_full_track()
+        # Render track with full DNA→render integration
+        render_full_track(dna=dna)
         return
 
     print("╔══════════════════════════════════════════════╗")

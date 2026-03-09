@@ -307,6 +307,9 @@ class DrumDNA:
     clap_brightness: float = 0.95
     clap_reverb: float = 0.15
 
+    snare_ott: float = 0.35
+    hat_density: int = 16  # subdivisions per bar (8, 16, 32)
+
 
 @dataclass
 class BassDNA:
@@ -325,6 +328,12 @@ class BassDNA:
     sub_weight: float = 0.9
     mid_drive: float = 0.85
 
+    pitch_dive_semi: float = 12.0
+    wavefold_thresh: float = 0.6
+    bitcrush_bits: int = 0  # 0 = off
+    ott_amount: float = 0.4
+    ring_mod_freq: float = 0.0  # 0 = off
+
 
 @dataclass
 class LeadDNA:
@@ -338,6 +347,11 @@ class LeadDNA:
     brightness: float = 0.7
     reverb_decay: float = 0.5
     shimmer: float = 0.0
+
+    supersaw_voices: int = 7
+    supersaw_detune: float = 35.0
+    supersaw_cutoff: float = 5500.0
+    ott_amount: float = 0.3
 
 
 @dataclass
@@ -369,6 +383,10 @@ class FxDNA:
     vocal_chop_distortion: float = 0.35
     beat_repeat_probability: float = 0.25
 
+    riser_start_freq: float = 150.0
+    riser_end_freq: float = 8000.0
+    boom_decay: float = 2.0
+
 
 @dataclass
 class MixDNA:
@@ -380,6 +398,12 @@ class MixDNA:
     eq_high_boost: float = 2.5
     compression_ratio: float = 3.5
     sidechain_depth: float = 0.7
+
+    ceiling_db: float = -0.2
+    eq_low_freq: float = 70.0
+    eq_high_freq: float = 10000.0
+    compression_threshold: float = -14.0
+    limiter_enabled: bool = True
 
 
 @dataclass
@@ -846,6 +870,8 @@ class VariationEngine:
             hat_brightness=self._art(0.8 + energy * 0.15, rng, 0.6, 1.0),
             clap_brightness=self._art(0.85 + energy * 0.1, rng, 0.7, 1.0),
             clap_reverb=self._art(0.1 + (1 - energy) * 0.15, rng, 0.05, 0.35),
+            snare_ott=self._art(0.2 + energy * 0.25, rng, 0.1, 0.6),
+            hat_density=rng.choice([16, 16, 16, 32]) if energy > 0.8 else 16,
         )
 
     def _build_bass_dna(self, params: dict, rng: random.Random) -> BassDNA:
@@ -893,6 +919,15 @@ class VariationEngine:
             sub_weight=self._art(
                 params.get("sub_weight", 0.7 + darkness * 0.2), rng, 0.5, 1.0),
             mid_drive=self._art(0.5 + energy * 0.45, rng, 0.2, 1.0),
+            pitch_dive_semi=self._art(
+                params.get("pitch_dive_range", 12.0), rng, 6.0, 36.0),
+            wavefold_thresh=self._art(
+                0.7 - energy * 0.3, rng, 0.3, 0.8),
+            bitcrush_bits=int(self._art(
+                params.get("bitcrush_depth", 0.0), rng, 0.0, 12.0)) if params.get("bitcrush_depth", 0) > 0 else 0,
+            ott_amount=self._art(0.25 + energy * 0.25, rng, 0.15, 0.6),
+            ring_mod_freq=self._art(
+                params.get("metallic", 0.0) * 200.0, rng, 0.0, 300.0) if params.get("metallic", 0) > 0.5 else 0.0,
         )
 
     def _build_lead_dna(self, params: dict, rng: random.Random) -> LeadDNA:
@@ -925,6 +960,11 @@ class VariationEngine:
                 params.get("reverb_decay", 0.5), rng, 0.2, 2.0),
             shimmer=self._art(
                 params.get("shimmer", 0.0), rng, 0.0, 1.0),
+            supersaw_voices=int(self._art(5 + energy * 4, rng, 3, 11)),
+            supersaw_detune=self._art(25.0 + energy * 20.0, rng, 15.0, 50.0),
+            supersaw_cutoff=self._art(
+                3500 + brightness * 4000 if brightness else 5500, rng, 2000, 8000),
+            ott_amount=self._art(0.2 + energy * 0.2, rng, 0.1, 0.5),
         )
 
     def _build_atmosphere_dna(self, params: dict, rng: random.Random) -> AtmosphereDNA:
@@ -976,6 +1016,9 @@ class VariationEngine:
                 params.get("pitch_dive_range", 12.0), rng, 6.0, 36.0),
             vocal_chop_distortion=self._art(0.2 + energy * 0.3, rng, 0.0, 0.7),
             beat_repeat_probability=self._art(0.15 + energy * 0.2, rng, 0.0, 0.5),
+            riser_start_freq=self._art(100 + (1 - energy) * 100, rng, 50, 300),
+            riser_end_freq=self._art(6000 + energy * 4000, rng, 4000, 12000),
+            boom_decay=self._art(1.5 + energy * 1.0, rng, 1.0, 3.0),
         )
 
     def _build_mix_dna(self, params: dict, rng: random.Random) -> MixDNA:
@@ -992,6 +1035,11 @@ class VariationEngine:
             eq_high_boost=self._art(1.5 + (1 - darkness) * 2.5, rng, 0.0, 5.0),
             compression_ratio=self._art(2.5 + energy * 2.0, rng, 1.5, 6.0),
             sidechain_depth=self._art(0.5 + energy * 0.3, rng, 0.3, 0.9),
+            ceiling_db=self._art(-0.3 + energy * 0.15, rng, -0.5, -0.1),
+            eq_low_freq=self._art(60 + darkness * 20, rng, 50, 90),
+            eq_high_freq=self._art(9000 + (1 - darkness) * 3000, rng, 7000, 13000),
+            compression_threshold=self._art(-16 + energy * 4, rng, -20, -10),
+            limiter_enabled=True,
         )
 
     # ───────────────────────────────────────────
