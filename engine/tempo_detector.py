@@ -9,7 +9,7 @@ import math
 from dataclasses import dataclass
 
 PHI = 1.6180339887
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 DUBSTEP_BPM_RANGE = (130, 155)
 COMMON_TEMPOS = [70, 75, 80, 85, 90, 100, 110, 120, 125, 128, 130,

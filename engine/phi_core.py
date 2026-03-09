@@ -20,7 +20,7 @@ from engine.config_loader import A4_440, FIBONACCI, PHI
 
 # --- Constants -----------------------------------------------------------
 
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 WAVETABLE_SIZE = 2048      # Serum standard single-cycle length
 DEFAULT_FRAMES = 256       # Serum max wavetable frames
 

@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 
 PHI = 1.6180339887
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 
 def _make_tone(freq: float, dur: float = 1.0, amp: float = 0.5) -> np.ndarray:

@@ -37,7 +37,7 @@ from engine.config_loader import A4_432, FIBONACCI, PHI, get_config_value
 # Serum wavetable specs
 SERUM_FRAME_SIZE = 2048          # samples per frame (internal resolution)
 SERUM_MAX_FRAMES = 256           # max wavetable frames
-SERUM_SAMPLE_RATE = 44100        # default sample rate
+SERUM_SAMPLE_RATE = 48000        # default sample rate
 SERUM_BIT_DEPTH = 16             # 16-bit PCM for .wav wavetables
 SERUM_CLM_MARKER = b'clm '      # Serum wavetable identification marker
 

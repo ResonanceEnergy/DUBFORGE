@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass, field
 
 PHI = 1.6180339887
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 
 @dataclass

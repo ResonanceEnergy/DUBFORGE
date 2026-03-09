@@ -3057,7 +3057,7 @@ def write_drum_manifest(patterns: dict[str, DrumPattern],
 # AUDIO SYNTHESIS — Real drum one-shots (v2.8.0)
 # ═══════════════════════════════════════════════════════════════════════════
 
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 
 def _write_oneshot_wav(path: str, audio: np.ndarray,

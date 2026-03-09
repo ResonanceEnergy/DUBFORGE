@@ -29,7 +29,7 @@ _log = get_logger("dubforge.mastering_chain")
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 TARGET_LUFS = -14.0           # Streaming target (Spotify / Apple Music)
 TRUE_PEAK_CEILING_DB = -1.0   # True-peak limiter ceiling
 LOOKAHEAD_MS = 5.0            # Limiter lookahead

@@ -103,7 +103,7 @@ from engine.variation_engine import (
 )
 
 # ── Constants ────────────────────────────────────────────────────────
-SR = 44100
+SR = 48000
 BPM = 140
 BEAT = 60.0 / BPM
 BAR = BEAT * 4
@@ -211,28 +211,69 @@ def bitcrush(sig: list[float], bits: int = 8) -> list[float]:
     return [round(s * levels) / levels for s in sig]
 
 
-def sidechain(sig: list[float], depth: float = 0.7, attack: float = 0.01, release: float = 0.15) -> list[float]:
-    """Musical sidechain compression synced to kick (beat 1 and 3)."""
+def sidechain(sig: list[float], depth: float = 0.7, attack: float = 0.005, release: float = 0.25) -> list[float]:
+    """Musical sidechain compression synced to kick (beat 1 and 3).
+
+    Uses an exponential envelope for natural-sounding pump with longer release.
+    """
     out = list(sig)
     beat_s = samples(1)
-    atk_s = int(attack * SR)
-    rel_s = int(release * SR)
+    atk_s = max(1, int(attack * SR))
+    rel_s = max(1, int(release * SR))
 
     for i in range(len(out)):
         beat_pos = i % (beat_s * 2)  # trigger every 2 beats (halftime)
         if beat_pos < atk_s:
-            env = 1.0 - depth * (1.0 - beat_pos / atk_s)
+            # Fast attack — duck the signal
+            t = beat_pos / atk_s
+            env = 1.0 - depth * (1.0 - t * t)  # quadratic attack
         elif beat_pos < atk_s + rel_s:
-            env = (1.0 - depth) + depth * ((beat_pos - atk_s) / rel_s)
+            # Slow release — let it breathe back in
+            t = (beat_pos - atk_s) / rel_s
+            env = (1.0 - depth) + depth * (1.0 - (1.0 - t) ** 2)  # quadratic release
         else:
             env = 1.0
         out[i] *= env
     return out
 
 
-def stereo_widen(mono: list[float], width: float = 0.3) -> tuple[list[float], list[float]]:
-    """Simple stereo widening via comb-filter delay."""
-    delay = int(0.012 * SR)  # 12ms Haas delay
+def sidechain_bus(L: list[float], R: list[float], kick_positions: list[int],
+                  depth: float = 0.8, attack: float = 0.003, release: float = 0.2) -> tuple[list[float], list[float]]:
+    """Apply sidechain compression to stereo bus triggered by actual kick positions.
+
+    This creates the signature dubstep pumping effect by ducking
+    the bass/pad bus whenever a kick hits.
+    """
+    out_l = list(L)
+    out_r = list(R)
+    n = len(out_l)
+    atk_s = max(1, int(attack * SR))
+    rel_s = max(1, int(release * SR))
+
+    # Build envelope from kick positions
+    env = np.ones(n)
+    for kick_pos in kick_positions:
+        for i in range(atk_s + rel_s):
+            pos = kick_pos + i
+            if pos >= n:
+                break
+            if i < atk_s:
+                t = i / atk_s
+                val = 1.0 - depth * (1.0 - t * t)
+            else:
+                t = (i - atk_s) / rel_s
+                val = (1.0 - depth) + depth * (1.0 - (1.0 - t) ** 2)
+            env[pos] = min(env[pos], val)  # min to handle overlapping kicks
+
+    for i in range(n):
+        out_l[i] *= env[i]
+        out_r[i] *= env[i]
+    return out_l, out_r
+
+
+def stereo_widen(mono: list[float], width: float = 0.5) -> tuple[list[float], list[float]]:
+    """Stereo widening via Haas delay + slight pitch detune for rich spread."""
+    delay = int(0.018 * SR)  # 18ms Haas delay (wider than before)
     left = list(mono)
     right = [0.0] * len(mono)
     for i in range(len(mono)):
@@ -244,34 +285,36 @@ def stereo_widen(mono: list[float], width: float = 0.3) -> tuple[list[float], li
 
 
 def write_mono_wav(path: str, sig: list[float]):
-    """Write 16-bit mono WAV."""
+    """Write 24-bit mono WAV."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with wave.open(path, "w") as wf:
         wf.setnchannels(1)
-        wf.setsampwidth(2)
+        wf.setsampwidth(3)  # 24-bit
         wf.setframerate(SR)
         frames = b""
         for s in sig:
-            frames += struct.pack("<h", max(-32768, min(32767, int(s * 32767))))
+            val = max(-8388608, min(8388607, int(s * 8388607)))
+            frames += struct.pack("<i", val)[:3]  # 24-bit LE
         wf.writeframes(frames)
 
 
 def write_stereo_wav(path: str, left: list[float], right: list[float]):
-    """Write 16-bit stereo WAV."""
+    """Write 24-bit stereo WAV."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     n = min(len(left), len(right))
     with wave.open(path, "w") as wf:
         wf.setnchannels(2)
-        wf.setsampwidth(2)
+        wf.setsampwidth(3)  # 24-bit
         wf.setframerate(SR)
         chunk_size = SR
         for start in range(0, n, chunk_size):
             end = min(start + chunk_size, n)
             frames = b""
             for i in range(start, end):
-                l_s = max(-32768, min(32767, int(left[i] * 32767)))
-                r_s = max(-32768, min(32767, int(right[i] * 32767)))
-                frames += struct.pack("<hh", l_s, r_s)
+                l_s = max(-8388608, min(8388607, int(left[i] * 8388607)))
+                r_s = max(-8388608, min(8388607, int(right[i] * 8388607)))
+                frames += struct.pack("<i", l_s)[:3]
+                frames += struct.pack("<i", r_s)[:3]
             wf.writeframes(frames)
 
 
@@ -769,15 +812,15 @@ def _default_v5_dna() -> SongDNA:
         root_freq=43.65,
         freq_table=dict(FREQ),
         arrangement=[
-            ArrangementSection("intro", 8, 0.2, ["drone", "pad", "hats_sparse"]),
-            ArrangementSection("build", 4, 0.5, ["kick", "snare_roll", "riser", "pad"]),
-            ArrangementSection("drop1", 16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops"]),
-            ArrangementSection("break", 8, 0.35, ["pad", "plucks", "sub_long"]),
-            ArrangementSection("build2", 4, 0.55, ["kick", "snare_roll", "riser"]),
-            ArrangementSection("drop2", 16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops", "extra_bass"]),
-            ArrangementSection("outro", 8, 0.15, ["kick_fade", "pad_fade"]),
+            ArrangementSection("intro", 16, 0.15, ["drone", "pad", "hats_sparse"]),
+            ArrangementSection("build", 8, 0.5, ["kick", "snare_roll", "riser", "pad"]),
+            ArrangementSection("drop1", 32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops"]),
+            ArrangementSection("break", 16, 0.25, ["pad", "plucks", "sub_long"]),
+            ArrangementSection("build2", 8, 0.55, ["kick", "snare_roll", "riser"]),
+            ArrangementSection("drop2", 32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops", "extra_bass"]),
+            ArrangementSection("outro", 16, 0.1, ["kick_fade", "pad_fade"]),
         ],
-        total_bars=64,
+        total_bars=128,
         drums=DrumDNA(
             kick_pitch=42.0, kick_fm_depth=3.0, kick_drive=0.55,
             kick_sub_weight=0.65, kick_attack=3.0,
@@ -814,10 +857,10 @@ def _default_v5_dna() -> SongDNA:
             riser_start_freq=150.0, riser_end_freq=8000.0, boom_decay=2.0,
         ),
         mix=MixDNA(
-            target_lufs=-7.0, stereo_width=1.5, master_drive=0.55,
-            eq_low_boost=3.5, eq_high_boost=2.5, compression_ratio=3.5,
-            sidechain_depth=0.7, ceiling_db=-0.2, eq_low_freq=70.0,
-            eq_high_freq=10000.0, compression_threshold=-14.0,
+            target_lufs=-6.0, stereo_width=1.5, master_drive=0.55,
+            eq_low_boost=-1.5, eq_high_boost=5.5, compression_ratio=4.0,
+            sidechain_depth=0.8, ceiling_db=-0.1, eq_low_freq=80.0,
+            eq_high_freq=8000.0, compression_threshold=-12.0,
             limiter_enabled=True,
         ),
         bass_rotation=["fm_growl", "growl_wt", "dist_fm", "sync", "acid", "neuro", "formant"],
@@ -1013,7 +1056,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     kick_len = max(len(kick_sub), len(kick_fm), len(kick_click), len(kick_rumble))
     kick = [0.0] * kick_len
     for i in range(len(kick_sub)):
-        kick[i] += kick_sub[i] * 0.65
+        kick[i] += kick_sub[i] * 0.35
     for i in range(len(kick_fm)):
         kick[i] += kick_fm[i] * 0.35
     for i in range(len(kick_click)):
@@ -1165,8 +1208,8 @@ def render_full_track(dna: 'SongDNA | None' = None):
         name="Sub", bass_type="sub_sine", frequency=FREQ["F1"],
         duration_s=BEAT * 2, attack_s=0.002, release_s=0.1
     )))
-    sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 4.0, q=0.6)
-    sub = normalize(sub, 0.97)
+    sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 1.0, q=0.6)
+    sub = normalize(sub, 0.22)
 
     # BASS 1: FM Growl — DNA-driven mod_index, feedback, depth
     print(f"    FM Growl (depth={bd.fm_depth:.1f})...")
@@ -1709,7 +1752,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mix_into(L, left, offset, gain)
         mix_into(R, right, offset, gain)
 
-    def mx_wide(mono, offset, gain=0.7, delay_ms=11.0):
+    def mx_wide(mono, offset, gain=0.7, delay_ms=18.0):
         st = panner.haas_delay(mono, delay_ms=delay_ms, side="right")
         mix_into(L, st.left, offset, gain)
         mix_into(R, st.right, offset, gain * 0.92)
@@ -1727,45 +1770,48 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print("  Intro...")
 
     drone_st = panner.haas_delay(drone[:samples(INTRO * 4)], delay_ms=18.0)
-    mx_stereo(drone_st.left, drone_st.right, cursor, 0.48)
+    mx_stereo(drone_st.left, drone_st.right, cursor, 0.30)
 
     ip = dark_pad[:samples(INTRO * 4)]
     ip = fade_in(ip, BAR * 5)
     ip = lowpass(ip, 0.06)
-    mx(ip, cursor, 0.3, 0.3)
+    mx(ip, cursor, 0.15, 0.15)
 
     for bar in range(INTRO):
         off = cursor + samples(bar * 4)
-        if bar >= 2:
-            k_vol = 0.25 + (bar - 2) * 0.06
-            mx(kick, off, k_vol, k_vol)
         if bar >= 4:
+            k_vol = 0.10 + (bar - 4) * 0.04
+            mx(kick, off, k_vol, k_vol)
+        if bar >= 8:
             for ev in hat_pattern:
-                h_vol = 0.06 + (bar - 4) * 0.025
+                h_vol = 0.04 + (bar - 8) * 0.015
                 mx_panned(hat_c, off + int(ev.time * SR), h_vol * ev.velocity, -0.15)
 
     ir = reese[:samples(INTRO * 4)]
     ir = lowpass(ir, 0.05)
     ir = fade_in(ir, BAR * 5)
-    mx(ir, cursor, 0.18, 0.18)
+    mx(ir, cursor, 0.10, 0.10)
 
-    mx_wide(rev_crash, cursor + samples((INTRO - 2) * 4), 0.3)
+    mx_wide(rev_crash, cursor + samples((INTRO - 2) * 4), 0.25)
 
     cursor += samples(INTRO * 4)
 
     # ══════════════════════════════════════════════════
-    #  BUILD (4 bars) — accelerating tension
+    #  BUILD (8 bars) — accelerating tension
     # ══════════════════════════════════════════════════
     print("  Build...")
 
     for bar in range(BUILD):
         off = cursor + samples(bar * 4)
-        mx(kick, off, 0.55, 0.55)
-        mx(kick, off + samples(2), 0.55, 0.55)
-        divs = [4, 8, 16, 32][bar]
+        k_vol = 0.35 + 0.15 * (bar / max(BUILD - 1, 1))
+        mx(kick, off, k_vol, k_vol)
+        mx(kick, off + samples(2), k_vol, k_vol)
+        # Progressive snare roll: 2→4→4→8→8→16→16→32
+        divs_seq = [2, 4, 4, 8, 8, 16, 16, 32]
+        divs = divs_seq[min(bar, len(divs_seq) - 1)]
         step = 4.0 / divs
         for h in range(divs):
-            vel = 0.15 + 0.65 * (bar / BUILD) * (h / divs)
+            vel = 0.12 + 0.55 * (bar / max(BUILD, 1)) * (h / max(divs, 1))
             pan = -0.25 + 0.5 * ((h % 6) / 6)
             mx_panned(snare, off + samples(h * step), vel, pan)
 
@@ -1787,33 +1833,37 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # ══════════════════════════════════════════════════
     print("  Drop 1...")
 
-    mx(boom, cursor, 0.97, 0.97)
-    mx(hit, cursor, 0.6, 0.6)
+    mx(boom, cursor, 0.85, 0.85)
+    mx(hit, cursor, 0.7, 0.7)
+
+    # Track kick positions for post-arrangement sidechain
+    kick_positions = []
 
     for bar in range(DROP1):
         off = cursor + samples(bar * 4)
 
-        # Drums
-        mx(kick, off, 0.94, 0.94)
-        mx(snare, off + samples(2), 0.85, 0.85)
-        mx(clap, off + samples(2), 0.3, 0.3)
+        # Drums — balanced gains
+        kick_positions.append(off)
+        mx(kick, off, 0.88, 0.88)
+        mx(snare, off + samples(2), 0.82, 0.82)
+        mx(clap, off + samples(2), 0.38, 0.38)
 
         for ev in hat_pattern:
-            h_vol = 0.22 * ev.velocity
-            h_pan = -0.3 + 0.6 * (ev.time / BAR)
+            h_vol = 0.45 * ev.velocity  # Hats UP for hi-freq presence
+            h_pan = -0.4 + 0.8 * (ev.time / BAR)  # Wider panning
             mx_panned(hat_c, off + int(ev.time * SR), h_vol, h_pan)
 
-        mx_panned(hat_o, off + samples(1.5), 0.18, 0.22)
-        mx_panned(hat_o, off + samples(3.5), 0.18, -0.22)
+        mx_panned(hat_o, off + samples(1.5), 0.35, 0.35)
+        mx_panned(hat_o, off + samples(3.5), 0.35, -0.35)
 
-        # Sub
-        sub_sc = sidechain(sub, depth=0.7, release=0.1)
-        mx(sub_sc, off, 0.92, 0.92)
-        mx(sub_sc, off + samples(2), 0.82, 0.82)
+        # Sub — HEAVILY REDUCED to balance spectrum (target: 15-25% of energy)
+        sub_sc = sidechain(sub, depth=0.85, release=0.2)
+        mx(sub_sc, off, 0.18, 0.18)
+        mx(sub_sc, off + samples(2), 0.14, 0.14)
 
-        # Noise bed
+        # Noise bed — UP for air and width
         dn = drop_noise[:min(samples(4), len(drop_noise))]
-        mx_wide(dn, off, 0.12, 15.0)
+        mx_wide(dn, off, 0.35, 20.0)
 
         # Mid bass — 7-type rotation
         bass_idx = bar % 7
@@ -1821,51 +1871,51 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
         if bass_idx in (0, 1):
             # FM growl or Wavetable growl — full 2-beat phrase
-            sc_b = sidechain(bass_snd, depth=0.6)
-            mx_wide(sc_b, off + samples(0.5), 0.55)
-            sc_g = sidechain(dist_fm, depth=0.55)
-            mx_wide(sc_g, off + samples(2.5), 0.5)
+            sc_b = sidechain(bass_snd, depth=0.7)
+            mx_wide(sc_b, off + samples(0.5), 0.88)
+            sc_g = sidechain(dist_fm, depth=0.65)
+            mx_wide(sc_g, off + samples(2.5), 0.82)
         elif bass_idx == 2:
             # Dist FM — staccato 8ths
             for s8 in range(8):
-                sc_b = sidechain(bass_snd, depth=0.55)
-                mx_panned(sc_b, off + samples(s8 * 0.5), 0.42, -0.15 + 0.3 * (s8 / 8))
+                sc_b = sidechain(bass_snd, depth=0.65)
+                mx_panned(sc_b, off + samples(s8 * 0.5), 0.75, -0.2 + 0.4 * (s8 / 8))
         elif bass_idx == 3:
             # Sync bass — swept harmonics
-            sc_b = sidechain(bass_snd, depth=0.55)
-            mx_wide(sc_b, off + samples(0.5), 0.55, 13.0)
+            sc_b = sidechain(bass_snd, depth=0.65)
+            mx_wide(sc_b, off + samples(0.5), 0.88, 15.0)
         elif bass_idx == 4:
             # Acid — filter sweep
-            sc_b = sidechain(bass_snd, depth=0.55)
-            mx_wide(sc_b, off + samples(0.5), 0.52)
+            sc_b = sidechain(bass_snd, depth=0.65)
+            mx_wide(sc_b, off + samples(0.5), 0.85)
             # Pitch dive on beat 3
-            mx_wide(pitch_dive, off + samples(2), 0.28)
+            mx_wide(pitch_dive, off + samples(2), 0.48)
         elif bass_idx == 5:
             # Neuro — choppy
             for s16 in range(8):
                 b = neuro if s16 % 2 == 0 else dist_fm
-                sc_b = sidechain(b, depth=0.5)
-                mx_panned(sc_b, off + samples(s16 * 0.5), 0.38, -0.2 + 0.4 * (s16 / 8))
+                sc_b = sidechain(b, depth=0.6)
+                mx_panned(sc_b, off + samples(s16 * 0.5), 0.68, -0.25 + 0.5 * (s16 / 8))
         elif bass_idx == 6:
             # Formant — talking bass "yoi"
-            sc_b = sidechain(bass_snd, depth=0.55)
-            mx_wide(sc_b, off + samples(0.5), 0.55, 12.0)
+            sc_b = sidechain(bass_snd, depth=0.65)
+            mx_wide(sc_b, off + samples(0.5), 0.88, 14.0)
 
-        # Vocal chops (every 4 bars)
+        # Vocal chops (every 4 bars) — MAX for mid presence
         if bar % 4 == 0:
             chop = vocal_chops[bar // 4 % len(vocal_chops)]
-            mx_wide(chop, off, 0.3)
+            mx_wide(chop, off, 0.62)
         if bar % 4 == 2:
-            mx_panned(chop_oh, off + samples(2), 0.2, 0.3)
+            mx_panned(chop_oh, off + samples(2), 0.48, 0.35)
 
-        # Lead
+        # Lead — HEAVILY BOOSTED for mid/high presence
         notes = [(lead_f, 0.0), (lead_eb, 1.0), (lead_c, 2.0), (lead_ab, 3.0)]
         for snd, bt in notes:
-            mx_panned(snd, off + samples(bt), 0.28, 0.25 + 0.15 * math.sin(bar * 0.5))
+            mx_panned(snd, off + samples(bt), 0.82, 0.30 + 0.20 * math.sin(bar * 0.5))
 
-        # Chords (every 4 bars)
+        # Chords (every 4 bars) — MAX for width and body
         if bar % 4 == 0:
-            mx_stereo(chord_f_l, chord_f_r, off, 0.25)
+            mx_stereo(chord_f_l, chord_f_r, off, 0.70)
 
     mx(tape_stop, cursor + samples((DROP1 - 1) * 4 + 2), 0.5, 0.5)
     mx_wide(stutter, cursor + samples((DROP1 - 1) * 4 + 2), 0.35)
@@ -1884,7 +1934,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     bp = fade_in(bp, BAR * 1.5)
     bp = fade_out(bp, BAR * 2)
     bp_st = panner.haas_delay(bp, delay_ms=14.0, side="right")
-    mx_stereo(bp_st.left, bp_st.right, cursor, 0.5)
+    mx_stereo(bp_st.left, bp_st.right, cursor, 0.35)
 
     # Karplus-Strong pluck arps — physical modeled
     pluck_freqs = [FREQ["F3"], FREQ["Ab3"], FREQ["C4"], FREQ["Eb4"]]
@@ -1914,7 +1964,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
         duration_s=BREAK_ * BAR, attack_s=1.5, release_s=2.5
     )))
     sd = normalize(sd, 0.65)
-    mx(sd, cursor, 0.25, 0.25)
+    mx(sd, cursor, 0.15, 0.15)
 
     mx_wide(rev_crash, cursor + samples((BREAK_ - 2) * 4), 0.35)
 
@@ -1927,12 +1977,14 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     for bar in range(BUILD2):
         off = cursor + samples(bar * 4)
-        mx(kick, off, 0.6, 0.6)
-        mx(kick, off + samples(2), 0.6, 0.6)
-        divs = [4, 8, 16, 32][bar]
+        k_vol = 0.40 + 0.15 * (bar / max(BUILD2 - 1, 1))
+        mx(kick, off, k_vol, k_vol)
+        mx(kick, off + samples(2), k_vol, k_vol)
+        divs_seq = [2, 4, 4, 8, 8, 16, 16, 32]
+        divs = divs_seq[min(bar, len(divs_seq) - 1)]
         step = 4.0 / divs
         for h in range(divs):
-            vel = 0.2 + 0.65 * (bar / BUILD2) * (h / divs)
+            vel = 0.15 + 0.55 * (bar / max(BUILD2, 1)) * (h / max(divs, 1))
             pan = -0.3 + 0.6 * ((h % 6) / 6)
             mx_panned(snare, off + samples(h * step), vel, pan)
 
@@ -1959,90 +2011,92 @@ def render_full_track(dna: 'SongDNA | None' = None):
     cursor += samples(BUILD2 * 4)
 
     # ══════════════════════════════════════════════════
-    #  DROP 2 (16 bars) — MAXIMUM ENERGY
+    #  DROP 2 (16 bars) — MAXIMUM ENERGY — DISTINCT from Drop 1
     # ══════════════════════════════════════════════════
     print("  Drop 2...")
 
-    mx(boom, cursor, 1.0, 1.0)
-    mx(hit, cursor, 0.7, 0.7)
-    mx(clap, cursor, 0.45, 0.45)
+    mx(boom, cursor, 0.90, 0.90)
+    mx(hit, cursor, 0.75, 0.75)
+    mx(clap, cursor, 0.50, 0.50)
 
     for bar in range(DROP2):
         off = cursor + samples(bar * 4)
 
-        # Heavier drums
-        mx(kick, off, 0.97, 0.97)
-        mx(snare, off + samples(2), 0.9, 0.9)
-        mx(clap, off + samples(2), 0.34, 0.34)
+        # Heavier drums — collect kick positions for sidechain
+        kick_positions.append(off)
+        mx(kick, off, 0.92, 0.92)
+        mx(snare, off + samples(2), 0.88, 0.88)
+        mx(clap, off + samples(2), 0.42, 0.42)
 
         for ev in hat_pattern:
-            h_vol = 0.25 * ev.velocity
-            h_pan = -0.35 + 0.7 * (ev.time / BAR)
+            h_vol = 0.48 * ev.velocity  # Brighter hats
+            h_pan = -0.45 + 0.9 * (ev.time / BAR)  # Even wider
             mx_panned(hat_c, off + int(ev.time * SR), h_vol, h_pan)
 
-        mx_panned(hat_o, off + samples(1.5), 0.2, 0.25)
-        mx_panned(hat_o, off + samples(3.5), 0.2, -0.25)
+        mx_panned(hat_o, off + samples(1.5), 0.38, 0.38)
+        mx_panned(hat_o, off + samples(3.5), 0.38, -0.38)
 
-        # Sub heavier
-        sub_sc = sidechain(sub, depth=0.75, release=0.08)
-        mx(sub_sc, off, 0.96, 0.96)
-        mx(sub_sc, off + samples(2), 0.88, 0.88)
+        # Sub — HEAVILY REDUCED same as Drop 1
+        sub_sc = sidechain(sub, depth=0.88, release=0.18)
+        mx(sub_sc, off, 0.20, 0.20)
+        mx(sub_sc, off + samples(2), 0.16, 0.16)
 
-        # Noise bed
+        # Noise bed — wider
         dn = drop_noise[:min(samples(4), len(drop_noise))]
-        mx_wide(dn, off, 0.14, 16.0)
+        mx_wide(dn, off, 0.38, 22.0)
 
-        # Mid bass — 8 patterns, more aggressive
+        # Mid bass — 8 patterns, more aggressive, HIGHER gains
         bass_idx = bar % 8
         if bass_idx in (0, 7):
             # Double-time mixed bass 16ths
             bass_pool = [neuro, dist_fm, fm_growl, growl_wt, sync_bass]
             for s16 in range(16):
                 b = bass_pool[s16 % len(bass_pool)]
-                sc_b = sidechain(b, depth=0.5)
-                mx_panned(sc_b, off + samples(s16 * 0.25), 0.35, -0.2 + 0.4 * (s16 / 16))
+                sc_b = sidechain(b, depth=0.6)
+                mx_panned(sc_b, off + samples(s16 * 0.25), 0.68, -0.3 + 0.6 * (s16 / 16))
         elif bass_idx == 1:
-            sc_f = sidechain(formant, depth=0.55)
-            mx_wide(sc_f, off + samples(0.5), 0.6, 12.0)
-            mx_wide(pitch_dive, off + samples(2.5), 0.3)
+            sc_f = sidechain(formant, depth=0.65)
+            mx_wide(sc_f, off + samples(0.5), 0.92, 14.0)
+            mx_wide(pitch_dive, off + samples(2.5), 0.48)
         elif bass_idx == 2:
             for s8 in range(8):
-                sc_b = sidechain(dist_fm, depth=0.55)
-                mx_panned(sc_b, off + samples(s8 * 0.5), 0.45, -0.2 + 0.4 * (s8 / 8))
+                sc_b = sidechain(dist_fm, depth=0.65)
+                mx_panned(sc_b, off + samples(s8 * 0.5), 0.78, -0.25 + 0.5 * (s8 / 8))
         elif bass_idx == 3:
-            sc_w = sidechain(growl_wt, depth=0.6)
-            mx_wide(sc_w, off + samples(0.5), 0.58)
+            sc_w = sidechain(growl_wt, depth=0.7)
+            mx_wide(sc_w, off + samples(0.5), 0.90)
         elif bass_idx == 4:
-            sc_d = sidechain(dive_bass, depth=0.5)
-            mx_wide(sc_d, off + samples(0.5), 0.55)
+            sc_d = sidechain(dive_bass, depth=0.6)
+            mx_wide(sc_d, off + samples(0.5), 0.85)
         elif bass_idx == 5:
             for s16 in range(8):
                 b = sync_bass if s16 % 2 == 0 else acid
-                sc_b = sidechain(b, depth=0.5)
-                mx_panned(sc_b, off + samples(s16 * 0.5), 0.4, -0.15 + 0.3 * (s16 / 8))
+                sc_b = sidechain(b, depth=0.6)
+                mx_panned(sc_b, off + samples(s16 * 0.5), 0.72, -0.2 + 0.4 * (s16 / 8))
         elif bass_idx == 6:
-            sc_f = sidechain(fm_growl, depth=0.55)
-            mx_wide(sc_f, off + samples(0.5), 0.52)
-            sc_g = sidechain(neuro, depth=0.55)
-            mx_wide(sc_g, off + samples(2.5), 0.48)
+            sc_f = sidechain(fm_growl, depth=0.65)
+            mx_wide(sc_f, off + samples(0.5), 0.82)
+            sc_g = sidechain(neuro, depth=0.65)
+            mx_wide(sc_g, off + samples(2.5), 0.78)
 
-        # Vocal chops (more frequent)
+        # Vocal chops (more frequent) — MAX
         if bar % 2 == 0:
             chop = vocal_chops[bar // 2 % len(vocal_chops)]
-            mx_wide(chop, off, 0.28)
+            mx_wide(chop, off, 0.60)
         if bar % 4 == 3:
-            mx_panned(chop_yoi, off + samples(2), 0.25, -0.2)
+            mx_panned(chop_yoi, off + samples(2), 0.52, -0.25)
 
-        # Lead
-        for snd, bt in [(lead_f, 0.0), (lead_eb, 1.0), (lead_c, 2.0), (lead_ab, 3.0)]:
-            mx_panned(snd, off + samples(bt), 0.32, 0.3 + 0.15 * math.sin(bar * 0.7))
+        # Lead — DIFFERENT PATTERN from Drop 1 (reverse order + wider)
+        notes_d2 = [(lead_ab, 0.0), (lead_c, 1.0), (lead_eb, 2.0), (lead_f, 3.0)]
+        for snd, bt in notes_d2:
+            mx_panned(snd, off + samples(bt), 0.85, -0.35 + 0.20 * math.sin(bar * 0.9))
 
-        # Chords (every 2 bars)
+        # Chords (every 2 bars) — LOUDER
         if bar % 2 == 0:
             chords = [(chord_f_l, chord_f_r), (chord_ab_l, chord_ab_r),
                       (chord_c_l, chord_c_r)]
             cl, cr = chords[(bar // 2) % 3]
-            mx_stereo(cl, cr, off, 0.24)
+            mx_stereo(cl, cr, off, 0.72)
 
     mx(tape_stop, cursor + samples((DROP2 - 1) * 4 + 2), 0.55, 0.55)
     mx_wide(stutter, cursor + samples((DROP2 - 2) * 4), 0.35)
@@ -2075,14 +2129,52 @@ def render_full_track(dna: 'SongDNA | None' = None):
         duration_s=OUTRO * BAR, release_s=OUTRO * BAR * 0.85
     )))
     os_sub = fade_out(os_sub, BAR * 7)
-    mx(os_sub, cursor, 0.2, 0.2)
+    mx(os_sub, cursor, 0.12, 0.12)
 
     # ══════════════════════════════════════════════════
     #  MIXDOWN + MASTERING
     # ══════════════════════════════════════════════════
     print("  [9/9] Mixing & mastering...")
 
-    stereo = np.column_stack([np.array(L), np.array(R)])
+    # ── Bus compression on full mix before mastering ──
+    # This glues the mix together like a console bus compressor
+    from engine.dsp_core import multiband_compress
+    L_np = np.array(L, dtype=np.float64)
+    R_np = np.array(R, dtype=np.float64)
+
+    # High-pass at 25Hz to remove inaudible sub rumble
+    from engine.dsp_core import svf_highpass
+    L_np = svf_highpass(L_np, 25.0, 0.7, SR)
+    R_np = svf_highpass(R_np, 25.0, 0.7, SR)
+
+    # Low-shelf CUT at 60Hz to tame sub energy (-4 dB)
+    L_list = L_np.tolist()
+    R_list = R_np.tolist()
+    L_list = apply_eq_band(L_list, center_hz=60.0, gain_db=-6.0, q=0.4)
+    R_list = apply_eq_band(R_list, center_hz=60.0, gain_db=-6.0, q=0.4)
+
+    # Mid presence boost at 1kHz (+4 dB)
+    L_list = apply_eq_band(L_list, center_hz=1000.0, gain_db=4.0, q=0.8)
+    R_list = apply_eq_band(R_list, center_hz=1000.0, gain_db=4.0, q=0.8)
+
+    # High presence boost at 5kHz (+3 dB)
+    L_list = apply_eq_band(L_list, center_hz=5000.0, gain_db=3.0, q=0.7)
+    R_list = apply_eq_band(R_list, center_hz=5000.0, gain_db=3.0, q=0.7)
+
+    L_np = np.array(L_list, dtype=np.float64)
+    R_np = np.array(R_list, dtype=np.float64)
+
+    # Bus compress L and R independently (glue compression — sub compressed harder)
+    L_np = multiband_compress(L_np, SR,
+                               low_xover=120.0, high_xover=4000.0,
+                               threshold_db=-10.0, ratio=2.5,
+                               attack_ms=10.0, release_ms=80.0)
+    R_np = multiband_compress(R_np, SR,
+                               low_xover=120.0, high_xover=4000.0,
+                               threshold_db=-10.0, ratio=2.5,
+                               attack_ms=10.0, release_ms=80.0)
+
+    stereo = np.column_stack([L_np, R_np])
 
     stereo = apply_stereo_imaging(stereo, StereoPreset(
         name="MasterImg", image_type="frequency_split",

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 PHI = 1.6180339887
 A4_432 = 432.0
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 # Frequency bands (Hz)
 BANDS = {

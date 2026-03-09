@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 PHI = 1.6180339887
 FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
 A4_432 = 432.0
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 # ═══════════════════════════════════════════════════════════
 # Module manifest — every DUBFORGE engine module

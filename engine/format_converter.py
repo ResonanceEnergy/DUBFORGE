@@ -12,7 +12,7 @@ import wave
 from dataclasses import dataclass
 
 PHI = 1.6180339887
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 
 @dataclass

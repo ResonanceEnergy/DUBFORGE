@@ -11,7 +11,7 @@ import struct
 import wave
 
 PHI = 1.6180339887
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 
 def _text_to_bits(text: str) -> list[int]:

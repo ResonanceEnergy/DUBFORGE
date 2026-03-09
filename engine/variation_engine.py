@@ -213,50 +213,50 @@ class ArrangementSection:
 
 ARRANGEMENT_ARCHETYPES: dict[str, list[ArrangementSection]] = {
     "standard": [
-        ArrangementSection("intro",  8, 0.2, ["drone", "pad", "hats_sparse"]),
-        ArrangementSection("build",  4, 0.5, ["kick", "snare_roll", "riser", "pad"]),
-        ArrangementSection("drop1", 16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops", "noise_bed"]),
-        ArrangementSection("break",  8, 0.35, ["pad", "plucks", "sub_long", "reverb_fx"]),
-        ArrangementSection("build2", 4, 0.55, ["kick", "snare_roll", "riser", "swell"]),
-        ArrangementSection("drop2", 16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops", "noise_bed", "extra_bass"]),
-        ArrangementSection("outro",  8, 0.15, ["kick_fade", "pad_fade", "sub_fade"]),
+        ArrangementSection("intro",  16, 0.15, ["drone", "pad", "hats_sparse"]),
+        ArrangementSection("build",   8, 0.5, ["kick", "snare_roll", "riser", "pad"]),
+        ArrangementSection("drop1",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops", "noise_bed"]),
+        ArrangementSection("break",  16, 0.25, ["pad", "plucks", "sub_long", "reverb_fx"]),
+        ArrangementSection("build2",  8, 0.55, ["kick", "snare_roll", "riser", "swell"]),
+        ArrangementSection("drop2",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops", "noise_bed", "extra_bass"]),
+        ArrangementSection("outro",  16, 0.1, ["kick_fade", "pad_fade", "sub_fade"]),
     ],
     "extended_intro": [
-        ArrangementSection("intro",  16, 0.15, ["drone", "pad", "texture", "hats_sparse"]),
-        ArrangementSection("build",   4, 0.5, ["kick", "snare_roll", "riser"]),
-        ArrangementSection("drop1",  16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead"]),
-        ArrangementSection("break",   8, 0.3, ["pad", "plucks"]),
-        ArrangementSection("build2",  4, 0.55, ["kick", "snare_roll", "riser"]),
-        ArrangementSection("drop2",  16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "extra_bass"]),
-        ArrangementSection("outro",   8, 0.1, ["pad_fade", "sub_fade"]),
+        ArrangementSection("intro",  32, 0.1, ["drone", "pad", "texture", "hats_sparse"]),
+        ArrangementSection("build",   8, 0.5, ["kick", "snare_roll", "riser"]),
+        ArrangementSection("drop1",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead"]),
+        ArrangementSection("break",  16, 0.25, ["pad", "plucks"]),
+        ArrangementSection("build2",  8, 0.55, ["kick", "snare_roll", "riser"]),
+        ArrangementSection("drop2",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "extra_bass"]),
+        ArrangementSection("outro",  16, 0.1, ["pad_fade", "sub_fade"]),
     ],
     "double_drop": [
-        ArrangementSection("intro",   8, 0.2, ["drone", "pad"]),
-        ArrangementSection("build",   4, 0.5, ["kick", "riser"]),
-        ArrangementSection("drop1",   8, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead"]),
-        ArrangementSection("drop1b",  8, 1.0, ["kick", "snare", "hats", "sub", "bass_alt", "lead"]),
-        ArrangementSection("break",   8, 0.3, ["pad", "plucks"]),
-        ArrangementSection("build2",  4, 0.6, ["kick", "riser"]),
-        ArrangementSection("drop2",   8, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops"]),
-        ArrangementSection("drop2b",  8, 1.0, ["kick", "snare", "hats", "sub", "bass_alt", "lead", "extra_bass"]),
-        ArrangementSection("outro",   8, 0.1, ["pad_fade"]),
+        ArrangementSection("intro",  16, 0.15, ["drone", "pad"]),
+        ArrangementSection("build",   8, 0.5, ["kick", "riser"]),
+        ArrangementSection("drop1",  16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead"]),
+        ArrangementSection("drop1b", 16, 1.0, ["kick", "snare", "hats", "sub", "bass_alt", "lead"]),
+        ArrangementSection("break",  16, 0.25, ["pad", "plucks"]),
+        ArrangementSection("build2",  8, 0.6, ["kick", "riser"]),
+        ArrangementSection("drop2",  16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops"]),
+        ArrangementSection("drop2b", 16, 1.0, ["kick", "snare", "hats", "sub", "bass_alt", "lead", "extra_bass"]),
+        ArrangementSection("outro",  16, 0.1, ["pad_fade"]),
     ],
     "minimal": [
-        ArrangementSection("intro",   4, 0.15, ["drone"]),
-        ArrangementSection("build",   4, 0.4, ["kick", "riser"]),
-        ArrangementSection("drop1",  16, 1.0, ["kick", "snare", "hats", "sub", "bass"]),
-        ArrangementSection("break",   4, 0.25, ["pad"]),
-        ArrangementSection("drop2",  16, 1.0, ["kick", "snare", "hats", "sub", "bass"]),
-        ArrangementSection("outro",   4, 0.1, ["kick_fade"]),
+        ArrangementSection("intro",   8, 0.1, ["drone"]),
+        ArrangementSection("build",   8, 0.4, ["kick", "riser"]),
+        ArrangementSection("drop1",  32, 1.0, ["kick", "snare", "hats", "sub", "bass"]),
+        ArrangementSection("break",   8, 0.2, ["pad"]),
+        ArrangementSection("drop2",  32, 1.0, ["kick", "snare", "hats", "sub", "bass"]),
+        ArrangementSection("outro",   8, 0.08, ["kick_fade"]),
     ],
     "progressive": [
         ArrangementSection("intro",  16, 0.1, ["pad", "texture", "drone"]),
-        ArrangementSection("verse1",  8, 0.35, ["kick_lite", "hats_sparse", "pad", "sub_long"]),
-        ArrangementSection("build",   8, 0.55, ["kick", "snare_roll", "riser", "swell"]),
-        ArrangementSection("drop1",  16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops"]),
-        ArrangementSection("break",  16, 0.25, ["pad", "plucks", "texture"]),
-        ArrangementSection("build2",  8, 0.6, ["kick", "snare_roll", "riser"]),
-        ArrangementSection("drop2",  16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "extra_bass"]),
+        ArrangementSection("verse1", 16, 0.3, ["kick_lite", "hats_sparse", "pad", "sub_long"]),
+        ArrangementSection("build",  16, 0.55, ["kick", "snare_roll", "riser", "swell"]),
+        ArrangementSection("drop1",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops"]),
+        ArrangementSection("break",  16, 0.2, ["pad", "plucks", "texture"]),
+        ArrangementSection("build2", 16, 0.6, ["kick", "snare_roll", "riser"]),
+        ArrangementSection("drop2",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "extra_bass"]),
         ArrangementSection("outro",  16, 0.08, ["pad_fade", "texture"]),
     ],
 }
@@ -391,18 +391,18 @@ class FxDNA:
 @dataclass
 class MixDNA:
     """Per-song mix/master personality."""
-    target_lufs: float = -7.5
-    stereo_width: float = 1.3
+    target_lufs: float = -6.0
+    stereo_width: float = 2.0
     master_drive: float = 0.55
-    eq_low_boost: float = 3.0
-    eq_high_boost: float = 2.5
-    compression_ratio: float = 3.5
-    sidechain_depth: float = 0.7
+    eq_low_boost: float = -1.5
+    eq_high_boost: float = 5.5
+    compression_ratio: float = 4.0
+    sidechain_depth: float = 0.8
 
-    ceiling_db: float = -0.2
+    ceiling_db: float = -0.1
     eq_low_freq: float = 70.0
     eq_high_freq: float = 10000.0
-    compression_threshold: float = -14.0
+    compression_threshold: float = -12.0
     limiter_enabled: bool = True
 
 
@@ -1031,8 +1031,8 @@ class VariationEngine:
             stereo_width=self._art(
                 params.get("stereo_width", 1.2 + energy * 0.3), rng, 1.0, 1.8),
             master_drive=self._art(0.3 + energy * 0.4, rng, 0.1, 0.8),
-            eq_low_boost=self._art(2.0 + darkness * 3.0, rng, 0.0, 6.0),
-            eq_high_boost=self._art(1.5 + (1 - darkness) * 2.5, rng, 0.0, 5.0),
+            eq_low_boost=self._art(-1.5 + darkness * 1.5, rng, -3.0, 1.0),
+            eq_high_boost=self._art(3.5 + (1 - darkness) * 3.0, rng, 2.0, 7.0),
             compression_ratio=self._art(2.5 + energy * 2.0, rng, 1.5, 6.0),
             sidechain_depth=self._art(0.5 + energy * 0.3, rng, 0.3, 0.9),
             ceiling_db=self._art(-0.3 + energy * 0.15, rng, -0.5, -0.1),

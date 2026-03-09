@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 PHI = 1.6180339887
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 
 class LoopState(Enum):

@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 PHI = 1.6180339887
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 
 
 @dataclass

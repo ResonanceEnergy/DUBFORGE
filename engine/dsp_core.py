@@ -23,7 +23,7 @@ import numpy as np
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 PHI = 1.6180339887
 TWO_PI = 2.0 * math.pi
 
@@ -496,12 +496,10 @@ def multiband_compress(signal: np.ndarray,
     """
     low, mid, high = multiband_split(signal, low_xover, high_xover, sample_rate)
     
-    # Sub gets gentler threshold, highs get tighter
-    low_c = _compress_band(low, threshold_db, ratio, attack_ms, release_ms, sample_rate)
-    mid_c = _compress_band(mid, threshold_db + 2, ratio, attack_ms, release_ms, sample_rate)
-    high_c = _compress_band(high, threshold_db + 4, ratio, attack_ms, release_ms, sample_rate)
-    
-    return low_c + mid_c + high_c
+    # Sub gets TIGHTER compression (lower threshold), highs gentler
+    low_c = _compress_band(low, threshold_db - 4, ratio * 1.5, attack_ms, release_ms, sample_rate)
+    mid_c = _compress_band(mid, threshold_db, ratio, attack_ms, release_ms, sample_rate)
+    high_c = _compress_band(high, threshold_db + 2, ratio * 0.8, attack_ms, release_ms, sample_rate)
     
     return low_c + mid_c + high_c
 

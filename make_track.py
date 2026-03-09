@@ -27,7 +27,7 @@ from engine.supersaw import SupersawPatch, render_supersaw_mono
 from engine.glitch_engine import GlitchPreset, synthesize_stutter, synthesize_bitcrush
 
 # ── Constants ────────────────────────────────────────────────────────
-SR = 44100
+SR = 48000
 BPM = 140
 BEAT = 60.0 / BPM                    # seconds per beat
 BAR = BEAT * 4                       # seconds per bar
