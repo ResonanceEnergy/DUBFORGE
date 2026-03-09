@@ -271,6 +271,30 @@ def sidechain_bus(L: list[float], R: list[float], kick_positions: list[int],
     return out_l, out_r
 
 
+def pitch_shift_bass(sig: list[float], semitones: float) -> list[float]:
+    """Quick pitch shift via linear interpolation resampling.
+
+    Shifts pitch by the given number of semitones while keeping
+    the output the same length as the input (zero-pads if needed).
+    """
+    if abs(semitones) < 0.01:
+        return sig
+    ratio = 2.0 ** (semitones / 12.0)
+    n_orig = len(sig)
+    new_n = int(n_orig / ratio)
+    if new_n < 2:
+        return sig
+    arr = np.array(sig, dtype=np.float64)
+    indices = np.linspace(0, n_orig - 1, new_n)
+    shifted = np.interp(indices, np.arange(n_orig), arr)
+    # Pad or truncate to original length
+    if len(shifted) < n_orig:
+        shifted = np.pad(shifted, (0, n_orig - len(shifted)))
+    else:
+        shifted = shifted[:n_orig]
+    return shifted.tolist()
+
+
 def stereo_widen(mono: list[float], width: float = 0.5) -> tuple[list[float], list[float]]:
     """Stereo widening via Haas delay + slight pitch detune for rich spread."""
     delay = int(0.018 * SR)  # 18ms Haas delay (wider than before)
@@ -946,6 +970,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
     if dna is None:
         dna = _default_v5_dna()
 
+    # Import DSP primitives needed throughout
+    from engine.dsp_core import svf_highpass, svf_lowpass, multiband_compress
+
     # Shadow module-level timing constants with DNA values
     BEAT = 60.0 / dna.bpm
     BAR = BEAT * 4
@@ -1481,10 +1508,28 @@ def render_full_track(dna: 'SongDNA | None' = None):
         ))
         return to_list(ld_np)
 
-    lead_f = make_lead(FREQ["F4"], BEAT * 0.5)
-    lead_eb = make_lead(FREQ["Eb4"], BEAT * 0.5)
-    lead_c = make_lead(FREQ["C4"], BEAT * 0.75)
-    lead_ab = make_lead(FREQ["Ab4"], BEAT * 0.5)
+    # Pre-render leads for ALL 7 scale degrees × 2 octaves (oct 3 & 4)
+    # so DNA melody_patterns can reference any scale degree
+    lead_notes = {}  # {(degree, octave): audio_list}
+    for _deg in range(7):
+        for _oct in [3, 4]:
+            _freq = n(_deg, _oct)
+            lead_notes[(_deg, _oct)] = make_lead(_freq, BEAT * 0.5)
+    # Also pre-render longer variants for held notes
+    lead_notes_long = {}
+    for _deg in range(7):
+        for _oct in [3, 4]:
+            _freq = n(_deg, _oct)
+            lead_notes_long[(_deg, _oct)] = make_lead(_freq, BEAT * 1.0)
+    # Backwards-compat aliases
+    lead_f = lead_notes[(0, 4)]
+    lead_eb = lead_notes[(6, 3)]
+    lead_c = lead_notes[(4, 3)]
+    lead_ab = lead_notes[(2, 4)]
+
+    # Pre-render chord stabs for all chord progression degrees
+    chord_notes_l = {}
+    chord_notes_r = {}
 
     # Supersaw chord stabs — DNA-driven voices + detune
     def make_chord(freq, dur=BEAT * 0.75):
@@ -1504,6 +1549,14 @@ def render_full_track(dna: 'SongDNA | None' = None):
     chord_f_l, chord_f_r = make_chord(FREQ["F3"])
     chord_ab_l, chord_ab_r = make_chord(FREQ["Ab3"])
     chord_c_l, chord_c_r = make_chord(FREQ["C3"])
+
+    # Pre-render chords for all progression degrees
+    _chord_prog = getattr(ld, 'chord_progression', [0, 5, 2, 4])
+    for _cdeg in set(_chord_prog):
+        _cfreq = n(_cdeg, 3)
+        _cl, _cr = make_chord(_cfreq)
+        chord_notes_l[_cdeg] = _cl
+        chord_notes_r[_cdeg] = _cr
 
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Vocal chops (DNA-driven vowels)
@@ -1865,35 +1918,57 @@ def render_full_track(dna: 'SongDNA | None' = None):
         dn = drop_noise[:min(samples(4), len(drop_noise))]
         mx_wide(dn, off, 0.35, 20.0)
 
-        # Mid bass — 7-type rotation
+        # Mid bass — DNA bass_riff drives pitch + timbre rotation
+        _bass_riff = getattr(bd, 'bass_riff', None)
         bass_idx = bar % 7
         bass_snd = bass_arsenal[bass_idx]
 
+        # Get pitch shift from bass_riff pattern
+        _bass_semi = 0
+        if _bass_riff and len(_bass_riff) > 0:
+            _riff_pat = _bass_riff[bar % len(_bass_riff)]
+            if _riff_pat:
+                # Use first note's degree for the main bass pitch
+                _bdeg = _riff_pat[0][0]  # scale degree
+                _bass_semi = intervals[_bdeg % len(intervals)]
+
         if bass_idx in (0, 1):
             # FM growl or Wavetable growl — full 2-beat phrase
-            sc_b = sidechain(bass_snd, depth=0.7)
+            _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
+            sc_b = sidechain(_b, depth=0.7)
             mx_wide(sc_b, off + samples(0.5), 0.88)
-            sc_g = sidechain(dist_fm, depth=0.65)
+            _d = pitch_shift_bass(dist_fm, _bass_semi) if _bass_semi else dist_fm
+            sc_g = sidechain(_d, depth=0.65)
             mx_wide(sc_g, off + samples(2.5), 0.82)
         elif bass_idx == 2:
-            # Dist FM — staccato 8ths
-            for s8 in range(8):
-                sc_b = sidechain(bass_snd, depth=0.65)
+            # Dist FM — staccato 8ths with pitch variation per note
+            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
+            for s8 in range(min(8, len(_riff_notes))):
+                _rdeg = _riff_notes[s8 % len(_riff_notes)][0]
+                _rsemi = intervals[_rdeg % len(intervals)]
+                _b = pitch_shift_bass(bass_snd, _rsemi) if _rsemi else bass_snd
+                sc_b = sidechain(_b, depth=0.65)
                 mx_panned(sc_b, off + samples(s8 * 0.5), 0.75, -0.2 + 0.4 * (s8 / 8))
         elif bass_idx == 3:
             # Sync bass — swept harmonics
-            sc_b = sidechain(bass_snd, depth=0.65)
+            _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
+            sc_b = sidechain(_b, depth=0.65)
             mx_wide(sc_b, off + samples(0.5), 0.88, 15.0)
         elif bass_idx == 4:
             # Acid — filter sweep
-            sc_b = sidechain(bass_snd, depth=0.65)
+            _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
+            sc_b = sidechain(_b, depth=0.65)
             mx_wide(sc_b, off + samples(0.5), 0.85)
             # Pitch dive on beat 3
             mx_wide(pitch_dive, off + samples(2), 0.48)
         elif bass_idx == 5:
-            # Neuro — choppy
+            # Neuro — choppy with pitch variation
+            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
             for s16 in range(8):
                 b = neuro if s16 % 2 == 0 else dist_fm
+                _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
+                _rsemi = intervals[_rdeg % len(intervals)]
+                b = pitch_shift_bass(b, _rsemi) if _rsemi else b
                 sc_b = sidechain(b, depth=0.6)
                 mx_panned(sc_b, off + samples(s16 * 0.5), 0.68, -0.25 + 0.5 * (s16 / 8))
         elif bass_idx == 6:
@@ -1908,14 +1983,52 @@ def render_full_track(dna: 'SongDNA | None' = None):
         if bar % 4 == 2:
             mx_panned(chop_oh, off + samples(2), 0.48, 0.35)
 
-        # Lead — HEAVILY BOOSTED for mid/high presence
-        notes = [(lead_f, 0.0), (lead_eb, 1.0), (lead_c, 2.0), (lead_ab, 3.0)]
-        for snd, bt in notes:
-            mx_panned(snd, off + samples(bt), 0.82, 0.30 + 0.20 * math.sin(bar * 0.5))
+        # Lead — DNA-driven melody patterns (varied per bar, per song)
+        _melody_pats = getattr(ld, 'melody_patterns', None)
+        if _melody_pats and len(_melody_pats) > 0:
+            _phrase_len = getattr(ld, 'phrase_length', 4)
+            _pat_idx = (bar // _phrase_len) % len(_melody_pats)
+            _pattern = _melody_pats[_pat_idx]
+            for (deg, bt, dur, vel) in _pattern:
+                _oct = 4 if deg >= 4 else 3
+                _lnote = lead_notes_long if dur > 0.6 else lead_notes
+                _key = (deg % 7, _oct)
+                if _key in _lnote:
+                    _pan = -0.35 + 0.20 * math.sin(bar * 0.5 + bt * 0.3)
+                    mx_panned(_lnote[_key], off + samples(bt), 0.82 * vel, _pan)
+        else:
+            # Fallback to original 4-note pattern
+            notes = [(lead_f, 0.0), (lead_eb, 1.0), (lead_c, 2.0), (lead_ab, 3.0)]
+            for snd, bt in notes:
+                mx_panned(snd, off + samples(bt), 0.82, 0.30 + 0.20 * math.sin(bar * 0.5))
 
-        # Chords (every 4 bars) — MAX for width and body
+        # Chords — DNA chord progression (rotates every 4 bars)
         if bar % 4 == 0:
-            mx_stereo(chord_f_l, chord_f_r, off, 0.70)
+            _cprog = getattr(ld, 'chord_progression', [0, 5, 2, 4])
+            _cidx = (bar // 4) % len(_cprog)
+            _cdeg = _cprog[_cidx]
+            _cl = chord_notes_l.get(_cdeg, chord_f_l)
+            _cr = chord_notes_r.get(_cdeg, chord_f_r)
+            mx_stereo(_cl, _cr, off, 0.70)
+
+        # Crash cymbal on phrase starts (every 4 bars)
+        if bar % 4 == 0 and bar > 0:
+            _crash = synthesize_noise(NoisePreset(
+                name="Crash", noise_type="white", duration_s=BEAT * 3,
+                attack_s=0.001, release_s=0.8, brightness=0.9, gain=0.7
+            ))
+            _crash_np = to_np(_crash)
+            # HP filter at 6kHz to make it cymbal-like
+            _crash_np = svf_highpass(_crash_np, 6000.0, 0.7, SR)
+            _crash = normalize(to_list(_crash_np), 0.35)
+            mx_wide(_crash, off, 0.32, 25.0)
+
+        # Drum fill at phrase boundaries (bar 3, 7, 11, 15)
+        if bar % 4 == 3:
+            for _fill_i in range(4):
+                mx(snare, off + samples(_fill_i + 0.5), 0.45 + 0.12 * _fill_i, 0.45 + 0.12 * _fill_i)
+            for _fill_i in range(8):
+                mx_panned(hat_c, off + samples(_fill_i * 0.5), 0.35, -0.4 + 0.8 * (_fill_i / 8))
 
     mx(tape_stop, cursor + samples((DROP1 - 1) * 4 + 2), 0.5, 0.5)
     mx_wide(stutter, cursor + samples((DROP1 - 1) * 4 + 2), 0.35)
@@ -2045,38 +2158,63 @@ def render_full_track(dna: 'SongDNA | None' = None):
         dn = drop_noise[:min(samples(4), len(drop_noise))]
         mx_wide(dn, off, 0.38, 22.0)
 
-        # Mid bass — 8 patterns, more aggressive, HIGHER gains
+        # Mid bass — 8 patterns, more aggressive, HIGHER gains, DNA pitch variation
+        _bass_riff = getattr(bd, 'bass_riff', None)
         bass_idx = bar % 8
+        _bass_semi = 0
+        if _bass_riff and len(_bass_riff) > 0:
+            _riff_pat = _bass_riff[bar % len(_bass_riff)]
+            if _riff_pat:
+                _bdeg = _riff_pat[0][0]
+                _bass_semi = intervals[_bdeg % len(intervals)]
+
         if bass_idx in (0, 7):
-            # Double-time mixed bass 16ths
+            # Double-time mixed bass 16ths with pitch variation
             bass_pool = [neuro, dist_fm, fm_growl, growl_wt, sync_bass]
+            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.25, 0.25) for i in range(16)]
             for s16 in range(16):
                 b = bass_pool[s16 % len(bass_pool)]
+                _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
+                _rsemi = intervals[_rdeg % len(intervals)]
+                b = pitch_shift_bass(b, _rsemi) if _rsemi else b
                 sc_b = sidechain(b, depth=0.6)
                 mx_panned(sc_b, off + samples(s16 * 0.25), 0.68, -0.3 + 0.6 * (s16 / 16))
         elif bass_idx == 1:
-            sc_f = sidechain(formant, depth=0.65)
+            _b = pitch_shift_bass(formant, _bass_semi) if _bass_semi else formant
+            sc_f = sidechain(_b, depth=0.65)
             mx_wide(sc_f, off + samples(0.5), 0.92, 14.0)
             mx_wide(pitch_dive, off + samples(2.5), 0.48)
         elif bass_idx == 2:
+            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
             for s8 in range(8):
-                sc_b = sidechain(dist_fm, depth=0.65)
+                _rdeg = _riff_notes[s8 % len(_riff_notes)][0]
+                _rsemi = intervals[_rdeg % len(intervals)]
+                _b = pitch_shift_bass(dist_fm, _rsemi) if _rsemi else dist_fm
+                sc_b = sidechain(_b, depth=0.65)
                 mx_panned(sc_b, off + samples(s8 * 0.5), 0.78, -0.25 + 0.5 * (s8 / 8))
         elif bass_idx == 3:
-            sc_w = sidechain(growl_wt, depth=0.7)
+            _b = pitch_shift_bass(growl_wt, _bass_semi) if _bass_semi else growl_wt
+            sc_w = sidechain(_b, depth=0.7)
             mx_wide(sc_w, off + samples(0.5), 0.90)
         elif bass_idx == 4:
-            sc_d = sidechain(dive_bass, depth=0.6)
+            _b = pitch_shift_bass(dive_bass, _bass_semi) if _bass_semi else dive_bass
+            sc_d = sidechain(_b, depth=0.6)
             mx_wide(sc_d, off + samples(0.5), 0.85)
         elif bass_idx == 5:
+            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
             for s16 in range(8):
                 b = sync_bass if s16 % 2 == 0 else acid
+                _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
+                _rsemi = intervals[_rdeg % len(intervals)]
+                b = pitch_shift_bass(b, _rsemi) if _rsemi else b
                 sc_b = sidechain(b, depth=0.6)
                 mx_panned(sc_b, off + samples(s16 * 0.5), 0.72, -0.2 + 0.4 * (s16 / 8))
         elif bass_idx == 6:
-            sc_f = sidechain(fm_growl, depth=0.65)
+            _b1 = pitch_shift_bass(fm_growl, _bass_semi) if _bass_semi else fm_growl
+            sc_f = sidechain(_b1, depth=0.65)
             mx_wide(sc_f, off + samples(0.5), 0.82)
-            sc_g = sidechain(neuro, depth=0.65)
+            _b2 = pitch_shift_bass(neuro, _bass_semi) if _bass_semi else neuro
+            sc_g = sidechain(_b2, depth=0.65)
             mx_wide(sc_g, off + samples(2.5), 0.78)
 
         # Vocal chops (more frequent) — MAX
@@ -2086,17 +2224,52 @@ def render_full_track(dna: 'SongDNA | None' = None):
         if bar % 4 == 3:
             mx_panned(chop_yoi, off + samples(2), 0.52, -0.25)
 
-        # Lead — DIFFERENT PATTERN from Drop 1 (reverse order + wider)
-        notes_d2 = [(lead_ab, 0.0), (lead_c, 1.0), (lead_eb, 2.0), (lead_f, 3.0)]
-        for snd, bt in notes_d2:
-            mx_panned(snd, off + samples(bt), 0.85, -0.35 + 0.20 * math.sin(bar * 0.9))
+        # Lead — DNA-driven melody (uses SECOND HALF of patterns for Drop 2)
+        _melody_pats = getattr(ld, 'melody_patterns', None)
+        if _melody_pats and len(_melody_pats) > 0:
+            _phrase_len = getattr(ld, 'phrase_length', 4)
+            # Offset pattern index so Drop 2 uses different patterns than Drop 1
+            _n_pats = len(_melody_pats)
+            _pat_idx = (_n_pats // 2 + (bar // _phrase_len)) % _n_pats
+            _pattern = _melody_pats[_pat_idx]
+            for (deg, bt, dur, vel) in _pattern:
+                _oct = 4 if deg >= 4 else 3
+                _lnote = lead_notes_long if dur > 0.6 else lead_notes
+                _key = (deg % 7, _oct)
+                if _key in _lnote:
+                    _pan = -0.40 + 0.22 * math.sin(bar * 0.9 + bt * 0.4)
+                    mx_panned(_lnote[_key], off + samples(bt), 0.85 * vel, _pan)
+        else:
+            notes_d2 = [(lead_ab, 0.0), (lead_c, 1.0), (lead_eb, 2.0), (lead_f, 3.0)]
+            for snd, bt in notes_d2:
+                mx_panned(snd, off + samples(bt), 0.85, -0.35 + 0.20 * math.sin(bar * 0.9))
 
-        # Chords (every 2 bars) — LOUDER
+        # Chords — DNA progression (rotates every 2 bars in Drop 2)
         if bar % 2 == 0:
-            chords = [(chord_f_l, chord_f_r), (chord_ab_l, chord_ab_r),
-                      (chord_c_l, chord_c_r)]
-            cl, cr = chords[(bar // 2) % 3]
-            mx_stereo(cl, cr, off, 0.72)
+            _cprog = getattr(ld, 'chord_progression', [0, 5, 2, 4])
+            _cidx = (bar // 2) % len(_cprog)
+            _cdeg = _cprog[_cidx]
+            _cl = chord_notes_l.get(_cdeg, chord_f_l)
+            _cr = chord_notes_r.get(_cdeg, chord_f_r)
+            mx_stereo(_cl, _cr, off, 0.72)
+
+        # Crash cymbal on phrase starts (every 4 bars)
+        if bar % 4 == 0 and bar > 0:
+            _crash = synthesize_noise(NoisePreset(
+                name="Crash", noise_type="white", duration_s=BEAT * 3,
+                attack_s=0.001, release_s=0.8, brightness=0.9, gain=0.7
+            ))
+            _crash_np = to_np(_crash)
+            _crash_np = svf_highpass(_crash_np, 6000.0, 0.7, SR)
+            _crash = normalize(to_list(_crash_np), 0.38)
+            mx_wide(_crash, off, 0.35, 25.0)
+
+        # Drum fill at phrase boundaries (bar 3, 7, 11, 15)
+        if bar % 4 == 3:
+            for _fill_i in range(6):
+                mx(snare, off + samples(_fill_i * 0.5 + 0.5), 0.42 + 0.10 * _fill_i, 0.42 + 0.10 * _fill_i)
+            for _fill_i in range(8):
+                mx_panned(hat_c, off + samples(_fill_i * 0.5), 0.38, -0.5 + 1.0 * (_fill_i / 8))
 
     mx(tape_stop, cursor + samples((DROP2 - 1) * 4 + 2), 0.55, 0.55)
     mx_wide(stutter, cursor + samples((DROP2 - 2) * 4), 0.35)
@@ -2136,26 +2309,29 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # ══════════════════════════════════════════════════
     print("  [9/9] Mixing & mastering...")
 
+    # ── Apply sidechain_bus using collected kick positions ──
+    # This creates the signature dubstep pump on the full mix
+    if kick_positions:
+        L, R = sidechain_bus(L, R, kick_positions, depth=0.35, attack=0.003, release=0.18)
+
     # ── Bus compression on full mix before mastering ──
     # This glues the mix together like a console bus compressor
-    from engine.dsp_core import multiband_compress
     L_np = np.array(L, dtype=np.float64)
     R_np = np.array(R, dtype=np.float64)
 
     # High-pass at 25Hz to remove inaudible sub rumble
-    from engine.dsp_core import svf_highpass
     L_np = svf_highpass(L_np, 25.0, 0.7, SR)
     R_np = svf_highpass(R_np, 25.0, 0.7, SR)
 
-    # Low-shelf CUT at 60Hz to tame sub energy (-4 dB)
+    # Low-shelf CUT at 60Hz to tame sub energy (-2 dB, mastering chain adds further DNA eq_low_boost)
     L_list = L_np.tolist()
     R_list = R_np.tolist()
-    L_list = apply_eq_band(L_list, center_hz=60.0, gain_db=-6.0, q=0.4)
-    R_list = apply_eq_band(R_list, center_hz=60.0, gain_db=-6.0, q=0.4)
+    L_list = apply_eq_band(L_list, center_hz=60.0, gain_db=-2.0, q=0.4)
+    R_list = apply_eq_band(R_list, center_hz=60.0, gain_db=-2.0, q=0.4)
 
-    # Mid presence boost at 1kHz (+4 dB)
-    L_list = apply_eq_band(L_list, center_hz=1000.0, gain_db=4.0, q=0.8)
-    R_list = apply_eq_band(R_list, center_hz=1000.0, gain_db=4.0, q=0.8)
+    # Mid presence boost at 1kHz (+2 dB — gentle, mastering adds more)
+    L_list = apply_eq_band(L_list, center_hz=1000.0, gain_db=2.0, q=0.8)
+    R_list = apply_eq_band(R_list, center_hz=1000.0, gain_db=2.0, q=0.8)
 
     # High presence boost at 5kHz (+3 dB)
     L_list = apply_eq_band(L_list, center_hz=5000.0, gain_db=3.0, q=0.7)
@@ -2164,15 +2340,19 @@ def render_full_track(dna: 'SongDNA | None' = None):
     L_np = np.array(L_list, dtype=np.float64)
     R_np = np.array(R_list, dtype=np.float64)
 
-    # Bus compress L and R independently (glue compression — sub compressed harder)
-    L_np = multiband_compress(L_np, SR,
+    # Bus compress as linked stereo (sum L+R → derive gain → apply to both)
+    M_np = (L_np + R_np) * 0.5  # Mid signal for gain detection
+    M_compressed = multiband_compress(M_np, SR,
                                low_xover=120.0, high_xover=4000.0,
                                threshold_db=-10.0, ratio=2.5,
                                attack_ms=10.0, release_ms=80.0)
-    R_np = multiband_compress(R_np, SR,
-                               low_xover=120.0, high_xover=4000.0,
-                               threshold_db=-10.0, ratio=2.5,
-                               attack_ms=10.0, release_ms=80.0)
+    # Derive gain envelope from mid compression
+    _gain_env = np.ones_like(M_np)
+    _nonzero = np.abs(M_np) > 1e-12
+    _gain_env[_nonzero] = M_compressed[_nonzero] / M_np[_nonzero]
+    _gain_env = np.clip(_gain_env, 0.0, 2.0)
+    L_np = L_np * _gain_env
+    R_np = R_np * _gain_env
 
     stereo = np.column_stack([L_np, R_np])
 

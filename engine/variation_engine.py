@@ -334,6 +334,13 @@ class BassDNA:
     ott_amount: float = 0.4
     ring_mod_freq: float = 0.0  # 0 = off
 
+    # Bass pitch riff patterns — list of bar-patterns
+    # Each bar-pattern is list of (scale_degree, beat_pos, duration_beats)
+    bass_riff: list = field(default_factory=lambda: [
+        [(0, 0.0, 1.0), (0, 1.0, 1.0), (6, 2.0, 0.5), (0, 3.0, 1.0)],
+        [(0, 0.0, 2.0), (4, 2.0, 1.0), (2, 3.0, 1.0)],
+    ])
+
 
 @dataclass
 class LeadDNA:
@@ -352,6 +359,20 @@ class LeadDNA:
     supersaw_detune: float = 35.0
     supersaw_cutoff: float = 5500.0
     ott_amount: float = 0.3
+
+    # ── Melody composition fields ──
+    # Each pattern is a list of (scale_degree, beat_position, duration_beats, velocity)
+    # scale_degree: 0-6 within the scale, -1 = rest
+    # beat_position: 0.0-3.75 within a bar
+    # duration_beats: how long the note lasts
+    # velocity: 0.0-1.0
+    melody_patterns: list = field(default_factory=lambda: [
+        [(0, 0.0, 0.5, 1.0), (6, 1.0, 0.5, 0.9), (4, 2.0, 0.75, 0.85), (2, 3.0, 0.5, 0.8)],
+    ])
+    # How many bars before the pattern repeats/varies
+    phrase_length: int = 4
+    # Chord progression as list of scale degrees (0=root, 2=third, 4=fifth, etc.)
+    chord_progression: list = field(default_factory=lambda: [0, 5, 2, 4])
 
 
 @dataclass
@@ -928,7 +949,64 @@ class VariationEngine:
             ott_amount=self._art(0.25 + energy * 0.25, rng, 0.15, 0.6),
             ring_mod_freq=self._art(
                 params.get("metallic", 0.0) * 200.0, rng, 0.0, 300.0) if params.get("metallic", 0) > 0.5 else 0.0,
+            bass_riff=self._generate_bass_riff(energy, darkness, rng),
         )
+
+    def _generate_bass_riff(self, energy: float, darkness: float, rng: random.Random) -> list:
+        """Generate 4-8 distinct bass riff bar-patterns using scale degrees."""
+        # Available rhythmic templates for bass
+        templates = [
+            # Halftime feel
+            [(0.0, 2.0), (2.0, 2.0)],
+            # Standard
+            [(0.0, 1.0), (1.0, 1.0), (2.0, 1.0), (3.0, 1.0)],
+            # Syncopated
+            [(0.0, 1.5), (1.5, 0.5), (2.0, 1.0), (3.0, 0.5), (3.5, 0.5)],
+            # Double-time 8ths
+            [(i * 0.5, 0.5) for i in range(8)],
+            # Dotted feel
+            [(0.0, 0.75), (0.75, 0.75), (1.5, 0.75), (2.25, 0.75), (3.0, 1.0)],
+            # Sparse
+            [(0.0, 2.0), (3.0, 1.0)],
+            # Triplet-ish
+            [(0.0, 0.67), (0.67, 0.67), (1.33, 0.67), (2.0, 1.0), (3.0, 1.0)],
+            # Stuttered
+            [(0.0, 0.25), (0.25, 0.25), (0.5, 1.5), (2.0, 0.5), (2.5, 0.5), (3.0, 1.0)],
+        ]
+
+        # Pitch contour shapes (scale degrees)
+        contours = [
+            [0, 0, 6, 0],          # root-root-b7-root
+            [0, 4, 2, 0],          # root-5th-3rd-root
+            [0, 6, 4, 2],          # descending
+            [0, 2, 4, 6],          # ascending
+            [0, 0, 4, 6],          # root-root-5th-b7
+            [2, 0, 6, 4],          # 3rd-root-b7-5th
+            [0, 5, 0, 4],          # root-b6-root-5th
+            [4, 0, 2, 6],          # 5th-root-3rd-b7
+            [0, 0, 0, 6],          # root-root-root-b7
+            [6, 6, 4, 0],          # b7-b7-5th-root
+        ]
+
+        n_patterns = 4 + int(energy * 4)  # 4-8 patterns
+        riff = []
+        used_combos = set()
+        for _ in range(n_patterns):
+            tmpl = rng.choice(templates)
+            contour = rng.choice(contours)
+            # Avoid exact duplicates
+            combo_key = (tuple((t, d) for t, d in tmpl), tuple(contour))
+            if combo_key in used_combos and len(used_combos) < len(templates) * len(contours):
+                tmpl = rng.choice(templates)
+                contour = rng.choice(contours)
+            used_combos.add(combo_key)
+
+            bar = []
+            for idx, (beat_pos, dur) in enumerate(tmpl):
+                degree = contour[idx % len(contour)]
+                bar.append((degree, beat_pos, dur))
+            riff.append(bar)
+        return riff
 
     def _build_lead_dna(self, params: dict, rng: random.Random) -> LeadDNA:
         """Derive lead personality."""
@@ -965,7 +1043,134 @@ class VariationEngine:
             supersaw_cutoff=self._art(
                 3500 + brightness * 4000 if brightness else 5500, rng, 2000, 8000),
             ott_amount=self._art(0.2 + energy * 0.2, rng, 0.1, 0.5),
+            melody_patterns=self._generate_melody_patterns(energy, brightness if brightness else 0.5, rng),
+            phrase_length=rng.choice([4, 4, 8, 8, 8]),
+            chord_progression=self._generate_chord_progression(energy, rng),
         )
+
+    def _generate_melody_patterns(self, energy: float, brightness: float, rng: random.Random) -> list:
+        """Generate 4-8 distinct melody bar-patterns for drops.
+
+        Each pattern is a list of (scale_degree, beat_pos, duration_beats, velocity).
+        Creates varied, musical phrases that differ between songs.
+        """
+        # Melodic contour archetypes
+        contour_types = [
+            "descending",   # start high, end low (classic dubstep)
+            "ascending",    # start low, end high
+            "arch",         # low-high-low
+            "valley",       # high-low-high
+            "static_high",  # stay in upper register
+            "pendulum",     # alternating high-low
+            "stepwise",     # scale run
+        ]
+
+        # Rhythmic density templates (beat_pos, duration)
+        rhythm_templates = [
+            # Quarter notes
+            [(0.0, 0.5), (1.0, 0.5), (2.0, 0.75), (3.0, 0.5)],
+            # Syncopated
+            [(0.0, 0.5), (0.75, 0.5), (2.0, 0.5), (3.0, 0.5)],
+            # Dotted 8ths
+            [(0.0, 0.75), (0.75, 0.75), (1.5, 0.75), (2.25, 0.75), (3.0, 0.5)],
+            # Sparse (half notes)
+            [(0.0, 1.0), (2.0, 1.0)],
+            # Dense 8ths
+            [(i * 0.5, 0.5) for i in range(8)],
+            # Off-beat
+            [(0.5, 0.5), (1.5, 0.5), (2.5, 0.5), (3.5, 0.5)],
+            # Call-and-response
+            [(0.0, 0.5), (0.5, 0.25), (1.5, 0.5), (3.0, 0.75)],
+            # Triplet
+            [(0.0, 0.33), (0.33, 0.33), (0.67, 0.33), (2.0, 0.5), (3.0, 1.0)],
+        ]
+
+        n_patterns = 4 + int(energy * 4)  # 4-8 patterns
+        patterns = []
+
+        # Pick 2-3 contour types for this song
+        song_contours = rng.sample(contour_types, min(3, len(contour_types)))
+
+        for i in range(n_patterns):
+            contour = song_contours[i % len(song_contours)]
+            rhythm = rng.choice(rhythm_templates)
+
+            # Generate scale degrees based on contour
+            n_notes = len(rhythm)
+            degrees = []
+            if contour == "descending":
+                high = rng.choice([4, 5, 6])
+                for j in range(n_notes):
+                    degrees.append(max(0, high - j))
+            elif contour == "ascending":
+                low = rng.choice([0, 1, 2])
+                for j in range(n_notes):
+                    degrees.append(min(6, low + j))
+            elif contour == "arch":
+                mid = n_notes // 2
+                for j in range(n_notes):
+                    if j <= mid:
+                        degrees.append(min(6, j * 2))
+                    else:
+                        degrees.append(max(0, (n_notes - j) * 2))
+            elif contour == "valley":
+                mid = n_notes // 2
+                for j in range(n_notes):
+                    if j <= mid:
+                        degrees.append(max(0, 6 - j * 2))
+                    else:
+                        degrees.append(min(6, (j - mid) * 2))
+            elif contour == "static_high":
+                base = rng.choice([4, 5, 6])
+                for j in range(n_notes):
+                    degrees.append(base + rng.choice([-1, 0, 0, 1]))
+                    degrees[-1] = max(0, min(6, degrees[-1]))
+            elif contour == "pendulum":
+                low = rng.choice([0, 1, 2])
+                high = rng.choice([4, 5, 6])
+                for j in range(n_notes):
+                    degrees.append(high if j % 2 == 0 else low)
+            else:  # stepwise
+                start = rng.choice([0, 2, 4])
+                direction = rng.choice([-1, 1])
+                for j in range(n_notes):
+                    degrees.append(max(0, min(6, start + j * direction)))
+
+            # Build pattern with velocity variation
+            pattern = []
+            for j, (beat_pos, dur) in enumerate(rhythm):
+                vel = 0.7 + 0.3 * rng.random()
+                # Accent first beat
+                if beat_pos < 0.1:
+                    vel = min(1.0, vel + 0.15)
+                pattern.append((degrees[j], beat_pos, dur, round(vel, 2)))
+
+            patterns.append(pattern)
+
+        return patterns
+
+    def _generate_chord_progression(self, energy: float, rng: random.Random) -> list:
+        """Generate a 4- or 8-chord progression as scale degrees."""
+        progressions_4 = [
+            [0, 5, 2, 4],    # i - bVI - III - V
+            [0, 3, 5, 4],    # i - iv - bVI - V
+            [0, 5, 3, 4],    # i - bVI - iv - V
+            [0, 2, 5, 4],    # i - III - bVI - V
+            [0, 4, 5, 3],    # i - V - bVI - iv
+            [0, 6, 5, 4],    # i - bVII - bVI - V
+            [0, 3, 4, 0],    # i - iv - V - i
+            [0, 5, 4, 3],    # i - bVI - V - iv
+        ]
+        progressions_8 = [
+            [0, 0, 5, 5, 3, 3, 4, 4],
+            [0, 2, 5, 4, 0, 3, 5, 4],
+            [0, 5, 3, 4, 2, 5, 4, 0],
+        ]
+
+        if energy > 0.7 or rng.random() > 0.5:
+            return rng.choice(progressions_4)
+        else:
+            return rng.choice(progressions_8)
 
     def _build_atmosphere_dna(self, params: dict, rng: random.Random) -> AtmosphereDNA:
         """Derive atmosphere personality."""
