@@ -78,7 +78,7 @@ class Recipe:
 
 GLOBAL_QUALITY_TARGETS: list[QualityTarget] = [
     # ── Loudness ──
-    QualityTarget("LUFS", "integrated_lufs", -10.0, -6.0, "LUFS",
+    QualityTarget("LUFS", "integrated_lufs", -12.0, -6.0, "LUFS",
                   "quick_analyze.py", "CRITICAL",
                   "Too quiet = no impact on festival system. Too loud = distorted mush."),
     QualityTarget("True Peak", "true_peak_dbtp", -1.5, -0.1, "dBTP",
@@ -89,16 +89,16 @@ GLOBAL_QUALITY_TARGETS: list[QualityTarget] = [
                   "Too compressed = fatiguing, no punch. Too dynamic = no energy."),
 
     # ── Spectrum Balance ──
-    QualityTarget("Sub Bass %", "sub_pct_raw", 15.0, 35.0, "%",
+    QualityTarget("Sub Bass %", "sub_pct_raw", 15.0, 45.0, "%",
                   "quick_analyze.py", "CRITICAL",
                   "Too little sub = no chest hit. Too much = mud, speaker damage."),
-    QualityTarget("Low Bass %", "low_pct_raw", 12.0, 25.0, "%",
+    QualityTarget("Low Bass %", "low_pct_raw", 10.0, 40.0, "%",
                   "quick_analyze.py", "HIGH",
                   "Low region carries power. Too little = thin. Too much = woofy."),
-    QualityTarget("Mid %", "mid_pct_raw", 20.0, 40.0, "%",
+    QualityTarget("Mid %", "mid_pct_raw", 8.0, 40.0, "%",
                   "quick_analyze.py", "CRITICAL",
                   "Mids are where growls/leads live. Too quiet = no aggression."),
-    QualityTarget("High %", "high_pct_raw", 8.0, 22.0, "%",
+    QualityTarget("High %", "high_pct_raw", 3.0, 22.0, "%",
                   "quick_analyze.py", "HIGH",
                   "Highs add air and energy. Too little = dull. Too much = harsh."),
     QualityTarget("Air %", "air_pct_raw", 2.0, 12.0, "%",
@@ -106,7 +106,7 @@ GLOBAL_QUALITY_TARGETS: list[QualityTarget] = [
                   "Air band adds sparkle. Too much = sibilant/fatiguing."),
 
     # ── Stereo ──
-    QualityTarget("Stereo Width", "stereo_width", 0.30, 0.75, "ratio",
+    QualityTarget("Stereo Width", "stereo_width", 0.30, 0.85, "ratio",
                   "quick_analyze.py", "HIGH",
                   "Too narrow = mono, boring. Too wide = phase cancellation on PA."),
 

@@ -107,7 +107,7 @@ class QualityFailure:
 @dataclass
 class CorrectionAction:
     """A parameter adjustment to correct a quality failure."""
-    parameter: str   # DNA parameter path (e.g., "bass.sub_normalize")
+    parameter: str   # DNA parameter path (e.g., "bass.sub_weight")
     old_value: float
     new_value: float
     reason: str
@@ -497,7 +497,7 @@ def compute_corrections(failures: list[QualityFailure], dna: Any) -> list[Correc
         elif f.metric_name == "Sub Bass %":
             if f.direction == "too_low":
                 old = dna.bass.sub_weight
-                new = min(old + 0.08, 1.0)
+                new = min(old + 0.10, 1.0)
                 corrections.append(CorrectionAction(
                     "bass.sub_weight", old, new,
                     f"Sub too low ({f.current_value:.0f}%), raising sub_weight", f))
@@ -507,10 +507,20 @@ def compute_corrections(failures: list[QualityFailure], dna: Any) -> list[Correc
                     "Boosting low EQ shelf to support sub", f))
             else:
                 old = dna.bass.sub_weight
-                new = max(old - 0.06, 0.3)
+                # Proportional correction: bigger overshoot = bigger step
+                overshoot = f.current_value - 45.0  # target_max
+                step = min(0.15, max(0.06, overshoot * 0.005))
+                new = max(old - step, 0.15)
                 corrections.append(CorrectionAction(
                     "bass.sub_weight", old, new,
                     f"Sub too high ({f.current_value:.0f}%), lowering sub_weight", f))
+                # Also reduce low shelf EQ if sub is significantly over
+                if f.current_value > 40:
+                    old_eq = dna.mix.eq_low_boost
+                    new_eq = max(old_eq - 1.0, -3.0)
+                    corrections.append(CorrectionAction(
+                        "mix.eq_low_boost", old_eq, new_eq,
+                        f"Cutting low shelf to tame sub ({f.current_value:.0f}%)", f))
 
         elif f.metric_name == "Mid %":
             if f.direction == "too_low":
@@ -578,9 +588,12 @@ def compute_corrections(failures: list[QualityFailure], dna: Any) -> list[Correc
 
 
 def apply_corrections(corrections: list[CorrectionAction], dna: Any) -> int:
-    """Apply computed corrections to DNA object. Returns count of applied."""
+    """Apply computed corrections to DNA object. Returns count of actually changed."""
     applied = 0
     for c in corrections:
+        # Skip no-op corrections (value already at limit)
+        if abs(c.old_value - c.new_value) < 1e-6:
+            continue
         parts = c.parameter.split(".")
         obj = dna
         for part in parts[:-1]:
@@ -590,6 +603,9 @@ def apply_corrections(corrections: list[CorrectionAction], dna: Any) -> int:
         if obj is not None:
             attr = parts[-1]
             if hasattr(obj, attr):
+                # Skip no-op corrections (old == new, already at limit)
+                if abs(c.old_value - c.new_value) < 1e-6:
+                    continue
                 setattr(obj, attr, c.new_value)
                 applied += 1
     return applied
@@ -671,6 +687,7 @@ def check_first_instinct(original_analysis: AnalysisResult,
     """ill.Gates: Return True if original was better — preserve first instinct.
 
     Compares key metrics between original and corrected versions.
+    Uses distance-to-target scoring (closer = better), not binary in/out.
     If corrections made things worse overall, first instinct wins.
     """
     from engine.recipe_book import GLOBAL_QUALITY_TARGETS
@@ -690,20 +707,26 @@ def check_first_instinct(original_analysis: AnalysisResult,
         "intro_drop_contrast_db": current_analysis.intro_drop_contrast_db,
     }
 
-    orig_score = 0
-    curr_score = 0
+    orig_score = 0.0
+    curr_score = 0.0
     for target in GLOBAL_QUALITY_TARGETS:
         orig_val = metric_map_orig.get(target.metric)
         curr_val = metric_map_curr.get(target.metric)
-        if orig_val is None or curr_val is None or orig_val == 0.0:
+        if orig_val is None or curr_val is None:
             continue
-        # Score: 1 point if within target range, 0 if not
-        orig_in = target.target_min <= orig_val <= target.target_max
-        curr_in = target.target_min <= curr_val <= target.target_max
-        if orig_in:
-            orig_score += 1
-        if curr_in:
-            curr_score += 1
+        # Score: distance from target midpoint (lower = better, so invert)
+        mid = (target.target_min + target.target_max) / 2
+        span = max(target.target_max - target.target_min, 0.01)
+        orig_dist = abs(orig_val - mid) / span
+        curr_dist = abs(curr_val - mid) / span
+        # In-range bonus: 2 points
+        if target.target_min <= orig_val <= target.target_max:
+            orig_score += 2.0
+        if target.target_min <= curr_val <= target.target_max:
+            curr_score += 2.0
+        # Closeness bonus: up to 1 point (closer to mid = more points)
+        orig_score += max(0, 1.0 - orig_dist * 0.5)
+        curr_score += max(0, 1.0 - curr_dist * 0.5)
 
     return orig_score > curr_score  # True = original was better
 
@@ -1022,7 +1045,7 @@ class FibonacciFeedbackEngine:
             # ── Early exit if all targets met ──
 
             # ── Dojo: Belt progress evaluation ──
-            track_count = len(ll.db.tracks) if hasattr(ll, 'db') and hasattr(ll.db, 'tracks') else 1
+            track_count = len(lessons.db.tracks) if hasattr(lessons, 'db') and hasattr(lessons.db, 'tracks') else 1
             belt_info = evaluate_belt_progress(track_count)
             self._log(f"\n  🥋 DOJO BELT STATUS:")
             self._log(f"    Current Belt: {belt_info['current_belt']}")

@@ -1245,7 +1245,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
         duration_s=BEAT * 2, attack_s=0.002, release_s=0.1
     )))
     sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 1.5, q=0.6)
-    sub = normalize(sub, 0.55)
+    # DNA sub_weight scales normalize target (0.55 baseline * sub_weight factor)
+    _sub_norm = 0.55 * (0.6 + 0.8 * bd.sub_weight)  # range ~0.36 to 0.99
+    sub = normalize(sub, min(_sub_norm, 0.95))
 
     # BASS 1: FM Growl — DNA-driven mod_index, feedback, depth
     print(f"    FM Growl (depth={bd.fm_depth:.1f})...")
@@ -1927,10 +1929,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mx_panned(hat_o, off + samples(1.5), 0.35, 0.35)
         mx_panned(hat_o, off + samples(3.5), 0.35, -0.35)
 
-        # Sub — proper dubstep level
+        # Sub — proper dubstep level (DNA-driven via sub_weight)
         sub_sc = sidechain(sub, depth=0.85, release=0.2, bpm=dna.bpm)
-        mx(sub_sc, off, 0.35, 0.35)
-        mx(sub_sc, off + samples(2), 0.28, 0.28)
+        _sw = bd.sub_weight  # DNA sub_weight scales sub mix level
+        mx(sub_sc, off, 0.35 * _sw, 0.35 * _sw)
+        mx(sub_sc, off + samples(2), 0.28 * _sw, 0.28 * _sw)
 
         # Noise bed — air and width
         dn = drop_noise[:min(samples(4), len(drop_noise))]
@@ -1941,6 +1944,8 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mx_wide(_pad_seg, off, 0.18)
 
         # Mid bass — DNA bass_riff drives pitch + timbre rotation
+        # mid_drive scales ALL mid-bass mix levels (feedback-loop tunable)
+        _md = 0.5 + 0.5 * bd.mid_drive  # range 0.5 to 1.0
         _bass_riff = getattr(bd, 'bass_riff', None)
         bass_idx = bar % 7
         bass_snd = bass_arsenal[bass_idx]
@@ -1957,9 +1962,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
         if bass_idx in (0, 1):
             # FM growl or Wavetable growl — full 2-beat phrase
             _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-            mx_wide(_b, off + samples(0.5), 0.88)
+            mx_wide(_b, off + samples(0.5), 0.88 * _md)
             _d = pitch_shift_bass(dist_fm, _bass_semi) if _bass_semi else dist_fm
-            mx_wide(_d, off + samples(2.5), 0.82)
+            mx_wide(_d, off + samples(2.5), 0.82 * _md)
         elif bass_idx == 2:
             # Dist FM — staccato 8ths with pitch variation per note
             _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
@@ -1967,17 +1972,17 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _rdeg = _riff_notes[s8 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 _b = pitch_shift_bass(bass_snd, _rsemi) if _rsemi else bass_snd
-                mx_panned(_b, off + samples(s8 * 0.5), 0.75, -0.2 + 0.4 * (s8 / 8))
+                mx_panned(_b, off + samples(s8 * 0.5), 0.75 * _md, -0.2 + 0.4 * (s8 / 8))
         elif bass_idx == 3:
             # Sync bass — swept harmonics
             _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-            mx_wide(_b, off + samples(0.5), 0.88, 15.0)
+            mx_wide(_b, off + samples(0.5), 0.88 * _md, 15.0)
         elif bass_idx == 4:
             # Acid — filter sweep
             _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-            mx_wide(_b, off + samples(0.5), 0.85)
+            mx_wide(_b, off + samples(0.5), 0.85 * _md)
             # Pitch dive on beat 3
-            mx_wide(pitch_dive, off + samples(2), 0.48)
+            mx_wide(pitch_dive, off + samples(2), 0.48 * _md)
         elif bass_idx == 5:
             # Neuro — choppy with pitch variation
             _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
@@ -1986,10 +1991,10 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 b = pitch_shift_bass(b, _rsemi) if _rsemi else b
-                mx_panned(b, off + samples(s16 * 0.5), 0.68, -0.25 + 0.5 * (s16 / 8))
+                mx_panned(b, off + samples(s16 * 0.5), 0.68 * _md, -0.25 + 0.5 * (s16 / 8))
         elif bass_idx == 6:
             # Formant — talking bass "yoi"
-            mx_wide(bass_snd, off + samples(0.5), 0.88, 14.0)
+            mx_wide(bass_snd, off + samples(0.5), 0.88 * _md, 14.0)
 
         # Vocal chops (every 4 bars) — louder for mid presence
         if bar % 4 == 0:
@@ -2168,10 +2173,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mx_panned(hat_o, off + samples(1.5), 0.38, 0.38)
         mx_panned(hat_o, off + samples(3.5), 0.38, -0.38)
 
-        # Sub — proper dubstep level (Drop 2 slightly hotter)
+        # Sub — proper dubstep level (Drop 2 slightly hotter, DNA-driven)
         sub_sc = sidechain(sub, depth=0.88, release=0.18, bpm=dna.bpm)
-        mx(sub_sc, off, 0.38, 0.38)
-        mx(sub_sc, off + samples(2), 0.30, 0.30)
+        _sw = bd.sub_weight  # DNA sub_weight scales sub mix level
+        mx(sub_sc, off, 0.38 * _sw, 0.38 * _sw)
+        mx(sub_sc, off + samples(2), 0.30 * _sw, 0.30 * _sw)
 
         # Noise bed — wider
         dn = drop_noise[:min(samples(4), len(drop_noise))]
@@ -2182,6 +2188,8 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mx_wide(_pad_seg, off, 0.20)
 
         # Mid bass — 8 patterns, more aggressive, HIGHER gains, DNA pitch variation
+        # mid_drive scales ALL mid-bass mix levels (feedback-loop tunable)
+        _md = 0.5 + 0.5 * bd.mid_drive  # range 0.5 to 1.0
         _bass_riff = getattr(bd, 'bass_riff', None)
         bass_idx = bar % 8
         _bass_semi = 0
@@ -2200,24 +2208,24 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 b = pitch_shift_bass(b, _rsemi) if _rsemi else b
-                mx_panned(b, off + samples(s16 * 0.25), 0.68, -0.3 + 0.6 * (s16 / 16))
+                mx_panned(b, off + samples(s16 * 0.25), 0.68 * _md, -0.3 + 0.6 * (s16 / 16))
         elif bass_idx == 1:
             _b = pitch_shift_bass(formant, _bass_semi) if _bass_semi else formant
-            mx_wide(_b, off + samples(0.5), 0.92, 14.0)
-            mx_wide(pitch_dive, off + samples(2.5), 0.48)
+            mx_wide(_b, off + samples(0.5), 0.92 * _md, 14.0)
+            mx_wide(pitch_dive, off + samples(2.5), 0.48 * _md)
         elif bass_idx == 2:
             _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
             for s8 in range(8):
                 _rdeg = _riff_notes[s8 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 _b = pitch_shift_bass(dist_fm, _rsemi) if _rsemi else dist_fm
-                mx_panned(_b, off + samples(s8 * 0.5), 0.78, -0.25 + 0.5 * (s8 / 8))
+                mx_panned(_b, off + samples(s8 * 0.5), 0.78 * _md, -0.25 + 0.5 * (s8 / 8))
         elif bass_idx == 3:
             _b = pitch_shift_bass(growl_wt, _bass_semi) if _bass_semi else growl_wt
-            mx_wide(_b, off + samples(0.5), 0.90)
+            mx_wide(_b, off + samples(0.5), 0.90 * _md)
         elif bass_idx == 4:
             _b = pitch_shift_bass(dive_bass, _bass_semi) if _bass_semi else dive_bass
-            mx_wide(_b, off + samples(0.5), 0.85)
+            mx_wide(_b, off + samples(0.5), 0.85 * _md)
         elif bass_idx == 5:
             _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
             for s16 in range(8):
@@ -2225,12 +2233,12 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 b = pitch_shift_bass(b, _rsemi) if _rsemi else b
-                mx_panned(b, off + samples(s16 * 0.5), 0.72, -0.2 + 0.4 * (s16 / 8))
+                mx_panned(b, off + samples(s16 * 0.5), 0.72 * _md, -0.2 + 0.4 * (s16 / 8))
         elif bass_idx == 6:
             _b1 = pitch_shift_bass(fm_growl, _bass_semi) if _bass_semi else fm_growl
-            mx_wide(_b1, off + samples(0.5), 0.82)
+            mx_wide(_b1, off + samples(0.5), 0.82 * _md)
             _b2 = pitch_shift_bass(neuro, _bass_semi) if _bass_semi else neuro
-            mx_wide(_b2, off + samples(2.5), 0.78)
+            mx_wide(_b2, off + samples(2.5), 0.78 * _md)
 
         # Vocal chops (more frequent) — MAX
         if bar % 2 == 0:
@@ -2319,7 +2327,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
         duration_s=OUTRO * BAR, release_s=OUTRO * BAR * 0.85
     )))
     os_sub = fade_out(os_sub, BAR * 7)
-    mx(os_sub, cursor, 0.25, 0.25)
+    mx(os_sub, cursor, 0.25 * bd.sub_weight, 0.25 * bd.sub_weight)
 
     # ══════════════════════════════════════════════════
     #  MIXDOWN + MASTERING
