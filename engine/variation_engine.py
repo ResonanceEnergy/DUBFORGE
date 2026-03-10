@@ -942,8 +942,7 @@ class VariationEngine:
             mid_drive=self._art(0.5 + energy * 0.45, rng, 0.2, 1.0),
             pitch_dive_semi=self._art(
                 params.get("pitch_dive_range", 12.0), rng, 6.0, 36.0),
-            wavefold_thresh=self._art(
-                0.7 - energy * 0.3, rng, 0.3, 0.8),
+            wavefold_thresh=0.0,  # disabled by default; enable per-song if desired
             bitcrush_bits=int(self._art(
                 params.get("bitcrush_depth", 0.0), rng, 0.0, 12.0)) if params.get("bitcrush_depth", 0) > 0 else 0,
             ott_amount=self._art(0.25 + energy * 0.25, rng, 0.15, 0.6),
@@ -1232,12 +1231,12 @@ class VariationEngine:
         darkness = params.get("darkness", 0.5)
 
         return MixDNA(
-            target_lufs=self._art(-8.0 + (1 - energy) * 2.0, rng, -10.0, -6.0),
+            target_lufs=self._art(-7.5 + (1 - energy) * 1.5, rng, -9.0, -6.5),
             stereo_width=self._art(
                 params.get("stereo_width", 1.2 + energy * 0.3), rng, 1.0, 1.8),
             master_drive=self._art(0.3 + energy * 0.4, rng, 0.1, 0.8),
-            eq_low_boost=self._art(-1.5 + darkness * 1.5, rng, -3.0, 1.0),
-            eq_high_boost=self._art(3.5 + (1 - darkness) * 3.0, rng, 2.0, 7.0),
+            eq_low_boost=self._art(1.0 + darkness * 1.5, rng, -1.0, 3.0),
+            eq_high_boost=self._art(1.5 + (1 - darkness) * 2.0, rng, 0.5, 4.0),
             compression_ratio=self._art(2.5 + energy * 2.0, rng, 1.5, 6.0),
             sidechain_depth=self._art(0.5 + energy * 0.3, rng, 0.3, 0.9),
             ceiling_db=self._art(-0.3 + energy * 0.15, rng, -0.5, -0.1),

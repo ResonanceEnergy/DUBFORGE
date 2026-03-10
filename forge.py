@@ -211,18 +211,19 @@ def bitcrush(sig: list[float], bits: int = 8) -> list[float]:
     return [round(s * levels) / levels for s in sig]
 
 
-def sidechain(sig: list[float], depth: float = 0.7, attack: float = 0.005, release: float = 0.25) -> list[float]:
+def sidechain(sig: list[float], depth: float = 0.7, attack: float = 0.005, release: float = 0.25, bpm: float = 0.0) -> list[float]:
     """Musical sidechain compression synced to kick (beat 1 and 3).
 
     Uses an exponential envelope for natural-sounding pump with longer release.
+    When bpm > 0, uses that BPM for timing; otherwise falls back to module-level.
     """
     out = list(sig)
-    beat_s = samples(1)
+    _beat_s = int((60.0 / bpm) * SR) if bpm > 0 else samples(1)
     atk_s = max(1, int(attack * SR))
     rel_s = max(1, int(release * SR))
 
     for i in range(len(out)):
-        beat_pos = i % (beat_s * 2)  # trigger every 2 beats (halftime)
+        beat_pos = i % (_beat_s * 2)  # trigger every 2 beats (halftime)
         if beat_pos < atk_s:
             # Fast attack — duck the signal
             t = beat_pos / atk_s
@@ -858,7 +859,7 @@ def _default_v5_dna() -> SongDNA:
             fm_depth=10.0, fm_feedback=0.6, distortion=0.9,
             filter_cutoff=0.8, acid_resonance=0.0, growl_resampler=True,
             lfo_rate=2.5, lfo_depth=0.8, sub_weight=0.9, mid_drive=0.85,
-            pitch_dive_semi=12.0, wavefold_thresh=0.6, bitcrush_bits=0,
+            pitch_dive_semi=12.0, wavefold_thresh=0.0, bitcrush_bits=0,
             ott_amount=0.4, ring_mod_freq=0.0,
         ),
         lead=LeadDNA(
@@ -881,8 +882,8 @@ def _default_v5_dna() -> SongDNA:
             riser_start_freq=150.0, riser_end_freq=8000.0, boom_decay=2.0,
         ),
         mix=MixDNA(
-            target_lufs=-6.0, stereo_width=1.5, master_drive=0.55,
-            eq_low_boost=-1.5, eq_high_boost=5.5, compression_ratio=4.0,
+            target_lufs=-7.5, stereo_width=1.5, master_drive=0.55,
+            eq_low_boost=1.5, eq_high_boost=2.5, compression_ratio=4.0,
             sidechain_depth=0.8, ceiling_db=-0.1, eq_low_freq=80.0,
             eq_high_freq=8000.0, compression_threshold=-12.0,
             limiter_enabled=True,
@@ -1023,7 +1024,8 @@ def render_full_track(dna: 'SongDNA | None' = None):
     BUILD2 = sec_map.get("build2", 4)
     DROP2 = sec_map.get("drop2", sec_map.get("drop2b", 16))
     OUTRO = sec_map.get("outro", 8)
-    total_bars = dna.total_bars
+    # Recalculate total_bars from ONLY rendered sections (excludes verse1/drop1b etc)
+    total_bars = INTRO + BUILD + DROP1 + BREAK_ + BUILD2 + DROP2 + OUTRO
     total_s = samples(total_bars * 4)
 
     song_label = dna.name or "dubstep_track"
@@ -1235,8 +1237,8 @@ def render_full_track(dna: 'SongDNA | None' = None):
         name="Sub", bass_type="sub_sine", frequency=FREQ["F1"],
         duration_s=BEAT * 2, attack_s=0.002, release_s=0.1
     )))
-    sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 1.0, q=0.6)
-    sub = normalize(sub, 0.22)
+    sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 1.5, q=0.6)
+    sub = normalize(sub, 0.55)
 
     # BASS 1: FM Growl — DNA-driven mod_index, feedback, depth
     print(f"    FM Growl (depth={bd.fm_depth:.1f})...")
@@ -1698,15 +1700,16 @@ def render_full_track(dna: 'SongDNA | None' = None):
     )))
     drop_noise = apply_eq_band(drop_noise_raw, center_hz=8000.0, gain_db=3.0, q=0.3)
     drop_noise = apply_eq_band(drop_noise, center_hz=200.0, gain_db=-6.0, q=0.5)
-    drop_noise = normalize(drop_noise, 0.15)
+    drop_noise = normalize(drop_noise, 0.30)
 
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Transition FX (DNA-driven)
     # ═══════════════════════════════════════════
     print(f"  [6/9] Transition FX — riser {fd.riser_start_freq:.0f}→{fd.riser_end_freq:.0f}Hz...")
 
+    _riser_bars = max(BUILD, BUILD2, 8)
     riser = to_list(synthesize_noise_sweep(RiserPreset(
-        name="Riser", riser_type="noise_sweep", duration_s=BAR * 4,
+        name="Riser", riser_type="noise_sweep", duration_s=BAR * _riser_bars,
         start_freq=fd.riser_start_freq, end_freq=fd.riser_end_freq,
         brightness=0.8, intensity=fd.riser_intensity, reverb_amount=0.3
     )))
@@ -1773,12 +1776,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     def make_hat_events_bar():
         events = []
-        for i in range(16):
+        _hat_steps = getattr(dd, 'hat_density', 16)
+        for i in range(_hat_steps):
             vel = 0.6 + 0.3 * ((i % 4) == 0)
             if i % 4 == 2:
                 vel *= 0.7
             events.append(NoteEvent(
-                time=i * groove_eng.sixteenth_duration,
+                time=i * (BAR / _hat_steps),
                 duration=0.03, pitch=42, velocity=vel
             ))
         grooved = groove_eng.apply_groove(
@@ -1823,22 +1827,29 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print("  Intro...")
 
     drone_st = panner.haas_delay(drone[:samples(INTRO * 4)], delay_ms=18.0)
-    mx_stereo(drone_st.left, drone_st.right, cursor, 0.30)
+    mx_stereo(drone_st.left, drone_st.right, cursor, 0.20)
 
     ip = dark_pad[:samples(INTRO * 4)]
     ip = fade_in(ip, BAR * 5)
-    ip = lowpass(ip, 0.06)
-    mx(ip, cursor, 0.15, 0.15)
+    ip = lowpass(ip, 0.12)
+    mx(ip, cursor, 0.18, 0.18)
+
+    # Track kick positions for post-arrangement sidechain (collect from ALL sections)
+    kick_positions = []
 
     for bar in range(INTRO):
         off = cursor + samples(bar * 4)
         if bar >= 4:
             k_vol = 0.10 + (bar - 4) * 0.04
             mx(kick, off, k_vol, k_vol)
-        if bar >= 8:
+            kick_positions.append(off)
+        if bar >= 6:
             for ev in hat_pattern:
-                h_vol = 0.04 + (bar - 8) * 0.015
+                h_vol = 0.08 + (bar - 6) * 0.03
                 mx_panned(hat_c, off + int(ev.time * SR), h_vol * ev.velocity, -0.15)
+            # Open hat every 4 beats for groove (M9)
+            if bar % 2 == 0:
+                mx_panned(hat_o, off + samples(1.5), 0.06 + (bar - 6) * 0.01, 0.25)
 
     ir = reese[:samples(INTRO * 4)]
     ir = lowpass(ir, 0.05)
@@ -1858,7 +1869,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
         off = cursor + samples(bar * 4)
         k_vol = 0.35 + 0.15 * (bar / max(BUILD - 1, 1))
         mx(kick, off, k_vol, k_vol)
+        kick_positions.append(off)
         mx(kick, off + samples(2), k_vol, k_vol)
+        kick_positions.append(off + samples(2))
         # Progressive snare roll: 2→4→4→8→8→16→16→32
         divs_seq = [2, 4, 4, 8, 8, 16, 16, 32]
         divs = divs_seq[min(bar, len(divs_seq) - 1)]
@@ -1875,7 +1888,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     mx(gc_seg, cursor, 0.2, 0.2)
 
     bp = dark_pad[:samples(BUILD * 4)]
-    mx(bp, cursor, 0.2, 0.2)
+    mx(bp, cursor, 0.30, 0.30)
 
     mx_wide(chop_ee_stut, cursor + samples(3 * 4), 0.35)
 
@@ -1888,9 +1901,6 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     mx(boom, cursor, 0.85, 0.85)
     mx(hit, cursor, 0.7, 0.7)
-
-    # Track kick positions for post-arrangement sidechain
-    kick_positions = []
 
     for bar in range(DROP1):
         off = cursor + samples(bar * 4)
@@ -1909,14 +1919,18 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mx_panned(hat_o, off + samples(1.5), 0.35, 0.35)
         mx_panned(hat_o, off + samples(3.5), 0.35, -0.35)
 
-        # Sub — HEAVILY REDUCED to balance spectrum (target: 15-25% of energy)
-        sub_sc = sidechain(sub, depth=0.85, release=0.2)
-        mx(sub_sc, off, 0.18, 0.18)
-        mx(sub_sc, off + samples(2), 0.14, 0.14)
+        # Sub — proper dubstep level
+        sub_sc = sidechain(sub, depth=0.85, release=0.2, bpm=dna.bpm)
+        mx(sub_sc, off, 0.35, 0.35)
+        mx(sub_sc, off + samples(2), 0.28, 0.28)
 
-        # Noise bed — UP for air and width
+        # Noise bed — air and width
         dn = drop_noise[:min(samples(4), len(drop_noise))]
-        mx_wide(dn, off, 0.35, 20.0)
+        mx_wide(dn, off, 0.40, 20.0)
+
+        # Pad atmosphere in drops (sustained harmonic content)
+        _pad_seg = dark_pad[: min(samples(4), len(dark_pad))]
+        mx_wide(_pad_seg, off, 0.18)
 
         # Mid bass — DNA bass_riff drives pitch + timbre rotation
         _bass_riff = getattr(bd, 'bass_riff', None)
@@ -1935,11 +1949,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
         if bass_idx in (0, 1):
             # FM growl or Wavetable growl — full 2-beat phrase
             _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-            sc_b = sidechain(_b, depth=0.7)
-            mx_wide(sc_b, off + samples(0.5), 0.88)
+            mx_wide(_b, off + samples(0.5), 0.88)
             _d = pitch_shift_bass(dist_fm, _bass_semi) if _bass_semi else dist_fm
-            sc_g = sidechain(_d, depth=0.65)
-            mx_wide(sc_g, off + samples(2.5), 0.82)
+            mx_wide(_d, off + samples(2.5), 0.82)
         elif bass_idx == 2:
             # Dist FM — staccato 8ths with pitch variation per note
             _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
@@ -1947,18 +1959,15 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _rdeg = _riff_notes[s8 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 _b = pitch_shift_bass(bass_snd, _rsemi) if _rsemi else bass_snd
-                sc_b = sidechain(_b, depth=0.65)
-                mx_panned(sc_b, off + samples(s8 * 0.5), 0.75, -0.2 + 0.4 * (s8 / 8))
+                mx_panned(_b, off + samples(s8 * 0.5), 0.75, -0.2 + 0.4 * (s8 / 8))
         elif bass_idx == 3:
             # Sync bass — swept harmonics
             _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-            sc_b = sidechain(_b, depth=0.65)
-            mx_wide(sc_b, off + samples(0.5), 0.88, 15.0)
+            mx_wide(_b, off + samples(0.5), 0.88, 15.0)
         elif bass_idx == 4:
             # Acid — filter sweep
             _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-            sc_b = sidechain(_b, depth=0.65)
-            mx_wide(sc_b, off + samples(0.5), 0.85)
+            mx_wide(_b, off + samples(0.5), 0.85)
             # Pitch dive on beat 3
             mx_wide(pitch_dive, off + samples(2), 0.48)
         elif bass_idx == 5:
@@ -1969,19 +1978,17 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 b = pitch_shift_bass(b, _rsemi) if _rsemi else b
-                sc_b = sidechain(b, depth=0.6)
-                mx_panned(sc_b, off + samples(s16 * 0.5), 0.68, -0.25 + 0.5 * (s16 / 8))
+                mx_panned(b, off + samples(s16 * 0.5), 0.68, -0.25 + 0.5 * (s16 / 8))
         elif bass_idx == 6:
             # Formant — talking bass "yoi"
-            sc_b = sidechain(bass_snd, depth=0.65)
-            mx_wide(sc_b, off + samples(0.5), 0.88, 14.0)
+            mx_wide(bass_snd, off + samples(0.5), 0.88, 14.0)
 
-        # Vocal chops (every 4 bars) — MAX for mid presence
+        # Vocal chops (every 4 bars) — louder for mid presence
         if bar % 4 == 0:
             chop = vocal_chops[bar // 4 % len(vocal_chops)]
-            mx_wide(chop, off, 0.62)
+            mx_wide(chop, off, 0.75)
         if bar % 4 == 2:
-            mx_panned(chop_oh, off + samples(2), 0.48, 0.35)
+            mx_panned(chop_oh, off + samples(2), 0.55, 0.35)
 
         # Lead — DNA-driven melody patterns (varied per bar, per song)
         _melody_pats = getattr(ld, 'melody_patterns', None)
@@ -2020,19 +2027,21 @@ def render_full_track(dna: 'SongDNA | None' = None):
             _crash_np = to_np(_crash)
             # HP filter at 6kHz to make it cymbal-like
             _crash_np = svf_highpass(_crash_np, 6000.0, 0.7, SR)
-            _crash = normalize(to_list(_crash_np), 0.35)
-            mx_wide(_crash, off, 0.32, 25.0)
+            _crash = normalize(to_list(_crash_np), 0.55)
+            mx_wide(_crash, off, 0.48, 25.0)
 
-        # Drum fill at phrase boundaries (bar 3, 7, 11, 15)
+        # Drum fill at phrase boundaries (bar 3, 7, 11, 15) — accelerating 16th-note rolls
         if bar % 4 == 3:
-            for _fill_i in range(4):
-                mx(snare, off + samples(_fill_i + 0.5), 0.45 + 0.12 * _fill_i, 0.45 + 0.12 * _fill_i)
+            _fill_positions = [2.0, 2.25, 2.5, 2.625, 2.75, 2.875, 3.0, 3.0625, 3.125, 3.25, 3.5]
+            for _fi, _fp in enumerate(_fill_positions):
+                _fv = 0.40 + 0.05 * _fi
+                mx(snare, off + samples(_fp), _fv, _fv)
             for _fill_i in range(8):
-                mx_panned(hat_c, off + samples(_fill_i * 0.5), 0.35, -0.4 + 0.8 * (_fill_i / 8))
+                mx_panned(hat_c, off + samples(2 + _fill_i * 0.25), 0.35, -0.4 + 0.8 * (_fill_i / 8))
 
     mx(tape_stop, cursor + samples((DROP1 - 1) * 4 + 2), 0.5, 0.5)
     mx_wide(stutter, cursor + samples((DROP1 - 1) * 4 + 2), 0.35)
-    mx(bass_repeat, cursor + samples((DROP1 - 1) * 4), 0.3, 0.3)
+    mx(bass_repeat, cursor + samples((DROP1 - 1) * 4), 0.50, 0.50)
 
     cursor += samples(DROP1 * 4)
 
@@ -2047,7 +2056,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     bp = fade_in(bp, BAR * 1.5)
     bp = fade_out(bp, BAR * 2)
     bp_st = panner.haas_delay(bp, delay_ms=14.0, side="right")
-    mx_stereo(bp_st.left, bp_st.right, cursor, 0.35)
+    mx_stereo(bp_st.left, bp_st.right, cursor, 0.25)
 
     # Karplus-Strong pluck arps — physical modeled
     pluck_freqs = [FREQ["F3"], FREQ["Ab3"], FREQ["C4"], FREQ["Eb4"]]
@@ -2067,17 +2076,17 @@ def render_full_track(dna: 'SongDNA | None' = None):
             ))
             plk = to_list(plk_np)
             pan = -0.45 + 0.9 * (q / 3)
-            mx_panned(plk, off + samples(q), 0.3, pan)
+            mx_panned(plk, off + samples(q), 0.22, pan)
 
         for q in range(4):
-            mx_panned(hat_c, off + samples(q), 0.06, -0.2 + 0.4 * (q / 3))
+            mx_panned(hat_c, off + samples(q), 0.04, -0.2 + 0.4 * (q / 3))
 
     sd = to_list(synthesize_bass(BassPreset(
         name="SD", bass_type="sub_sine", frequency=FREQ["F1"],
         duration_s=BREAK_ * BAR, attack_s=1.5, release_s=2.5
     )))
     sd = normalize(sd, 0.65)
-    mx(sd, cursor, 0.15, 0.15)
+    mx(sd, cursor, 0.18, 0.18)
 
     mx_wide(rev_crash, cursor + samples((BREAK_ - 2) * 4), 0.35)
 
@@ -2092,7 +2101,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
         off = cursor + samples(bar * 4)
         k_vol = 0.40 + 0.15 * (bar / max(BUILD2 - 1, 1))
         mx(kick, off, k_vol, k_vol)
+        kick_positions.append(off)
         mx(kick, off + samples(2), k_vol, k_vol)
+        kick_positions.append(off + samples(2))
         divs_seq = [2, 4, 4, 8, 8, 16, 16, 32]
         divs = divs_seq[min(bar, len(divs_seq) - 1)]
         step = 4.0 / divs
@@ -2114,7 +2125,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     ), freq=FREQ["F3"], duration=BAR * BUILD2)
     seg_l = swell_l[:samples(BUILD2 * 4)]
     seg_r = swell_r[:samples(BUILD2 * 4)]
-    mx_stereo(seg_l, seg_r, cursor, 0.28)
+    mx_stereo(seg_l, seg_r, cursor, 0.42)
 
     gc2 = gate_chop[:samples(BUILD2 * 4)]
     mx(gc2, cursor, 0.22, 0.22)
@@ -2149,14 +2160,18 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mx_panned(hat_o, off + samples(1.5), 0.38, 0.38)
         mx_panned(hat_o, off + samples(3.5), 0.38, -0.38)
 
-        # Sub — HEAVILY REDUCED same as Drop 1
-        sub_sc = sidechain(sub, depth=0.88, release=0.18)
-        mx(sub_sc, off, 0.20, 0.20)
-        mx(sub_sc, off + samples(2), 0.16, 0.16)
+        # Sub — proper dubstep level (Drop 2 slightly hotter)
+        sub_sc = sidechain(sub, depth=0.88, release=0.18, bpm=dna.bpm)
+        mx(sub_sc, off, 0.38, 0.38)
+        mx(sub_sc, off + samples(2), 0.30, 0.30)
 
         # Noise bed — wider
         dn = drop_noise[:min(samples(4), len(drop_noise))]
-        mx_wide(dn, off, 0.38, 22.0)
+        mx_wide(dn, off, 0.42, 22.0)
+
+        # Pad atmosphere in drops (sustained harmonic content)
+        _pad_seg = dark_pad[: min(samples(4), len(dark_pad))]
+        mx_wide(_pad_seg, off, 0.20)
 
         # Mid bass — 8 patterns, more aggressive, HIGHER gains, DNA pitch variation
         _bass_riff = getattr(bd, 'bass_riff', None)
@@ -2177,12 +2192,10 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 b = pitch_shift_bass(b, _rsemi) if _rsemi else b
-                sc_b = sidechain(b, depth=0.6)
-                mx_panned(sc_b, off + samples(s16 * 0.25), 0.68, -0.3 + 0.6 * (s16 / 16))
+                mx_panned(b, off + samples(s16 * 0.25), 0.68, -0.3 + 0.6 * (s16 / 16))
         elif bass_idx == 1:
             _b = pitch_shift_bass(formant, _bass_semi) if _bass_semi else formant
-            sc_f = sidechain(_b, depth=0.65)
-            mx_wide(sc_f, off + samples(0.5), 0.92, 14.0)
+            mx_wide(_b, off + samples(0.5), 0.92, 14.0)
             mx_wide(pitch_dive, off + samples(2.5), 0.48)
         elif bass_idx == 2:
             _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
@@ -2190,16 +2203,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _rdeg = _riff_notes[s8 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 _b = pitch_shift_bass(dist_fm, _rsemi) if _rsemi else dist_fm
-                sc_b = sidechain(_b, depth=0.65)
-                mx_panned(sc_b, off + samples(s8 * 0.5), 0.78, -0.25 + 0.5 * (s8 / 8))
+                mx_panned(_b, off + samples(s8 * 0.5), 0.78, -0.25 + 0.5 * (s8 / 8))
         elif bass_idx == 3:
             _b = pitch_shift_bass(growl_wt, _bass_semi) if _bass_semi else growl_wt
-            sc_w = sidechain(_b, depth=0.7)
-            mx_wide(sc_w, off + samples(0.5), 0.90)
+            mx_wide(_b, off + samples(0.5), 0.90)
         elif bass_idx == 4:
             _b = pitch_shift_bass(dive_bass, _bass_semi) if _bass_semi else dive_bass
-            sc_d = sidechain(_b, depth=0.6)
-            mx_wide(sc_d, off + samples(0.5), 0.85)
+            mx_wide(_b, off + samples(0.5), 0.85)
         elif bass_idx == 5:
             _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
             for s16 in range(8):
@@ -2207,15 +2217,12 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
                 _rsemi = intervals[_rdeg % len(intervals)]
                 b = pitch_shift_bass(b, _rsemi) if _rsemi else b
-                sc_b = sidechain(b, depth=0.6)
-                mx_panned(sc_b, off + samples(s16 * 0.5), 0.72, -0.2 + 0.4 * (s16 / 8))
+                mx_panned(b, off + samples(s16 * 0.5), 0.72, -0.2 + 0.4 * (s16 / 8))
         elif bass_idx == 6:
             _b1 = pitch_shift_bass(fm_growl, _bass_semi) if _bass_semi else fm_growl
-            sc_f = sidechain(_b1, depth=0.65)
-            mx_wide(sc_f, off + samples(0.5), 0.82)
+            mx_wide(_b1, off + samples(0.5), 0.82)
             _b2 = pitch_shift_bass(neuro, _bass_semi) if _bass_semi else neuro
-            sc_g = sidechain(_b2, depth=0.65)
-            mx_wide(sc_g, off + samples(2.5), 0.78)
+            mx_wide(_b2, off + samples(2.5), 0.78)
 
         # Vocal chops (more frequent) — MAX
         if bar % 2 == 0:
@@ -2261,20 +2268,22 @@ def render_full_track(dna: 'SongDNA | None' = None):
             ))
             _crash_np = to_np(_crash)
             _crash_np = svf_highpass(_crash_np, 6000.0, 0.7, SR)
-            _crash = normalize(to_list(_crash_np), 0.38)
-            mx_wide(_crash, off, 0.35, 25.0)
+            _crash = normalize(to_list(_crash_np), 0.55)
+            mx_wide(_crash, off, 0.50, 25.0)
 
-        # Drum fill at phrase boundaries (bar 3, 7, 11, 15)
+        # Drum fill at phrase boundaries (bar 3, 7, 11, 15) — accelerating 16th-note rolls
         if bar % 4 == 3:
-            for _fill_i in range(6):
-                mx(snare, off + samples(_fill_i * 0.5 + 0.5), 0.42 + 0.10 * _fill_i, 0.42 + 0.10 * _fill_i)
+            _fill_positions = [2.0, 2.25, 2.5, 2.625, 2.75, 2.875, 3.0, 3.0625, 3.125, 3.25, 3.5]
+            for _fi, _fp in enumerate(_fill_positions):
+                _fv = 0.42 + 0.05 * _fi
+                mx(snare, off + samples(_fp), _fv, _fv)
             for _fill_i in range(8):
-                mx_panned(hat_c, off + samples(_fill_i * 0.5), 0.38, -0.5 + 1.0 * (_fill_i / 8))
+                mx_panned(hat_c, off + samples(2 + _fill_i * 0.25), 0.38, -0.5 + 1.0 * (_fill_i / 8))
 
     mx(tape_stop, cursor + samples((DROP2 - 1) * 4 + 2), 0.55, 0.55)
     mx_wide(stutter, cursor + samples((DROP2 - 2) * 4), 0.35)
     mx_wide(stutter, cursor + samples((DROP2 - 1) * 4), 0.4)
-    mx(bass_repeat, cursor + samples((DROP2 - 1) * 4 + 2), 0.35, 0.35)
+    mx(bass_repeat, cursor + samples((DROP2 - 1) * 4 + 2), 0.50, 0.50)
 
     cursor += samples(DROP2 * 4)
 
@@ -2291,7 +2300,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     for bar in range(OUTRO):
         off = cursor + samples(bar * 4)
-        vol = max(0.04, 0.38 - bar * 0.05)
+        vol = max(0.04, 0.65 - bar * 0.08)
         mx(kick, off, vol, vol)
         for ev in hat_pattern:
             h_vol = max(0.02, 0.12 - bar * 0.015) * ev.velocity
@@ -2302,7 +2311,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
         duration_s=OUTRO * BAR, release_s=OUTRO * BAR * 0.85
     )))
     os_sub = fade_out(os_sub, BAR * 7)
-    mx(os_sub, cursor, 0.12, 0.12)
+    mx(os_sub, cursor, 0.25, 0.25)
 
     # ══════════════════════════════════════════════════
     #  MIXDOWN + MASTERING
@@ -2312,7 +2321,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # ── Apply sidechain_bus using collected kick positions ──
     # This creates the signature dubstep pump on the full mix
     if kick_positions:
-        L, R = sidechain_bus(L, R, kick_positions, depth=0.35, attack=0.003, release=0.18)
+        L, R = sidechain_bus(L, R, kick_positions, depth=0.55, attack=0.003, release=0.18)
 
     # ── Bus compression on full mix before mastering ──
     # This glues the mix together like a console bus compressor
@@ -2323,19 +2332,17 @@ def render_full_track(dna: 'SongDNA | None' = None):
     L_np = svf_highpass(L_np, 25.0, 0.7, SR)
     R_np = svf_highpass(R_np, 25.0, 0.7, SR)
 
-    # Low-shelf CUT at 60Hz to tame sub energy (-2 dB, mastering chain adds further DNA eq_low_boost)
+    # Sub energy preserved — no pre-master 60Hz cut (let mastering chain handle it)
     L_list = L_np.tolist()
     R_list = R_np.tolist()
-    L_list = apply_eq_band(L_list, center_hz=60.0, gain_db=-2.0, q=0.4)
-    R_list = apply_eq_band(R_list, center_hz=60.0, gain_db=-2.0, q=0.4)
 
     # Mid presence boost at 1kHz (+2 dB — gentle, mastering adds more)
     L_list = apply_eq_band(L_list, center_hz=1000.0, gain_db=2.0, q=0.8)
     R_list = apply_eq_band(R_list, center_hz=1000.0, gain_db=2.0, q=0.8)
 
-    # High presence boost at 5kHz (+3 dB)
-    L_list = apply_eq_band(L_list, center_hz=5000.0, gain_db=3.0, q=0.7)
-    R_list = apply_eq_band(R_list, center_hz=5000.0, gain_db=3.0, q=0.7)
+    # High presence boost at 5kHz (+1.5 dB — gentle, mastering adds DNA eq_high_boost)
+    L_list = apply_eq_band(L_list, center_hz=5000.0, gain_db=1.5, q=0.7)
+    R_list = apply_eq_band(R_list, center_hz=5000.0, gain_db=1.5, q=0.7)
 
     L_np = np.array(L_list, dtype=np.float64)
     R_np = np.array(R_list, dtype=np.float64)
@@ -2346,11 +2353,15 @@ def render_full_track(dna: 'SongDNA | None' = None):
                                low_xover=120.0, high_xover=4000.0,
                                threshold_db=-10.0, ratio=2.5,
                                attack_ms=10.0, release_ms=80.0)
-    # Derive gain envelope from mid compression
+    # Derive gain envelope from mid compression (with safe threshold and smoothing)
     _gain_env = np.ones_like(M_np)
-    _nonzero = np.abs(M_np) > 1e-12
+    _nonzero = np.abs(M_np) > 1e-4
     _gain_env[_nonzero] = M_compressed[_nonzero] / M_np[_nonzero]
     _gain_env = np.clip(_gain_env, 0.0, 2.0)
+    # Smooth gain envelope to avoid zero-crossing artifacts (1ms window)
+    _smooth_n = max(1, int(0.001 * SR))
+    _kernel = np.ones(_smooth_n) / _smooth_n
+    _gain_env = np.convolve(_gain_env, _kernel, mode='same')
     L_np = L_np * _gain_env
     R_np = R_np * _gain_env
 

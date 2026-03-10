@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Quick analysis of rendered track quality."""
-import wave, struct, numpy as np
+import sys, wave, struct, numpy as np
 from numpy.fft import rfft, rfftfreq
 
-f = "output/skull_crusher.wav"
+f = sys.argv[1] if len(sys.argv) > 1 else "output/skull_crusher.wav"
 w = wave.open(f, "rb")
 sr = w.getframerate()
 ch = w.getnchannels()
