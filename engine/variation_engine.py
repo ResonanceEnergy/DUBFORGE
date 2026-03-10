@@ -96,16 +96,16 @@ BPM_RANGES: dict[str, tuple[int, int]] = {
 # fmt: off
 WORD_ATOMS: dict[str, dict[str, float]] = {
     # ── Aggression / Violence ──
-    "scream":    {"energy": 1.0, "darkness": 0.6, "distortion": 0.9, "fm_depth": 8.0, "attack_sharpness": 0.95, "formant_shift": 4.0},
+    "scream":    {"energy": 0.9, "darkness": 0.6, "distortion": 0.45, "fm_depth": 4.5, "attack_sharpness": 0.95, "formant_shift": 4.0},
     "shatter":   {"energy": 0.95, "darkness": 0.5, "distortion": 0.85, "transient_attack": 3.5, "granular_density": 0.8},
     "hollow":    {"energy": 0.85, "darkness": 0.7, "distortion": 0.7, "transient_attack": 3.0, "reverb_decay": 0.4},
     "bullet":    {"energy": 0.9, "darkness": 0.6, "transient_attack": 4.0, "distortion": 0.6, "kick_drive": 0.8},
     "blade":     {"energy": 0.88, "darkness": 0.55, "distortion": 0.75, "brightness": 0.85, "transient_attack": 2.8},
-    "war":       {"energy": 1.0, "darkness": 0.8, "distortion": 0.9, "fm_depth": 7.0, "sub_weight": 0.9},
-    "crush":     {"energy": 0.92, "darkness": 0.65, "distortion": 0.95, "bitcrush_depth": 6.0},
+    "war":       {"energy": 0.9, "darkness": 0.8, "distortion": 0.45, "fm_depth": 4.5, "sub_weight": 0.9},
+    "crush":     {"energy": 0.85, "darkness": 0.65, "distortion": 0.45, "bitcrush_depth": 6.0},
     "fang":      {"energy": 0.87, "darkness": 0.75, "distortion": 0.8, "fm_depth": 5.0, "brightness": 0.7},
     "venom":     {"energy": 0.85, "darkness": 0.8, "distortion": 0.7, "acid_resonance": 0.85, "filter_sweep": 0.9},
-    "rage":      {"energy": 1.0, "darkness": 0.7, "distortion": 1.0, "fm_depth": 10.0, "chaos": 0.9},
+    "rage":      {"energy": 0.85, "darkness": 0.7, "distortion": 0.4, "fm_depth": 4.0, "chaos": 0.5},
     "impact":    {"energy": 0.95, "darkness": 0.5, "transient_attack": 4.5, "sub_weight": 0.95, "reverb_decay": 0.6},
 
     # ── Darkness / Mystery ──
@@ -179,10 +179,10 @@ WORD_ATOMS: dict[str, dict[str, float]] = {
     "ember":     {"energy": 0.6, "darkness": 0.55, "warmth": 0.85, "distortion": 0.4, "brightness": 0.4},
 
     # ── Emotional State ──
-    "wrath":     {"energy": 1.0, "darkness": 0.85, "distortion": 1.0, "fm_depth": 9.0, "chaos": 0.85},
+    "wrath":     {"energy": 0.9, "darkness": 0.85, "distortion": 0.45, "fm_depth": 4.5, "chaos": 0.5},
     "grief":     {"energy": 0.3, "darkness": 0.9, "reverb_decay": 3.0, "pad_attack": 3.5, "brightness": 0.15},
     "bliss":     {"energy": 0.7, "darkness": 0.1, "brightness": 0.9, "shimmer": 0.7, "stereo_width": 1.6},
-    "fury":      {"energy": 0.98, "darkness": 0.7, "distortion": 0.95, "transient_attack": 3.5, "fm_depth": 8.0},
+    "fury":      {"energy": 0.88, "darkness": 0.7, "distortion": 0.45, "transient_attack": 3.5, "fm_depth": 4.5},
     "serenity":  {"energy": 0.2, "darkness": 0.2, "reverb_decay": 4.0, "brightness": 0.6, "pad_attack": 4.0},
     "chaos":     {"energy": 0.95, "darkness": 0.6, "glitch_amount": 0.9, "chaos": 1.0, "fm_depth": 7.0},
 
@@ -190,7 +190,7 @@ WORD_ATOMS: dict[str, dict[str, float]] = {
     "wobble":    {"energy": 0.75, "darkness": 0.5, "lfo_rate": 3.0, "bass_type": "wobble"},
     "growl":     {"energy": 0.85, "darkness": 0.65, "fm_depth": 8.0, "distortion": 0.8, "bass_type": "growl"},
     "riddim":    {"energy": 0.8, "darkness": 0.6, "groove_swing": 0.0, "minimalism": 0.7, "bass_type": "dist_fm"},
-    "filthy":    {"energy": 0.9, "darkness": 0.75, "distortion": 0.9, "fm_depth": 7.0, "bass_type": "neuro"},
+    "filthy":    {"energy": 0.85, "darkness": 0.75, "distortion": 0.45, "fm_depth": 4.5, "bass_type": "neuro"},
     "heavy":     {"energy": 0.85, "darkness": 0.7, "sub_weight": 0.95, "distortion": 0.7, "bass_type": "dist_fm"},
     "deep":      {"energy": 0.5, "darkness": 0.7, "sub_weight": 0.9, "reverb_decay": 1.5, "brightness": 0.3},
     "tearout":   {"energy": 0.95, "darkness": 0.65, "distortion": 0.85, "transient_attack": 3.0, "bass_type": "sync"},
@@ -317,21 +317,21 @@ class BassDNA:
     primary_type: str = "dist_fm"
     secondary_type: str = "sync"
     tertiary_type: str = "neuro"
-    fm_depth: float = 8.0
-    fm_feedback: float = 0.5
-    distortion: float = 0.7
-    filter_cutoff: float = 0.8
+    fm_depth: float = 4.0
+    fm_feedback: float = 0.15
+    distortion: float = 0.35
+    filter_cutoff: float = 0.65
     acid_resonance: float = 0.0
     growl_resampler: bool = True
     lfo_rate: float = 2.5
-    lfo_depth: float = 0.8
+    lfo_depth: float = 0.5
     sub_weight: float = 0.9
-    mid_drive: float = 0.85
+    mid_drive: float = 0.7
 
     pitch_dive_semi: float = 12.0
-    wavefold_thresh: float = 0.6
+    wavefold_thresh: float = 0.0
     bitcrush_bits: int = 0  # 0 = off
-    ott_amount: float = 0.4
+    ott_amount: float = 0.15
     ring_mod_freq: float = 0.0  # 0 = off
 
     # Bass pitch riff patterns — list of bar-patterns
@@ -412,17 +412,17 @@ class FxDNA:
 @dataclass
 class MixDNA:
     """Per-song mix/master personality."""
-    target_lufs: float = -6.0
-    stereo_width: float = 2.0
-    master_drive: float = 0.55
-    eq_low_boost: float = -1.5
-    eq_high_boost: float = 5.5
-    compression_ratio: float = 4.0
+    target_lufs: float = -9.0
+    stereo_width: float = 1.0
+    master_drive: float = 0.35
+    eq_low_boost: float = 1.0
+    eq_high_boost: float = 1.5
+    compression_ratio: float = 3.0
     sidechain_depth: float = 0.8
 
-    ceiling_db: float = -0.1
-    eq_low_freq: float = 70.0
-    eq_high_freq: float = 10000.0
+    ceiling_db: float = -0.3
+    eq_low_freq: float = 80.0
+    eq_high_freq: float = 8000.0
     compression_threshold: float = -12.0
     limiter_enabled: bool = True
 
@@ -925,10 +925,10 @@ class VariationEngine:
             secondary_type=secondary,
             tertiary_type=tertiary,
             fm_depth=self._art(
-                params.get("fm_depth", 5.0 + energy * 4.0), rng, 2.0, 12.0),
-            fm_feedback=self._art(0.2 + energy * 0.4, rng, 0.0, 0.7),
+                params.get("fm_depth", 2.0 + energy * 2.0), rng, 1.0, 5.0),
+            fm_feedback=self._art(0.05 + energy * 0.15, rng, 0.0, 0.25),
             distortion=self._art(
-                params.get("distortion", 0.4 + energy * 0.5), rng, 0.1, 1.0),
+                params.get("distortion", 0.15 + energy * 0.25), rng, 0.05, 0.5),
             filter_cutoff=self._art(
                 params.get("filter_cutoff", 0.5 + energy * 0.4), rng, 0.2, 1.0),
             acid_resonance=self._art(
@@ -945,7 +945,7 @@ class VariationEngine:
             wavefold_thresh=0.0,  # disabled by default; enable per-song if desired
             bitcrush_bits=int(self._art(
                 params.get("bitcrush_depth", 0.0), rng, 0.0, 12.0)) if params.get("bitcrush_depth", 0) > 0 else 0,
-            ott_amount=self._art(0.25 + energy * 0.25, rng, 0.15, 0.6),
+            ott_amount=self._art(0.1 + energy * 0.1, rng, 0.05, 0.25),
             ring_mod_freq=self._art(
                 params.get("metallic", 0.0) * 200.0, rng, 0.0, 300.0) if params.get("metallic", 0) > 0.5 else 0.0,
             bass_riff=self._generate_bass_riff(energy, darkness, rng),
@@ -1231,18 +1231,18 @@ class VariationEngine:
         darkness = params.get("darkness", 0.5)
 
         return MixDNA(
-            target_lufs=self._art(-7.5 + (1 - energy) * 1.5, rng, -9.0, -6.5),
+            target_lufs=self._art(-10.0 + (1 - energy) * 2.0, rng, -12.0, -8.0),
             stereo_width=self._art(
-                params.get("stereo_width", 1.2 + energy * 0.3), rng, 1.0, 1.8),
-            master_drive=self._art(0.3 + energy * 0.4, rng, 0.1, 0.8),
-            eq_low_boost=self._art(1.0 + darkness * 1.5, rng, -1.0, 3.0),
-            eq_high_boost=self._art(1.5 + (1 - darkness) * 2.0, rng, 0.5, 4.0),
-            compression_ratio=self._art(2.5 + energy * 2.0, rng, 1.5, 6.0),
+                params.get("stereo_width", 0.8 + energy * 0.2), rng, 0.6, 1.2),
+            master_drive=self._art(0.2 + energy * 0.2, rng, 0.1, 0.5),
+            eq_low_boost=self._art(0.5 + darkness * 1.0, rng, -0.5, 2.0),
+            eq_high_boost=self._art(1.0 + (1 - darkness) * 1.0, rng, 0.5, 2.5),
+            compression_ratio=self._art(2.0 + energy * 1.5, rng, 1.5, 4.0),
             sidechain_depth=self._art(0.5 + energy * 0.3, rng, 0.3, 0.9),
-            ceiling_db=self._art(-0.3 + energy * 0.15, rng, -0.5, -0.1),
-            eq_low_freq=self._art(60 + darkness * 20, rng, 50, 90),
-            eq_high_freq=self._art(9000 + (1 - darkness) * 3000, rng, 7000, 13000),
-            compression_threshold=self._art(-16 + energy * 4, rng, -20, -10),
+            ceiling_db=self._art(-0.3, rng, -0.5, -0.2),
+            eq_low_freq=self._art(70 + darkness * 15, rng, 60, 90),
+            eq_high_freq=self._art(8000 + (1 - darkness) * 2000, rng, 6000, 11000),
+            compression_threshold=self._art(-14 + energy * 3, rng, -18, -10),
             limiter_enabled=True,
         )
 
@@ -1252,10 +1252,10 @@ class VariationEngine:
 
     def _pick_bass_rotation(self, bass: BassDNA, params: dict,
                             rng: random.Random) -> list[str]:
-        """Order the bass types for drop rotation."""
+        """Order the bass types for drop rotation (max 3 for coherence)."""
+        # Only use the 3 DNA-selected types — no extras
         all_types = [
             bass.primary_type, bass.secondary_type, bass.tertiary_type,
-            "fm_growl", "growl_wt", "formant", "acid",
         ]
         # Remove duplicates, keep order
         seen = set()
@@ -1267,12 +1267,11 @@ class VariationEngine:
 
         # Artistic shuffle — slight reorder
         if rng.random() < self.artistic_variance:
-            # Swap two random positions
-            if len(unique) >= 3:
+            if len(unique) >= 2:
                 i, j = rng.sample(range(len(unique)), 2)
                 unique[i], unique[j] = unique[j], unique[i]
 
-        return unique
+        return unique[:3]
 
     def _pick_chop_vowels(self, params: dict, rng: random.Random) -> list[str]:
         """Pick vocal chop vowel order."""

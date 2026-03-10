@@ -95,6 +95,8 @@ from engine.pitch_automation import PitchAutoPreset, apply_pitch_automation
 from engine.transition_fx import TransitionPreset, synthesize_transition
 from engine.riser_synth import RiserPreset, synthesize_noise_sweep
 from engine.groove import GrooveEngine, GROOVE_TEMPLATES, NoteEvent
+from engine.rhythm_engine import RhythmEngine, RhythmDNA, DrumEvent
+from engine.openclaw_agent import OpenClawAgent, get_agent as get_producer_agent
 from engine.vocal_processor import VocalPreset, apply_vocal_processing
 from engine.variation_engine import (
     VariationEngine, SongBlueprint, SongDNA, forge_song_dna, save_dna,
@@ -856,11 +858,11 @@ def _default_v5_dna() -> SongDNA:
         ),
         bass=BassDNA(
             primary_type="dist_fm", secondary_type="sync", tertiary_type="neuro",
-            fm_depth=10.0, fm_feedback=0.6, distortion=0.9,
-            filter_cutoff=0.8, acid_resonance=0.0, growl_resampler=True,
-            lfo_rate=2.5, lfo_depth=0.8, sub_weight=0.9, mid_drive=0.85,
+            fm_depth=4.0, fm_feedback=0.15, distortion=0.4,
+            filter_cutoff=0.65, acid_resonance=0.0, growl_resampler=True,
+            lfo_rate=2.5, lfo_depth=0.5, sub_weight=0.9, mid_drive=0.7,
             pitch_dive_semi=12.0, wavefold_thresh=0.0, bitcrush_bits=0,
-            ott_amount=0.4, ring_mod_freq=0.0,
+            ott_amount=0.15, ring_mod_freq=0.0,
         ),
         lead=LeadDNA(
             use_additive=True, additive_partials=16, additive_rolloff="sawtooth",
@@ -882,13 +884,13 @@ def _default_v5_dna() -> SongDNA:
             riser_start_freq=150.0, riser_end_freq=8000.0, boom_decay=2.0,
         ),
         mix=MixDNA(
-            target_lufs=-7.5, stereo_width=1.5, master_drive=0.55,
-            eq_low_boost=1.5, eq_high_boost=2.5, compression_ratio=4.0,
-            sidechain_depth=0.8, ceiling_db=-0.1, eq_low_freq=80.0,
+            target_lufs=-9.0, stereo_width=1.0, master_drive=0.35,
+            eq_low_boost=1.0, eq_high_boost=1.5, compression_ratio=3.0,
+            sidechain_depth=0.8, ceiling_db=-0.3, eq_low_freq=80.0,
             eq_high_freq=8000.0, compression_threshold=-12.0,
             limiter_enabled=True,
         ),
-        bass_rotation=["fm_growl", "growl_wt", "dist_fm", "sync", "acid", "neuro", "formant"],
+        bass_rotation=["fm_growl", "dist_fm", "sync"],
         chop_vowels=["ah", "oh", "ee", "oo"],
     )
 
@@ -901,15 +903,15 @@ def _default_v5_dna() -> SongDNA:
 # ═══════════════════════════════════════════
 
 def _ott_simulate(sig: list[float], amount: float = 0.4) -> list[float]:
-    """Simulate OTT multiband upward compression."""
+    """Simulate OTT multiband upward compression — gentle settings."""
     sat = SaturationEngine(sample_rate=SR)
     compressed = compress(sig, CompressorSettings(
-        threshold_db=-25.0, ratio=6.0, attack_ms=0.5,
-        release_ms=20.0, knee_db=6.0, makeup_db=8.0, mix=amount
+        threshold_db=-12.0, ratio=3.0, attack_ms=2.0,
+        release_ms=50.0, knee_db=8.0, makeup_db=3.0, mix=amount
     ))
-    excited = sat.harmonic_exciter(compressed, amount=amount * 0.5, frequency=2500)
+    excited = sat.harmonic_exciter(compressed, amount=amount * 0.25, frequency=3000)
     result = sat.saturate(excited, SatConfig(
-        sat_type="tape", drive=0.2 * amount, mix=amount * 0.3
+        sat_type="tape", drive=0.1 * amount, mix=amount * 0.2
     ))
     return result
 
@@ -1048,6 +1050,15 @@ def render_full_track(dna: 'SongDNA | None' = None):
     sat = SaturationEngine(sample_rate=SR)
     panner = PanningEngine(sample_rate=SR)
     groove_eng = GrooveEngine(bpm=dna.bpm, sample_rate=SR)
+
+    # ── Rhythm Engine — pattern-driven drum placement ──
+    _energy = getattr(dna, 'energy', 0.7)
+    if hasattr(dna, 'mood') and isinstance(dna.mood, str):
+        if any(w in dna.mood.lower() for w in ('aggressive', 'rage', 'fury', 'war')):
+            _energy = max(_energy, 0.8)
+    rhythm_eng = RhythmEngine.from_drum_dna(
+        dd, bpm=dna.bpm, energy=_energy, seed=hash(dna.name) & 0xFFFF)
+    print(f"  {rhythm_eng.describe()}")
 
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Drums (LAYERED, MULTI-SOURCE)
@@ -1272,17 +1283,15 @@ def render_full_track(dna: 'SongDNA | None' = None):
         sync_division=2.0
     ), duration_s=BEAT * 2)
     fm_growl_np = fm_growl_np * (0.2 + 0.8 * lfo_fg[:len(fm_growl_np)])
-    # Multiband distortion — DNA-driven mids
+    # Multiband distortion — DNA-driven mids (gentle)
     fm_growl_np = apply_multiband_distortion(fm_growl_np, MultibandDistPreset(
-        name="FMDist", dist_type="aggressive", low_drive=0.3,
-        mid_drive=bd.mid_drive, high_drive=0.4,
-        crossover_low=130.0, crossover_high=3000.0, output_gain=0.8
+        name="FMDist", dist_type="tube", low_drive=0.15,
+        mid_drive=bd.mid_drive * 0.5, high_drive=0.2,
+        crossover_low=130.0, crossover_high=3000.0, output_gain=0.85
     ))
     fm_growl = to_list(fm_growl_np)
     fm_growl = _ott_simulate(fm_growl, bd.ott_amount)
-    fm_growl = sat.saturate(fm_growl, SatConfig(
-        sat_type="transistor", drive=bd.distortion * 0.78, mix=bd.distortion * 0.67))
-    fm_growl = normalize(fm_growl, 0.88)
+    fm_growl = normalize(fm_growl, 0.60)
 
     # BASS 2: Growl Resampler — DNA fm_depth drives wavetable character
     print("    Growl Resampler wavetable...")
@@ -1292,15 +1301,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
     growl_wt_np = _wavetable_to_audio(growl_frames, freq=FREQ["F2"],
                                        duration_s=BEAT * 2, sr=SR)
     growl_wt_np = apply_multiband_distortion(growl_wt_np, MultibandDistPreset(
-        name="GrlWTDist", dist_type="tube", low_drive=0.4,
-        mid_drive=bd.mid_drive, high_drive=0.3,
-        crossover_low=120.0, crossover_high=2800.0, output_gain=0.82
+        name="GrlWTDist", dist_type="tube", low_drive=0.2,
+        mid_drive=bd.mid_drive * 0.5, high_drive=0.15,
+        crossover_low=120.0, crossover_high=2800.0, output_gain=0.85
     ))
     growl_wt = to_list(growl_wt_np)
     growl_wt = _ott_simulate(growl_wt, bd.ott_amount)
-    growl_wt = sat.saturate(growl_wt, SatConfig(
-        sat_type="tape", drive=bd.distortion * 0.67, mix=bd.distortion * 0.61))
-    growl_wt = normalize(growl_wt, 0.87)
+    growl_wt = normalize(growl_wt, 0.58)
 
     # BASS 3: Dist FM — DNA distortion + filter
     print(f"    Dist FM (dist={bd.distortion:.2f})...")
@@ -1311,12 +1318,12 @@ def render_full_track(dna: 'SongDNA | None' = None):
     )))
     dist_fm_np = to_np(dist_fm)
     dist_fm_np = apply_multiband_distortion(dist_fm_np, MultibandDistPreset(
-        name="DFMDist", dist_type="aggressive", low_drive=0.25,
-        mid_drive=bd.mid_drive, high_drive=0.4, output_gain=0.8
+        name="DFMDist", dist_type="tube", low_drive=0.15,
+        mid_drive=bd.mid_drive * 0.5, high_drive=0.2, output_gain=0.85
     ))
     dist_fm = to_list(dist_fm_np)
     dist_fm = _ott_simulate(dist_fm, bd.ott_amount)
-    dist_fm = normalize(dist_fm, 0.86)
+    dist_fm = normalize(dist_fm, 0.58)
 
     # BASS 4: Sync bass — DNA lfo_rate drives sweep
     print("    Sync bass...")
@@ -1332,14 +1339,12 @@ def render_full_track(dna: 'SongDNA | None' = None):
     ), duration_s=BEAT * 1.5)
     sync_np = sync_np * (0.3 + 0.7 * lfo_sync[:len(sync_np)])
     sync_np = apply_multiband_distortion(sync_np, MultibandDistPreset(
-        name="SyncDist", dist_type="tube", low_drive=0.35,
-        mid_drive=bd.mid_drive, high_drive=0.3, output_gain=0.82
+        name="SyncDist", dist_type="tube", low_drive=0.2,
+        mid_drive=bd.mid_drive * 0.5, high_drive=0.15, output_gain=0.85
     ))
     sync_bass = to_list(sync_np)
     sync_bass = _ott_simulate(sync_bass, bd.ott_amount * 0.88)
-    sync_bass = sat.saturate(sync_bass, SatConfig(
-        sat_type="transistor", drive=bd.distortion * 0.67, mix=0.5))
-    sync_bass = normalize(sync_bass, 0.86)
+    sync_bass = normalize(sync_bass, 0.58)
 
     # BASS 5: Acid bass — DNA acid_resonance drives filter character
     print(f"    Acid bass (res={bd.acid_resonance:.2f})...")
@@ -1350,12 +1355,12 @@ def render_full_track(dna: 'SongDNA | None' = None):
     )))
     acid_np = to_np(acid)
     acid_np = apply_multiband_distortion(acid_np, MultibandDistPreset(
-        name="AcidDist", dist_type="tube", low_drive=0.3,
-        mid_drive=bd.mid_drive * 0.82, high_drive=0.2, output_gain=0.85
+        name="AcidDist", dist_type="tube", low_drive=0.15,
+        mid_drive=bd.mid_drive * 0.5, high_drive=0.1, output_gain=0.88
     ))
     acid = to_list(acid_np)
     acid = _ott_simulate(acid, bd.ott_amount * 0.75)
-    acid = normalize(acid, 0.85)
+    acid = normalize(acid, 0.55)
 
     # BASS 6: Neuro — DNA fm_depth + lfo_rate for phase distortion chaos
     print(f"    Neuro bass (fm={bd.fm_depth:.1f})...")
@@ -1371,14 +1376,14 @@ def render_full_track(dna: 'SongDNA | None' = None):
     ), duration_s=BEAT)
     neuro_np = neuro_np * (0.25 + 0.75 * lfo_n[:len(neuro_np)])
     neuro_np = apply_multiband_distortion(neuro_np, MultibandDistPreset(
-        name="NroDist", dist_type="aggressive", low_drive=0.15,
-        mid_drive=min(0.99, bd.mid_drive * 1.15),
-        high_drive=0.5, crossover_low=100.0, crossover_high=3500.0,
-        output_gain=0.75
+        name="NroDist", dist_type="tube", low_drive=0.1,
+        mid_drive=bd.mid_drive * 0.6,
+        high_drive=0.25, crossover_low=100.0, crossover_high=3500.0,
+        output_gain=0.82
     ))
     neuro = to_list(neuro_np)
-    neuro = _ott_simulate(neuro, bd.ott_amount * 1.12)
-    neuro = normalize(neuro, 0.86)
+    neuro = _ott_simulate(neuro, bd.ott_amount)
+    neuro = normalize(neuro, 0.55)
 
     # BASS 7: Formant "yoi" — DNA distortion + brightness
     print("    Formant bass...")
@@ -1390,14 +1395,12 @@ def render_full_track(dna: 'SongDNA | None' = None):
     ))
     form_np = to_np(formant_raw)
     form_np = apply_multiband_distortion(form_np, MultibandDistPreset(
-        name="FormDist", dist_type="tube", low_drive=0.4,
-        mid_drive=bd.mid_drive * 0.88, high_drive=0.25, output_gain=0.82
+        name="FormDist", dist_type="tube", low_drive=0.2,
+        mid_drive=bd.mid_drive * 0.5, high_drive=0.12, output_gain=0.85
     ))
     formant = to_list(form_np)
     formant = _ott_simulate(formant, bd.ott_amount * 0.88)
-    formant = sat.saturate(formant, SatConfig(
-        sat_type="tape", drive=bd.distortion * 0.56, mix=0.45))
-    formant = normalize(formant, 0.84)
+    formant = normalize(formant, 0.55)
 
     # Pitch-dive variant — DNA pitch_dive_semi
     dive_raw = to_list(fm_growl)
@@ -1774,6 +1777,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     gate_chop = to_list(synthesize_transition(TransitionPreset(
         name="GateChop", fx_type="gate_chop", duration_s=BAR * 2,
+    # hat_pattern kept for backward compat (outro / breakdown still reference it)
         gate_divisions=int(fd.stutter_rate), brightness=0.5
     )))
     gate_chop = normalize(gate_chop, fd.riser_intensity * 0.53)
@@ -1819,15 +1823,41 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mix_into(L, left, offset, gain)
         mix_into(R, right, offset, gain)
 
-    def mx_wide(mono, offset, gain=0.7, delay_ms=18.0):
-        st = panner.haas_delay(mono, delay_ms=delay_ms, side="right")
-        mix_into(L, st.left, offset, gain)
-        mix_into(R, st.right, offset, gain * 0.92)
+    def mx_panned(mono, offset, gain=0.7, pan=0.0):
+        """Mix a mono signal with pan (-1=left, 0=center, +1=right)."""
+        # Constant-power panning
+        angle = (pan + 1.0) * 0.25 * math.pi  # 0..π/2
+        gl = gain * math.cos(angle)
+        gr = gain * math.sin(angle)
+        mix_into(L, mono, offset, gl)
+        mix_into(R, mono, offset, gr)
 
-    def mx_panned(mono, offset, gain, pan):
-        st = panner.pan_constant_power(mono, position=pan)
-        mix_into(L, st.left, offset, gain)
-        mix_into(R, st.right, offset, gain)
+    def mx_wide(mono, offset, gain=0.7, delay_ms=15.0):
+        """Mix mono into stereo with a Haas-effect delay for width."""
+        delay_samp = int(delay_ms * 0.001 * SR)
+        mix_into(L, mono, offset, gain)
+        mix_into(R, mono, offset + delay_samp, gain)
+
+    # ── Rhythm-engine dispatcher ──────────────────────
+    _drum_sounds = {
+        "kick": kick, "snare": snare, "clap": clap,
+        "hat_c": hat_c, "hat_o": hat_o,
+    }
+
+    def place_drums(events: list[DrumEvent], bar_offset: int):
+        """Place a list of DrumEvents into the mix at bar_offset."""
+        for ev in events:
+            snd = _drum_sounds.get(ev.instrument)
+            if snd is None:
+                continue
+            pos = bar_offset + int(ev.beat * BEAT * SR)
+            if abs(ev.pan) < 0.01:
+                mx(snd, pos, ev.gain, ev.gain)
+            else:
+                mx_panned(snd, pos, ev.gain, ev.pan)
+            # Track kick positions for sidechain
+            if ev.instrument == "kick":
+                kick_positions.append(pos)
 
     cursor = 0
 
@@ -1849,47 +1879,25 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     for bar in range(INTRO):
         off = cursor + samples(bar * 4)
-        if bar >= 4:
-            k_vol = 0.10 + (bar - 4) * 0.04
-            mx(kick, off, k_vol, k_vol)
-            kick_positions.append(off)
-        if bar >= 6:
-            for ev in hat_pattern:
-                h_vol = 0.08 + (bar - 6) * 0.03
-                mx_panned(hat_c, off + int(ev.time * SR), h_vol * ev.velocity, -0.15)
-            # Open hat every 4 beats for groove (M9)
-            if bar % 2 == 0:
-                mx_panned(hat_o, off + samples(1.5), 0.06 + (bar - 6) * 0.01, 0.25)
+        drum_evs = rhythm_eng.intro_bar(bar, INTRO)
+        place_drums(drum_evs, off)
 
     ir = reese[:samples(INTRO * 4)]
     ir = lowpass(ir, 0.05)
     ir = fade_in(ir, BAR * 5)
     mx(ir, cursor, 0.10, 0.10)
 
-    mx_wide(rev_crash, cursor + samples((INTRO - 2) * 4), 0.25)
-
     cursor += samples(INTRO * 4)
 
     # ══════════════════════════════════════════════════
-    #  BUILD (8 bars) — accelerating tension
+    #  BUILD 1 (8 bars)
     # ══════════════════════════════════════════════════
-    print("  Build...")
+    print("  Build 1...")
 
     for bar in range(BUILD):
         off = cursor + samples(bar * 4)
-        k_vol = 0.35 + 0.15 * (bar / max(BUILD - 1, 1))
-        mx(kick, off, k_vol, k_vol)
-        kick_positions.append(off)
-        mx(kick, off + samples(2), k_vol, k_vol)
-        kick_positions.append(off + samples(2))
-        # Progressive snare roll: 2→4→4→8→8→16→16→32
-        divs_seq = [2, 4, 4, 8, 8, 16, 16, 32]
-        divs = divs_seq[min(bar, len(divs_seq) - 1)]
-        step = 4.0 / divs
-        for h in range(divs):
-            vel = 0.12 + 0.55 * (bar / max(BUILD, 1)) * (h / max(divs, 1))
-            pan = -0.25 + 0.5 * ((h % 6) / 6)
-            mx_panned(snare, off + samples(h * step), vel, pan)
+        drum_evs = rhythm_eng.build_bar(bar, BUILD, is_build2=False)
+        place_drums(drum_evs, off)
 
     r_seg = riser[:samples(BUILD * 4)]
     mx_wide(r_seg, cursor, 0.55)
@@ -1914,20 +1922,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     for bar in range(DROP1):
         off = cursor + samples(bar * 4)
-
-        # Drums — balanced gains
-        kick_positions.append(off)
-        mx(kick, off, 0.88, 0.88)
-        mx(snare, off + samples(2), 0.82, 0.82)
-        mx(clap, off + samples(2), 0.38, 0.38)
-
-        for ev in hat_pattern:
-            h_vol = 0.45 * ev.velocity  # Hats UP for hi-freq presence
-            h_pan = -0.4 + 0.8 * (ev.time / BAR)  # Wider panning
-            mx_panned(hat_c, off + int(ev.time * SR), h_vol, h_pan)
-
-        mx_panned(hat_o, off + samples(1.5), 0.35, 0.35)
-        mx_panned(hat_o, off + samples(3.5), 0.35, -0.35)
+        # rhythm engine handles pattern, groove, fills, variation
+        drum_evs = rhythm_eng.drop_bar(bar, DROP1, intensity=1)
+        place_drums(drum_evs, off)
 
         # Sub — proper dubstep level (DNA-driven via sub_weight)
         sub_sc = sidechain(sub, depth=0.85, release=0.2, bpm=dna.bpm)
@@ -1935,19 +1932,20 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mx(sub_sc, off, 0.35 * _sw, 0.35 * _sw)
         mx(sub_sc, off + samples(2), 0.28 * _sw, 0.28 * _sw)
 
-        # Noise bed — air and width
+        # Noise bed — reduced for clarity
         dn = drop_noise[:min(samples(4), len(drop_noise))]
-        mx_wide(dn, off, 0.40, 20.0)
+        mx_wide(dn, off, 0.18, 20.0)
 
         # Pad atmosphere in drops (sustained harmonic content)
         _pad_seg = dark_pad[: min(samples(4), len(dark_pad))]
-        mx_wide(_pad_seg, off, 0.18)
+        mx_wide(_pad_seg, off, 0.12)
 
         # Mid bass — DNA bass_riff drives pitch + timbre rotation
         # mid_drive scales ALL mid-bass mix levels (feedback-loop tunable)
         _md = 0.5 + 0.5 * bd.mid_drive  # range 0.5 to 1.0
         _bass_riff = getattr(bd, 'bass_riff', None)
-        bass_idx = bar % 7
+        # Rotate through 3 bass sounds (fm_growl, dist_fm, sync) for coherence
+        bass_idx = bar % len(bass_arsenal)
         bass_snd = bass_arsenal[bass_idx]
 
         # Get pitch shift from bass_riff pattern
@@ -1959,49 +1957,16 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _bdeg = _riff_pat[0][0]  # scale degree
                 _bass_semi = intervals[_bdeg % len(intervals)]
 
-        if bass_idx in (0, 1):
-            # FM growl or Wavetable growl — full 2-beat phrase
-            _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-            mx_wide(_b, off + samples(0.5), 0.88 * _md)
-            _d = pitch_shift_bass(dist_fm, _bass_semi) if _bass_semi else dist_fm
-            mx_wide(_d, off + samples(2.5), 0.82 * _md)
-        elif bass_idx == 2:
-            # Dist FM — staccato 8ths with pitch variation per note
-            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
-            for s8 in range(min(8, len(_riff_notes))):
-                _rdeg = _riff_notes[s8 % len(_riff_notes)][0]
-                _rsemi = intervals[_rdeg % len(intervals)]
-                _b = pitch_shift_bass(bass_snd, _rsemi) if _rsemi else bass_snd
-                mx_panned(_b, off + samples(s8 * 0.5), 0.75 * _md, -0.2 + 0.4 * (s8 / 8))
-        elif bass_idx == 3:
-            # Sync bass — swept harmonics
-            _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-            mx_wide(_b, off + samples(0.5), 0.88 * _md, 15.0)
-        elif bass_idx == 4:
-            # Acid — filter sweep
-            _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-            mx_wide(_b, off + samples(0.5), 0.85 * _md)
-            # Pitch dive on beat 3
-            mx_wide(pitch_dive, off + samples(2), 0.48 * _md)
-        elif bass_idx == 5:
-            # Neuro — choppy with pitch variation
-            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
-            for s16 in range(8):
-                b = neuro if s16 % 2 == 0 else dist_fm
-                _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
-                _rsemi = intervals[_rdeg % len(intervals)]
-                b = pitch_shift_bass(b, _rsemi) if _rsemi else b
-                mx_panned(b, off + samples(s16 * 0.5), 0.68 * _md, -0.25 + 0.5 * (s16 / 8))
-        elif bass_idx == 6:
-            # Formant — talking bass "yoi"
-            mx_wide(bass_snd, off + samples(0.5), 0.88 * _md, 14.0)
+        # ONE bass sound per bar, on beat 1.5, proper mix level
+        _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
+        mx_wide(_b, off + samples(0.5), 0.55 * _md)
 
         # Vocal chops (every 4 bars) — louder for mid presence
         if bar % 4 == 0:
             chop = vocal_chops[bar // 4 % len(vocal_chops)]
-            mx_wide(chop, off, 0.75)
+            mx_wide(chop, off, 0.45)
         if bar % 4 == 2:
-            mx_panned(chop_oh, off + samples(2), 0.55, 0.35)
+            mx_panned(chop_oh, off + samples(2), 0.35, 0.35)
 
         # Lead — DNA-driven melody patterns (varied per bar, per song)
         _melody_pats = getattr(ld, 'melody_patterns', None)
@@ -2015,12 +1980,12 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _key = (deg % 7, _oct)
                 if _key in _lnote:
                     _pan = -0.35 + 0.20 * math.sin(bar * 0.5 + bt * 0.3)
-                    mx_panned(_lnote[_key], off + samples(bt), 0.82 * vel, _pan)
+                    mx_panned(_lnote[_key], off + samples(bt), 0.55 * vel, _pan)
         else:
             # Fallback to original 4-note pattern
             notes = [(lead_f, 0.0), (lead_eb, 1.0), (lead_c, 2.0), (lead_ab, 3.0)]
             for snd, bt in notes:
-                mx_panned(snd, off + samples(bt), 0.82, 0.30 + 0.20 * math.sin(bar * 0.5))
+                mx_panned(snd, off + samples(bt), 0.55, 0.30 + 0.20 * math.sin(bar * 0.5))
 
         # Chords — DNA chord progression (rotates every 4 bars)
         if bar % 4 == 0:
@@ -2038,28 +2003,14 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 attack_s=0.001, release_s=0.8, brightness=0.9, gain=0.7
             ))
             _crash_np = to_np(_crash)
-            # HP filter at 6kHz to make it cymbal-like
-            _crash_np = svf_highpass(_crash_np, 6000.0, 0.7, SR)
-            _crash = normalize(to_list(_crash_np), 0.55)
-            mx_wide(_crash, off, 0.48, 25.0)
+            # HP filter at 6kHz to make it cymbal-like (low Q = no harsh peak)
+            _crash_np = svf_highpass(_crash_np, 6000.0, 0.3, SR)
+            _crash = normalize(to_list(_crash_np), 0.35)
+            mx_wide(_crash, off, 0.30, 25.0)
 
-        # Drum fill at phrase boundaries (bar 3, 7, 11, 15) — accelerating 16th-note rolls
-        if bar % 4 == 3:
-            _fill_positions = [2.0, 2.25, 2.5, 2.625, 2.75, 2.875, 3.0, 3.0625, 3.125, 3.25, 3.5]
-            for _fi, _fp in enumerate(_fill_positions):
-                _fv = 0.40 + 0.05 * _fi
-                mx(snare, off + samples(_fp), _fv, _fv)
-            for _fill_i in range(8):
-                mx_panned(hat_c, off + samples(2 + _fill_i * 0.25), 0.35, -0.4 + 0.8 * (_fill_i / 8))
-
-    mx(tape_stop, cursor + samples((DROP1 - 1) * 4 + 2), 0.5, 0.5)
-    mx_wide(stutter, cursor + samples((DROP1 - 1) * 4 + 2), 0.35)
-    mx(bass_repeat, cursor + samples((DROP1 - 1) * 4), 0.50, 0.50)
-
+    mx(tape_stop, cursor + samples((DROP1 - 1) * 4 + 2), 0.55, 0.55)
     cursor += samples(DROP1 * 4)
 
-    # ══════════════════════════════════════════════════
-    #  BREAKDOWN (8 bars) — stripped back
     # ══════════════════════════════════════════════════
     print("  Breakdown...")
 
@@ -2091,8 +2042,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
             pan = -0.45 + 0.9 * (q / 3)
             mx_panned(plk, off + samples(q), 0.22, pan)
 
-        for q in range(4):
-            mx_panned(hat_c, off + samples(q), 0.04, -0.2 + 0.4 * (q / 3))
+        # Breakdown drums via rhythm engine
+        drum_evs = rhythm_eng.breakdown_bar(bar, BREAK_)
+        place_drums(drum_evs, off)
 
     sd = to_list(synthesize_bass(BassPreset(
         name="SD", bass_type="sub_sine", frequency=FREQ["F1"],
@@ -2112,18 +2064,8 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     for bar in range(BUILD2):
         off = cursor + samples(bar * 4)
-        k_vol = 0.40 + 0.15 * (bar / max(BUILD2 - 1, 1))
-        mx(kick, off, k_vol, k_vol)
-        kick_positions.append(off)
-        mx(kick, off + samples(2), k_vol, k_vol)
-        kick_positions.append(off + samples(2))
-        divs_seq = [2, 4, 4, 8, 8, 16, 16, 32]
-        divs = divs_seq[min(bar, len(divs_seq) - 1)]
-        step = 4.0 / divs
-        for h in range(divs):
-            vel = 0.15 + 0.55 * (bar / max(BUILD2, 1)) * (h / max(divs, 1))
-            pan = -0.3 + 0.6 * ((h % 6) / 6)
-            mx_panned(snare, off + samples(h * step), vel, pan)
+        drum_evs = rhythm_eng.build_bar(bar, BUILD2, is_build2=True)
+        place_drums(drum_evs, off)
 
     r2 = riser[:samples(BUILD2 * 4)]
     mx_wide(r2, cursor, 0.6)
@@ -2159,19 +2101,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
     for bar in range(DROP2):
         off = cursor + samples(bar * 4)
 
-        # Heavier drums — collect kick positions for sidechain
-        kick_positions.append(off)
-        mx(kick, off, 0.92, 0.92)
-        mx(snare, off + samples(2), 0.88, 0.88)
-        mx(clap, off + samples(2), 0.42, 0.42)
-
-        for ev in hat_pattern:
-            h_vol = 0.48 * ev.velocity  # Brighter hats
-            h_pan = -0.45 + 0.9 * (ev.time / BAR)  # Even wider
-            mx_panned(hat_c, off + int(ev.time * SR), h_vol, h_pan)
-
-        mx_panned(hat_o, off + samples(1.5), 0.38, 0.38)
-        mx_panned(hat_o, off + samples(3.5), 0.38, -0.38)
+        # Drums — rhythm engine handles pattern, groove, fills, variation
+        drum_evs = rhythm_eng.drop_bar(bar, DROP2, intensity=2)
+        place_drums(drum_evs, off)
 
         # Sub — proper dubstep level (Drop 2 slightly hotter, DNA-driven)
         sub_sc = sidechain(sub, depth=0.88, release=0.18, bpm=dna.bpm)
@@ -2179,19 +2111,18 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mx(sub_sc, off, 0.38 * _sw, 0.38 * _sw)
         mx(sub_sc, off + samples(2), 0.30 * _sw, 0.30 * _sw)
 
-        # Noise bed — wider
+        # Noise bed — reduced for clarity
         dn = drop_noise[:min(samples(4), len(drop_noise))]
-        mx_wide(dn, off, 0.42, 22.0)
+        mx_wide(dn, off, 0.20, 22.0)
 
         # Pad atmosphere in drops (sustained harmonic content)
         _pad_seg = dark_pad[: min(samples(4), len(dark_pad))]
-        mx_wide(_pad_seg, off, 0.20)
+        mx_wide(_pad_seg, off, 0.14)
 
-        # Mid bass — 8 patterns, more aggressive, HIGHER gains, DNA pitch variation
-        # mid_drive scales ALL mid-bass mix levels (feedback-loop tunable)
+        # Mid bass — coherent: 3 sounds, one per bar, proper mix level
         _md = 0.5 + 0.5 * bd.mid_drive  # range 0.5 to 1.0
         _bass_riff = getattr(bd, 'bass_riff', None)
-        bass_idx = bar % 8
+        bass_idx = bar % len(bass_arsenal)
         _bass_semi = 0
         if _bass_riff and len(_bass_riff) > 0:
             _riff_pat = _bass_riff[bar % len(_bass_riff)]
@@ -2199,53 +2130,17 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _bdeg = _riff_pat[0][0]
                 _bass_semi = intervals[_bdeg % len(intervals)]
 
-        if bass_idx in (0, 7):
-            # Double-time mixed bass 16ths with pitch variation
-            bass_pool = [neuro, dist_fm, fm_growl, growl_wt, sync_bass]
-            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.25, 0.25) for i in range(16)]
-            for s16 in range(16):
-                b = bass_pool[s16 % len(bass_pool)]
-                _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
-                _rsemi = intervals[_rdeg % len(intervals)]
-                b = pitch_shift_bass(b, _rsemi) if _rsemi else b
-                mx_panned(b, off + samples(s16 * 0.25), 0.68 * _md, -0.3 + 0.6 * (s16 / 16))
-        elif bass_idx == 1:
-            _b = pitch_shift_bass(formant, _bass_semi) if _bass_semi else formant
-            mx_wide(_b, off + samples(0.5), 0.92 * _md, 14.0)
-            mx_wide(pitch_dive, off + samples(2.5), 0.48 * _md)
-        elif bass_idx == 2:
-            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
-            for s8 in range(8):
-                _rdeg = _riff_notes[s8 % len(_riff_notes)][0]
-                _rsemi = intervals[_rdeg % len(intervals)]
-                _b = pitch_shift_bass(dist_fm, _rsemi) if _rsemi else dist_fm
-                mx_panned(_b, off + samples(s8 * 0.5), 0.78 * _md, -0.25 + 0.5 * (s8 / 8))
-        elif bass_idx == 3:
-            _b = pitch_shift_bass(growl_wt, _bass_semi) if _bass_semi else growl_wt
-            mx_wide(_b, off + samples(0.5), 0.90 * _md)
-        elif bass_idx == 4:
-            _b = pitch_shift_bass(dive_bass, _bass_semi) if _bass_semi else dive_bass
-            mx_wide(_b, off + samples(0.5), 0.85 * _md)
-        elif bass_idx == 5:
-            _riff_notes = _bass_riff[bar % len(_bass_riff)] if _bass_riff else [(0, i*0.5, 0.5) for i in range(8)]
-            for s16 in range(8):
-                b = sync_bass if s16 % 2 == 0 else acid
-                _rdeg = _riff_notes[s16 % len(_riff_notes)][0]
-                _rsemi = intervals[_rdeg % len(intervals)]
-                b = pitch_shift_bass(b, _rsemi) if _rsemi else b
-                mx_panned(b, off + samples(s16 * 0.5), 0.72 * _md, -0.2 + 0.4 * (s16 / 8))
-        elif bass_idx == 6:
-            _b1 = pitch_shift_bass(fm_growl, _bass_semi) if _bass_semi else fm_growl
-            mx_wide(_b1, off + samples(0.5), 0.82 * _md)
-            _b2 = pitch_shift_bass(neuro, _bass_semi) if _bass_semi else neuro
-            mx_wide(_b2, off + samples(2.5), 0.78 * _md)
+        # ONE bass sound per bar, slightly hotter than Drop 1
+        bass_snd = bass_arsenal[bass_idx]
+        _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
+        mx_wide(_b, off + samples(0.5), 0.60 * _md)
 
-        # Vocal chops (more frequent) — MAX
+        # Vocal chops (more frequent)
         if bar % 2 == 0:
             chop = vocal_chops[bar // 2 % len(vocal_chops)]
-            mx_wide(chop, off, 0.60)
+            mx_wide(chop, off, 0.40)
         if bar % 4 == 3:
-            mx_panned(chop_yoi, off + samples(2), 0.52, -0.25)
+            mx_panned(chop_yoi, off + samples(2), 0.35, -0.25)
 
         # Lead — DNA-driven melody (uses SECOND HALF of patterns for Drop 2)
         _melody_pats = getattr(ld, 'melody_patterns', None)
@@ -2261,11 +2156,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _key = (deg % 7, _oct)
                 if _key in _lnote:
                     _pan = -0.40 + 0.22 * math.sin(bar * 0.9 + bt * 0.4)
-                    mx_panned(_lnote[_key], off + samples(bt), 0.85 * vel, _pan)
+                    mx_panned(_lnote[_key], off + samples(bt), 0.58 * vel, _pan)
         else:
             notes_d2 = [(lead_ab, 0.0), (lead_c, 1.0), (lead_eb, 2.0), (lead_f, 3.0)]
             for snd, bt in notes_d2:
-                mx_panned(snd, off + samples(bt), 0.85, -0.35 + 0.20 * math.sin(bar * 0.9))
+                mx_panned(snd, off + samples(bt), 0.58, -0.35 + 0.20 * math.sin(bar * 0.9))
 
         # Chords — DNA progression (rotates every 2 bars in Drop 2)
         if bar % 2 == 0:
@@ -2283,18 +2178,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 attack_s=0.001, release_s=0.8, brightness=0.9, gain=0.7
             ))
             _crash_np = to_np(_crash)
-            _crash_np = svf_highpass(_crash_np, 6000.0, 0.7, SR)
-            _crash = normalize(to_list(_crash_np), 0.55)
-            mx_wide(_crash, off, 0.50, 25.0)
+            _crash_np = svf_highpass(_crash_np, 6000.0, 0.3, SR)
+            _crash = normalize(to_list(_crash_np), 0.35)
+            mx_wide(_crash, off, 0.30, 25.0)
 
-        # Drum fill at phrase boundaries (bar 3, 7, 11, 15) — accelerating 16th-note rolls
-        if bar % 4 == 3:
-            _fill_positions = [2.0, 2.25, 2.5, 2.625, 2.75, 2.875, 3.0, 3.0625, 3.125, 3.25, 3.5]
-            for _fi, _fp in enumerate(_fill_positions):
-                _fv = 0.42 + 0.05 * _fi
-                mx(snare, off + samples(_fp), _fv, _fv)
-            for _fill_i in range(8):
-                mx_panned(hat_c, off + samples(2 + _fill_i * 0.25), 0.38, -0.5 + 1.0 * (_fill_i / 8))
+        # (Drum fills handled by rhythm_engine)
 
     mx(tape_stop, cursor + samples((DROP2 - 1) * 4 + 2), 0.55, 0.55)
     mx_wide(stutter, cursor + samples((DROP2 - 2) * 4), 0.35)
@@ -2316,11 +2204,8 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     for bar in range(OUTRO):
         off = cursor + samples(bar * 4)
-        vol = max(0.04, 0.65 - bar * 0.08)
-        mx(kick, off, vol, vol)
-        for ev in hat_pattern:
-            h_vol = max(0.02, 0.12 - bar * 0.015) * ev.velocity
-            mx_panned(hat_c, off + int(ev.time * SR), h_vol, 0.0)
+        drum_evs = rhythm_eng.outro_bar(bar, OUTRO)
+        place_drums(drum_evs, off)
 
     os_sub = to_list(synthesize_bass(BassPreset(
         name="OS", bass_type="sub_sine", frequency=FREQ["F1"],
@@ -2507,7 +2392,7 @@ def main():
         session = engine.run(song_name, style=style, mood=mood)
         return
 
-    # ── Song mode: --song "Song Name" [--style dubstep] [--mood dark] ──
+    # ── Song mode: --song "Song Name" [--style dubstep] [--mood dark] [--producer subtronics] ──
     if "--song" in args:
         idx = args.index("--song")
         song_name = args[idx + 1] if idx + 1 < len(args) else "Untitled"
@@ -2516,6 +2401,7 @@ def main():
         style = "dubstep"
         mood = ""
         sound_style = ""
+        producer = ""
         if "--style" in args:
             si = args.index("--style")
             style = args[si + 1] if si + 1 < len(args) else style
@@ -2525,11 +2411,23 @@ def main():
         if "--sound" in args:
             sdi = args.index("--sound")
             sound_style = args[sdi + 1] if sdi + 1 < len(args) else sound_style
+        if "--producer" in args:
+            pi = args.index("--producer")
+            producer = args[pi + 1] if pi + 1 < len(args) else ""
 
-        bp = SongBlueprint(name=song_name, style=style, mood=mood,
-                           sound_style=sound_style)
-        engine = VariationEngine(artistic_variance=0.15)
-        dna = engine.forge_dna(bp)
+        if producer:
+            # ── OpenClaw Agent mode: producer-style DNA generation ──
+            agent = get_producer_agent(producer)
+            print(agent.banner())
+            dna = agent.produce(
+                song_name, style=style, mood=mood,
+                sound_style=sound_style,
+            )
+        else:
+            bp = SongBlueprint(name=song_name, style=style, mood=mood,
+                               sound_style=sound_style)
+            engine = VariationEngine(artistic_variance=0.15)
+            dna = engine.forge_dna(bp)
 
         print("╔══════════════════════════════════════════════╗")
         print(f"║  DUBFORGE — {dna.name:<33}║")
