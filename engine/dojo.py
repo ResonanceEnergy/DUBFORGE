@@ -1182,11 +1182,12 @@ ARTIST_PROFILE = {
         "2025": "128s-style wavetables shipped with Serum 2",
     },
     "stats": {
-        "plays": "58 Million+",
-        "songs": "275+",
+        "plays": "60 Million+",
+        "songs": "300+",
         "shows": "1000+ on 5 continents",
-        "tracks_2022": 56,
+        "tracks_2022": 58,
         "grammy_collabs": "Songs with winners of 9 Grammys",
+        "official_credits": ["Star Wars", "GTA5", "Microsoft"],
     },
     "star_students": [
         "Apashe", "Beats Antique", "Chee", "Claude Von Stroke",
@@ -1258,6 +1259,831 @@ DOJO_PLATFORM = {
                             "a wavetable, the fire of fractal harmonics burns on its own.",
     },
 }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CREATIVE PHILOSOPHY — ill.Gates' production wisdom (blog essays)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CREATIVE_PHILOSOPHY: dict = {
+    "the_14_minute_hit": {
+        "title": "The 14-Minute Hit",
+        "source": "producerdojo.com/blog/the-14-minute-hit (March 8 2026)",
+        "core_thesis": "Sia wrote 'Diamonds' in 14 minutes. Speed is proof of "
+                       "depth, not laziness. First instinct beats labored revision.",
+        "principles": [
+            {
+                "name": "First Instinct Supremacy",
+                "description": "Your first musical thought is usually the truest. "
+                               "Revision often waters down the original spark. "
+                               "Capture first instincts IMMEDIATELY.",
+            },
+            {
+                "name": "Flow State Neuroscience",
+                "description": "During flow states, the dorsolateral prefrontal cortex "
+                               "(self-monitoring/judgment) DEACTIVATES while the medial "
+                               "prefrontal cortex (self-expression) lights up. "
+                               "Don't fight this — surrender to it.",
+            },
+            {
+                "name": "Decision Fatigue Kills Creativity",
+                "description": "Every preset auditioned, every knob twisted indecisively "
+                               "burns creative fuel. Commit to sounds early. "
+                               "Decision fatigue is the silent killer of great music.",
+            },
+            {
+                "name": "Volume Is The Teacher",
+                "description": "Write MORE. Not better. More. The producers who grow "
+                               "fastest finish tracks constantly and relentlessly. "
+                               "Volume is the teacher. Speed is how you let it teach.",
+            },
+            {
+                "name": "Separate Creation From Revision",
+                "description": "NEVER mix while creating. NEVER create while mixing. "
+                               "These are different cognitive modes. Switching between "
+                               "them destroys both.",
+            },
+            {
+                "name": "Timer-Based Sessions",
+                "description": "Use a hard timer: 60-90 minutes for creation. "
+                               "When the timer ends, STOP. Commit or shelve. "
+                               "The constraint IS the craft.",
+            },
+            {
+                "name": "Finished > Perfect",
+                "description": "A finished track with rough edges teaches you more "
+                               "than an unfinished track with a pristine mix bus. "
+                               "Ship it. Learn. Repeat.",
+            },
+        ],
+        "sia_quote": "I'm pretty successful because I'm really productive, "
+                     "not necessarily that I'm a great songwriter.",
+        "phi_integration": {
+            "phi_timer": f"1/phi of 90 min ≈ {round(90 / PHI, 1)} min creation, "
+                        f"{round(90 - 90 / PHI, 1)} min evaluation",
+            "fibonacci_session_blocks": "8 min warm-up, 13 min sketch, 21 min build, "
+                                        "13 min polish, 8 min export = 63 min total",
+            "golden_decision_rule": "After Fibonacci count of alternatives (3 presets, "
+                                    "5 samples, 8 options max), STOP and commit.",
+        },
+    },
+    "dont_resist_whats_easy": {
+        "title": "Don't Resist What's Easy",
+        "source": "producerdojo.com/blog/don-t-resist-what-s-easy (February 10 2026)",
+        "core_thesis": "The urge to reject the easy path is a trick of ego and "
+                       "vanity. 9/10 times complexity does more harm than good. "
+                       "Your audience cares about one thing: the FEELING.",
+        "principles": [
+            {
+                "name": "Ego Trap Recognition",
+                "description": "The desire to make everything 'special' or 'complex' "
+                               "is often insecurity disguised as ambition. Recognize "
+                               "when you're adding complexity for YOU, not the listener.",
+            },
+            {
+                "name": "Direct Route First",
+                "description": "Take the most direct route to the objective. "
+                               "You can ALWAYS make the song more complex later. "
+                               "It's really hard to unmake a mess.",
+            },
+            {
+                "name": "Feeling Over Technique",
+                "description": "Your audience primarily cares about one thing: FEELING. "
+                               "Unnecessary complexity makes your track feel like it "
+                               "comes from insecurity.",
+            },
+            {
+                "name": "Style Is Confidence",
+                "description": "Style is confidence in self-expression. "
+                               "Don't let the imagined opinions of others hold you back.",
+            },
+        ],
+        "rules": [
+            "Not EVERY technique needs to be crazy.",
+            "Not EVERY sound needs to be crazy.",
+            "Not EVERY song needs to be crazy.",
+            "Sometimes let the song write itself.",
+        ],
+        "phi_integration": "Golden simplicity ratio: for every phi complex element, "
+                          "include phi² simple elements. Balance: 38.2% complex, "
+                          "61.8% straightforward = natural, confident feel.",
+    },
+    "ninja_sounds": {
+        "title": "Start Using Ninja Sounds",
+        "source": "producerdojo.com/blog/start-using-ninja-sounds (January 21 2026)",
+        "core_thesis": "Most sounds in a mix should AVOID listener attention. "
+                       "Only the 'singer' should demand focus. Everything else "
+                       "is the 'band' — supportive, invisible, essential.",
+        "singer_band_metaphor": {
+            "singer": "The ONE element that demands attention (lead, vocal, "
+                      "main bass in the drop). Only 1 singer at a time.",
+            "band": "Everything else — drums, pads, sub, FX, atmosphere. "
+                    "Must be felt, not heard individually. Ninja sounds.",
+        },
+        "attention_thieves": [
+            "Louder than the rest (competing for headroom)",
+            "Brighter than the rest (stealing high-frequency attention)",
+            "Dryer than the rest (standing out of the reverb space)",
+            "Wider than the rest (dominating stereo field)",
+            "Dominating the pain zone (2-4.5 kHz region)",
+        ],
+        "ninja_rules": [
+            "If a mixing decision doesn't serve the focus direction, don't add it.",
+            "High-pass the 'band' to make room for the 'singer'.",
+            "Roll off 2-4.5 kHz on supporting elements — that's the 'singer' zone.",
+            "Use reverb to push elements BACK in the mix (not everything dry).",
+            "Mono your sub elements — they don't need width.",
+            "Keep ninja sounds WARM (low-pass slightly) — warmth = invisible.",
+        ],
+        "pain_zone": {
+            "range_hz": "2000-4500 Hz",
+            "description": "The region of maximum ear sensitivity. Human hearing "
+                          "evolved to be most sensitive here (speech intelligibility). "
+                          "Any element dominating this zone STEALS attention.",
+            "phi_frequency_center": f"{round(2000 * PHI, 1)} Hz "
+                                    f"(≈{round(2000 * PHI)} Hz — the golden attention apex)",
+        },
+        "phi_integration": {
+            "ninja_volume_rule": f"Ninja sounds at 1/phi (≈0.618) of singer volume.",
+            "ninja_brightness_rule": f"Ninja high shelf cut at phi × 2kHz ≈ {round(2000 * PHI)} Hz.",
+            "ninja_width_rule": "Ninja sounds at 0.382 stereo width (tight center), "
+                               "singer at 0.618 width (naturally wider).",
+        },
+    },
+    "stock_device_mastery": {
+        "title": "Invest in Stock! ...Devices.",
+        "source": "producerdojo.com/blog/invest-in-stock-devices (January 15 2026)",
+        "core_thesis": "ill.Gates champions Ableton stock devices over third-party "
+                       "plugins. Master the tools you already have before buying more. "
+                       "The fundamentals are a bottomless well.",
+        "devices": "See STOCK_DEVICE_MASTERY dict below for full catalog.",
+    },
+    "low_pass_mastery": {
+        "title": "5 Killer Low Pass Tips",
+        "source": "producerdojo.com/blog/5-ways-you-re-not-using-low-pass-filter-enough "
+                  "(January 21 2026)",
+        "core_thesis": "Low pass filter is far from the fanciest effect, but it's "
+                       "one of the most powerful. The fundamentals are a bottomless "
+                       "well — you can NEVER be too geeked out on them.",
+        "techniques": "See LOW_PASS_TECHNIQUES list below for full breakdown.",
+    },
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STOCK DEVICE MASTERY — ill.Gates' Ableton native device recommendations
+# ═══════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class StockDevice:
+    """An Ableton stock device recommended by ill.Gates."""
+    name: str
+    category: str          # INSTRUMENT / AUDIO_EFFECT / MIDI_EFFECT / M4L
+    ill_gates_rank: int    # 1 = most essential
+    description: str
+    ill_gates_tip: str
+    dubforge_use: str
+    phi_enhancement: str
+
+
+STOCK_DEVICE_MASTERY: list[dict] = [
+    asdict(StockDevice(
+        name="Sampler",
+        category="INSTRUMENT",
+        ill_gates_rank=1,
+        description="ill.Gates' #1 instrument in Ableton. The engine behind "
+                    "the 128 Rack and the Infinite Drum Rack. Multisampling, "
+                    "zone editing, modulation matrix, round-robin — limitless.",
+        ill_gates_tip="The 128 Rack technique puts an entire career of sounds "
+                      "at your fingertips. One Sampler, 128 zones, infinite power.",
+        dubforge_use="Build phi-organized 128 Racks with Fibonacci zone "
+                     "distribution. Load DUBFORGE wavetable one-shots as zones.",
+        phi_enhancement="Velocity curve: vel^(1/phi) for natural dynamic response. "
+                       "Zone crossfade width: phi ratio between adjacent zones.",
+    )),
+    asdict(StockDevice(
+        name="Operator",
+        category="INSTRUMENT",
+        ill_gates_rank=2,
+        description="The timeless FM synth. Four operators, multiple algorithms. "
+                    "Can produce everything from clean sine waves to screaming "
+                    "digital chaos.",
+        ill_gates_tip="Operator is timeless. People chase Serum but sleep on "
+                      "Operator. It's been making hits for 20 years.",
+        dubforge_use="FM ratio 1:phi between carriers and modulators. "
+                     "Use as basis for resampling chains.",
+        phi_enhancement="Carrier:Modulator ratio = 1:phi (1.618) for inharmonic "
+                       "bass timbres. Operator feedback at 0.618.",
+    )),
+    asdict(StockDevice(
+        name="Wavetable",
+        category="INSTRUMENT",
+        ill_gates_rank=3,
+        description="Ableton's built-in wavetable synth. Great starting point "
+                    "before reaching for Serum 2. Modern, capable, and FREE "
+                    "with Ableton Suite.",
+        ill_gates_tip="Between Wavetable, Meld, and Drift you have three "
+                      "world-class synths that most people never even open.",
+        dubforge_use="Import DUBFORGE PHI CORE wavetables directly. "
+                     "Use as lightweight alternative to Serum 2.",
+        phi_enhancement="Wavetable position modulated at Fibonacci LFO rates. "
+                       "Sub oscillator at 1/phi of main oscillator level.",
+    )),
+    asdict(StockDevice(
+        name="Meld",
+        category="INSTRUMENT",
+        ill_gates_rank=4,
+        description="Hybrid poly synth combining multiple synthesis methods. "
+                    "Modern, expressive, surprising — a sleeping giant.",
+        ill_gates_tip="Meld is one of those synths people don't realize they "
+                      "should be using. Open it. Be surprised.",
+        dubforge_use="Layered pad generation for atmosphere tracks. "
+                     "Alternative to Serum 2 Phi Pad preset.",
+        phi_enhancement="Macro depth modulation at phi curve response. "
+                       "Layer detune at phi cents intervals.",
+    )),
+    asdict(StockDevice(
+        name="Drift",
+        category="INSTRUMENT",
+        ill_gates_rank=5,
+        description="Analog-modeled subtractive synth with built-in character. "
+                    "The 'imperfect' flavor that digital synths often lack.",
+        ill_gates_tip="Drift has that warm, imperfect analog feel that just "
+                      "sits in a mix perfectly without trying.",
+        dubforge_use="Sub bass alternative with natural drift behavior. "
+                     "Resampling source for organic textures.",
+        phi_enhancement="Oscillator drift rate modulated at phi frequency. "
+                       "Filter envelope: phi ratio attack:decay:release.",
+    )),
+    asdict(StockDevice(
+        name="Saturator (Digital Clip mode)",
+        category="AUDIO_EFFECT",
+        ill_gates_rank=6,
+        description="Ableton's Saturator in Digital Clip mode is a secret "
+                    "weapon. Clean, hard clipping that adds harmonics without "
+                    "muddiness.",
+        ill_gates_tip="Digital Clip mode beats 9 out of 10 third-party "
+                      "clipper plugins. It's right there in Saturator. Use it.",
+        dubforge_use="Post-sub-bass harmonic enhancement. "
+                     "Clipping stage in growl resampler chain.",
+        phi_enhancement="Drive amount at phi-derived values: "
+                       "0.618 (subtle), 1.0 (medium), 1.618 (aggressive).",
+    )),
+    asdict(StockDevice(
+        name="OTT (Multiband Dynamics preset)",
+        category="AUDIO_EFFECT",
+        ill_gates_rank=7,
+        description="The OTT preset in Multiband Dynamics. Legendary "
+                    "upward+downward compression. Used on everything.",
+        ill_gates_tip="OTT still slaps. It's been the secret weapon "
+                      "for years and it's NOT going anywhere.",
+        dubforge_use="Master chain compression. Bass group processing. "
+                     "Crossovers at PSBS phi frequencies.",
+        phi_enhancement="Crossover frequencies at phi ladder: "
+                       f"{round(55 * PHI**0)} / {round(55 * PHI**1)} / "
+                       f"{round(55 * PHI**2)} Hz.",
+    )),
+    asdict(StockDevice(
+        name="Erosion",
+        category="AUDIO_EFFECT",
+        ill_gates_rank=8,
+        description="Frequency-dependent distortion / noise modulation. "
+                    "Adds fizz, grit, and texture to any signal.",
+        ill_gates_tip="Erosion defined whole genres of bass music. "
+                      "That fizzy, buzzy quality people chase with expensive "
+                      "plugins? Erosion has been doing it for free.",
+        dubforge_use="Mid-bass harmonic enhancement on PSBS MID layer. "
+                     "Growl character in resampling chains.",
+        phi_enhancement="Erosion frequency at phi multiples of fundamental. "
+                       "Amount: 0.618 for subtle grit, phi for heavy.",
+    )),
+    asdict(StockDevice(
+        name="Roar",
+        category="AUDIO_EFFECT",
+        ill_gates_rank=9,
+        description="Multi-stage distortion with routing flexibility. "
+                    "Serial, parallel, mid/side, and multiband modes.",
+        ill_gates_tip="Roar is the new kid on the block but it's already "
+                      "essential. The routing options are insane.",
+        dubforge_use="Heavy distortion stage for mid-bass growl design. "
+                     "Multiband mode with PSBS crossover frequencies.",
+        phi_enhancement="Multiband crossovers at PSBS phi frequencies. "
+                       "Drive stages at Fibonacci ratio intensities.",
+    )),
+    asdict(StockDevice(
+        name="Glue Compressor",
+        category="AUDIO_EFFECT",
+        ill_gates_rank=10,
+        description="SSL G-bus emulation. Nearly indistinguishable from "
+                    "the hardware according to many A/B tests.",
+        ill_gates_tip="Nearly indistinguishable from SSL hardware. "
+                      "Stop buying compressor plugins.",
+        dubforge_use="Drum bus glue. Master chain compression. "
+                     "Sidechain compression for pump effect.",
+        phi_enhancement="Ratio: phi:1 (≈1.618:1) for natural dynamics. "
+                       "Attack/release in phi-ratio ms values.",
+    )),
+    asdict(StockDevice(
+        name="Echo",
+        category="AUDIO_EFFECT",
+        ill_gates_rank=11,
+        description="Dual delay with character controls, filter, reverb, "
+                    "modulation, and ducking. Way more than a simple delay.",
+        ill_gates_tip="Echo is a complete creative tool, not just a delay. "
+                      "The modulation and ducking alone make it essential.",
+        dubforge_use="Fibonacci-timed delays on return tracks. "
+                     "Ducking echo for bass music clarity.",
+        phi_enhancement="Delay times at Fibonacci ratios: 1/8, 1/5, 1/3, "
+                       "1/2, phi/4 beats. Feedback at 0.618.",
+    )),
+    asdict(StockDevice(
+        name="Max for Live (Free Devices)",
+        category="M4L",
+        ill_gates_rank=12,
+        description="The free Max for Live device library is an untapped "
+                    "goldmine. Convolution reverbs, spectral tools, LFOs, "
+                    "and creative instruments — all free with Live Suite.",
+        ill_gates_tip="Most people don't even open the free M4L devices. "
+                      "There are convolution reverbs, spectral processors, "
+                      "and creative tools in there that rival paid plugins.",
+        dubforge_use="Generate custom M4L devices via DUBFORGE Ableton Live "
+                     "engine M4L script generator.",
+        phi_enhancement="Custom LFO shapes following phi curves. "
+                       "Spectral processing at phi-harmonic frequencies.",
+    )),
+]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LOW PASS TECHNIQUES — ill.Gates' 5 killer uses of low pass filter
+# ═══════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class LowPassTechnique:
+    """A low pass filter technique from ill.Gates' production methodology."""
+    name: str
+    category: str
+    description: str
+    how_to: str
+    dubforge_use: str
+    phi_enhancement: str
+
+
+LOW_PASS_TECHNIQUES: list[dict] = [
+    asdict(LowPassTechnique(
+        name="Narrative Filtering",
+        category="ARRANGEMENT",
+        description="Put low passes on groups, busses, or the master and SLOWLY "
+                    "open them up over time. Adds narrative and variation to "
+                    "simple, repetitive sections. Cliché for a reason: it WORKS.",
+        how_to="1. Insert Auto Filter on a bus or master. "
+               "2. Set to Low Pass, cutoff at ~200 Hz. "
+               "3. Automate cutoff to open from 200 Hz → 20 kHz over 8-16 bars. "
+               "4. Reset before drops for maximum impact.",
+        dubforge_use="RCO energy curve automation maps directly to filter "
+                     "cutoff. Low cutoff = low energy, full open = peak energy.",
+        phi_enhancement=f"Open filter from phi × 100 Hz (≈{round(PHI * 100)} Hz) "
+                       f"to phi × 12000 Hz (≈{round(PHI * 12000)} Hz). "
+                       "Rate of opening follows golden spiral acceleration.",
+    )),
+    asdict(LowPassTechnique(
+        name="High Frequency Boosting via Resonance",
+        category="MIXING",
+        description="Set low pass cutoff high (8 kHz+) and boost resonance. "
+                    "Creates a smooth, creamy boost at the cutoff frequency "
+                    "while gently rolling off the extreme highs. Lets vocals "
+                    "own the 'air' frequencies above 10 kHz.",
+        how_to="1. Set LP cutoff at 8-12 kHz. "
+               "2. Increase resonance to 40-60%. "
+               "3. The resonance peak accentuates frequencies around cutoff. "
+               "4. Use on instrumental bus to let vocals sit on top.",
+        dubforge_use="Apply to PSBS MID and HIGH layers to create space "
+                     "for the lead 'singer' sound above.",
+        phi_enhancement=f"Cutoff at phi × 5000 Hz ≈ {round(PHI * 5000)} Hz. "
+                       "Resonance at 1/phi ≈ 0.618 for golden Q factor.",
+    )),
+    asdict(LowPassTechnique(
+        name="Filter Pinging",
+        category="SOUND_DESIGN",
+        description="High resonance low pass filter fed with short transients "
+                    "produces juicy percussive pinging sounds. The resonance "
+                    "causes a ringing decay like an analog drum machine.",
+        how_to="1. Use an analog-modeled LP filter (UAD Moog, Arturia, etc.). "
+               "2. Set resonance to 80-95% (near self-oscillation). "
+               "3. Feed short transient clicks, noise bursts, or impulses. "
+               "4. Tune cutoff frequency to desired pitch. "
+               "5. Result: resonant percussion with natural decay.",
+        dubforge_use="Percussion synthesis in DUBFORGE drum generator. "
+                     "Living, breathing analog-feel drum sounds.",
+        phi_enhancement="Tune pings to phi-harmonic frequencies: "
+                       "55, 89, 144, 233, 377 Hz. Decay time: phi × 100 ms.",
+    )),
+    asdict(LowPassTechnique(
+        name="Low Pass Gate (LPG)",
+        category="SOUND_DESIGN",
+        description="Filter cutoff and VCA amplitude tied together. Opening "
+                    "the VCA opens the filter. Emulates natural acoustic "
+                    "behavior — loud = bright, quiet = dark. The famous "
+                    "'Buchla Bongo' percussion sound comes from pinging an LPG.",
+        how_to="1. Create a Macro controlling both filter cutoff AND amplitude. "
+               "2. Set both to respond to the same envelope/modulator. "
+               "3. When amplitude is high → filter opens → bright sound. "
+               "4. When amplitude fades → filter closes → dark, warm tail. "
+               "5. Many synths can route a single mod source to both targets.",
+        dubforge_use="Apply LPG behavior to DUBFORGE bass layers — natural "
+                     "dynamics where loud bass is bright, quiet bass is warm.",
+        phi_enhancement="LPG tracking ratio: cutoff follows amplitude at "
+                       "phi curve (amp^(1/phi)). Natural golden-ratio dynamics.",
+    )),
+    asdict(LowPassTechnique(
+        name="Audio Rate Filter FM",
+        category="SOUND_DESIGN",
+        description="Route an oscillator to modulate the filter cutoff at audio "
+                    "rate. With resonance, this produces gnarly FM tones that "
+                    "feel much more alive than sterile DX7-style FM. "
+                    "ill.Gates calls this his 'secret sound design weapon' for bass.",
+        how_to="1. Route an oscillator's output to the filter cutoff input. "
+               "2. Set the modulating oscillator to audio rate (20 Hz+). "
+               "3. Increase filter resonance to 50-80%. "
+               "4. For Reese bass: detune two oscillators, only ONE modulates "
+               "   the filter cutoff → amazing alive quality. "
+               "5. Experiment with mod oscillator waveform (sine=smooth, "
+               "   saw=aggressive, square=digital).",
+        dubforge_use="Core technique for DUBFORGE growl resampler mid-bass. "
+                     "Filter FM produces the 'living' quality in dubstep bass.",
+        phi_enhancement="FM oscillator frequency at phi ratio of carrier "
+                       "fundamental. Mod depth at Fibonacci LFO rates. "
+                       "Resonance at 1/phi for golden sweet spot.",
+    )),
+]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UNBEATABLE DRUMS — ill.Gates' hardware drum sample catalog
+# ═══════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class DrumKit:
+    """A hardware drum kit from the Unbeatable Drums collection."""
+    name: str
+    hardware_source: str
+    year_sampled: int
+    character: str
+    combinatorial_count: int    # possible unique combinations
+    categories: list[str]
+    dubforge_use: str
+
+
+UNBEATABLE_DRUMS: dict = {
+    "name": "Unbeatable Drums — The Ultimate All-Genre Drum Library",
+    "creator": "ill.Gates",
+    "total_sounds": 3500,
+    "price": "$39 (90% off from $290)",
+    "combinations_per_kit": 180_000,
+    "technique": "128s system — all power at your fingertips out of the box",
+    "studio_processing": [
+        "Neves", "SSLs", "1176s", "LA-2As", "Distressors",
+        "Tubes", "Valves", "Vactrols",
+    ],
+    "kits": [
+        asdict(DrumKit(
+            name="SH-101 'Goldzilla'",
+            hardware_source="1982 Black & Gold Roland SH-101",
+            year_sampled=2023,
+            character="Analog warmth, punchy, classic. Recorded through "
+                      "UAD preamps + hardware distortion in megastudios.",
+            combinatorial_count=180_000,
+            categories=["Kicks", "Snares", "Hats", "Perc", "FX"],
+            dubforge_use="Classic analog drum foundation. Sub-heavy kicks.",
+        )),
+        asdict(DrumKit(
+            name="Erica Synths Perkons",
+            hardware_source="Erica Synths Perkons HD-01 ($3000)",
+            year_sampled=2023,
+            character="Modern analog percussion. A whole new dimension. "
+                      "Famously used by Eprom. You've gotta hear it.",
+            combinatorial_count=180_000,
+            categories=["Kicks", "Toms", "Snares", "Metallic", "Noise"],
+            dubforge_use="Modern analog perc for bass music drops.",
+        )),
+        asdict(DrumKit(
+            name="Modular Madness",
+            hardware_source="Large format modular synthesizer",
+            year_sampled=2023,
+            character="Huge, unwieldy, massive sound without the hassle. "
+                      "Same sound as owning a $50k modular setup.",
+            combinatorial_count=180_000,
+            categories=["Kicks", "Hits", "Noise", "Metallic", "Drones"],
+            dubforge_use="Experimental percussion and textural hits.",
+        )),
+        asdict(DrumKit(
+            name="Elektron Syntakt",
+            hardware_source="Elektron Syntakt",
+            year_sampled=2023,
+            character="Subtractive + FM synthesis with analog filters and "
+                      "overdrive. Shocking audio fidelity. Cuts like a knife.",
+            combinatorial_count=180_000,
+            categories=["Kicks", "Snares", "Hats", "Toms", "FX"],
+            dubforge_use="Clean, precise electronic drums for modern drops.",
+        )),
+        asdict(DrumKit(
+            name="Make Noise Shared System",
+            hardware_source="Make Noise Shared System (Buchla-inspired)",
+            year_sampled=2023,
+            character="West Coast synthesis. Deep love of sound. Cutting edge "
+                      "percussion from Buchla-inspired circuits.",
+            combinatorial_count=180_000,
+            categories=["Plucks", "Pings", "Bongos", "Clicks", "Textures"],
+            dubforge_use="Buchla bongo percussion, LPG pings, organic textures.",
+        )),
+        asdict(DrumKit(
+            name="Korg MS-20",
+            hardware_source="Korg MS-20 (1978 semi-modular)",
+            year_sampled=2023,
+            character="So relevant that all Ableton filters emulate its sound. "
+                      "Raw, aggressive, legendary. Used originals are expensive.",
+            combinatorial_count=180_000,
+            categories=["Kicks", "Snares", "Noise", "Zaps", "Sweeps"],
+            dubforge_use="Raw analog aggression for heavy dubstep drops.",
+        )),
+        asdict(DrumKit(
+            name="Erica Synths LXR-02",
+            hardware_source="Erica Synths LXR-02",
+            year_sampled=2023,
+            character="Digital/analog hybrid drum machine. Clean and punchy.",
+            combinatorial_count=180_000,
+            categories=["Kicks", "Snares", "Hats", "Claps", "Perc"],
+            dubforge_use="Hybrid electronic drums with clean digital punch.",
+        )),
+        asdict(DrumKit(
+            name="All-Genre 128 Kit",
+            hardware_source="Mixed multisampled sources",
+            year_sampled=2023,
+            character="Classic Infinite Drum Rack style. Contains a whole "
+                      "career worth of combinations in a single kit.",
+            combinatorial_count=180_000,
+            categories=["Kicks", "Snares", "Hats", "Perc", "FX",
+                        "Bass", "Melodic", "Vocal", "Foley"],
+            dubforge_use="One-stop solution for any genre. Load and go.",
+        )),
+        asdict(DrumKit(
+            name="Glitchy 128 Kit",
+            hardware_source="Processed glitch sources",
+            year_sampled=2023,
+            character="Gooey, glitchy goodness. Designed to be reused "
+                      "thousands of times without getting stale.",
+            combinatorial_count=180_000,
+            categories=["Glitch", "Stutter", "Artifact", "Digital", "Noise"],
+            dubforge_use="Glitch fills, stutter edits, digital textures.",
+        )),
+        asdict(DrumKit(
+            name="SH-101 Mudpie Kit",
+            hardware_source="SH-101 processed through Mudpie technique",
+            year_sampled=2023,
+            character="Mudpie chaos captured from SH-101 experiments.",
+            combinatorial_count=180_000,
+            categories=["Chaos", "Texture", "Hits", "Noise", "Organic"],
+            dubforge_use="Organic chaos textures from Mudpie sessions.",
+        )),
+        asdict(DrumKit(
+            name="MS-20 Feedback Kit",
+            hardware_source="MS-20 feedback patches",
+            year_sampled=2023,
+            character="Self-oscillating filter feedback from the MS-20. "
+                      "Living, breathing, aggressive.",
+            combinatorial_count=180_000,
+            categories=["Feedback", "Resonant", "Tonal", "Aggressive"],
+            dubforge_use="Feedback-driven percussion for aggressive drops.",
+        )),
+    ],
+    "bonus_content": [
+        "Drum Rack Workshop ($50 value)",
+        "Acoustic Drum Breaks (recorded at Shelter Studios, 2023)",
+        "Jungle Break Kit",
+        "Electro/Techno Kit",
+        "Fat n' Simple Kit",
+        "Donk Kit",
+    ],
+    "phi_integration": {
+        "kit_count": "11 kits (close to Fibonacci 13)",
+        "sounds_total": f"3500 sounds (≈ Fibonacci 3 × 1000 + 500)",
+        "combinations_per_kit": "180,000 (phi^12 ≈ 321.9 × 560 ≈ 180K)",
+        "zone_distribution": "Fibonacci allocation across categories in 128 Rack",
+    },
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# THE PRODUCER'S PATH — 12-week course structure
+# ═══════════════════════════════════════════════════════════════════════════
+
+PRODUCERS_PATH: dict = {
+    "name": "The Producer's Path",
+    "tagline": "90 Days to Music That Works",
+    "guarantee": "You'll make music you're proud of by the end or your money back.",
+    "duration_weeks": 12,
+    "structure": {
+        "weekly_classes": 12,
+        "production_challenges": 12,
+        "listening_levels": 12,
+        "creativity_discussions": 12,
+        "fundamental_technique_levels": 12,
+        "digging_preparation_levels": 12,
+    },
+    "included_content": {
+        "drums_bass_breaks_vocals": "Nearly 1 GB",
+        "music_tools_templates": "All the tools + templates you'll ever need",
+        "moog_sub_multisamples": "Damian Taylor's Grammy-nominated album sounds",
+        "deep_reference_library": "Catch beginners up fast",
+    },
+    "methodology": {
+        "scientific_goal_setting": "More than doubles finish rate",
+        "prep_organization": "System adopted by household names",
+        "psychological_tweaks": "Little tweaks that make it feel effortless",
+        "enough_fun": "Fall in love with the fundamentals",
+        "enough_depth": "Repeat any time you want to level up",
+    },
+    "annual_membership_includes": [
+        "All four 12-week semester courses (live + at your own pace)",
+        "ill.Gates private Discord live stream access",
+        "Reference Library (best of 400+ Weekly Download Archive videos)",
+        "Basics Library (fundamental production videos)",
+        "Music Tool Vault (templates, instruments, racks, Unbeatable Drums, "
+         "Infinite Drum Rack, top sound packs)",
+        "Unlimited written track feedback",
+        "WIP Wednesday + Feedback Friday live streams",
+        "12 Sensei Sessions (optional add-on)",
+    ],
+    "phi_integration": {
+        "course_weeks": f"12 weeks (near Fibonacci 13)",
+        "fibonacci_challenge_schedule": "Challenges at Fibonacci week intervals: "
+                                        "Week 1, 1, 2, 3, 5, 8 — intensifying pace",
+        "golden_feedback_cycle": f"Submit track → wait phi days (≈{round(PHI, 1)} days) "
+                                 "→ receive feedback → iterate. Natural learning cadence.",
+    },
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EXTENDED DOJO TECHNIQUES — Ninja Sounds + Low Pass as formal techniques
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Append new techniques to DOJO_TECHNIQUES
+DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Ninja Sounds (Singer vs Band)",
+    year_introduced=2024,
+    category=TechniqueType.MIXING.value,
+    description="The mix philosophy that most sounds should AVOID listener attention. "
+                "Only the 'singer' element (lead/vocal/main bass) demands focus. "
+                "Everything else is the 'band' — supportive, invisible, essential. "
+                "Based on ill.Gates' 'Start Using Ninja Sounds' blog (Jan 2026).",
+    steps=[
+        "1. Identify the ONE 'singer' element for each section (usually lead or main bass)",
+        "2. Everything else is 'band' — supportive ninja sounds",
+        "3. Audit every mix decision: does this serve the focus direction?",
+        "4. Pull back ninja sounds: slightly quieter, warmer, narrower, wetter",
+        "5. Clear 2-4.5 kHz (pain zone) on band elements — that's the singer's zone",
+        "6. Use reverb to push band elements BACK in the mix",
+        "7. Mono sub elements — width steals attention",
+        "8. A/B test: solo the singer, then add the band — band should enhance, not compete",
+        "9. If a ninja sound grabs your attention, make it quieter/darker/narrower",
+        "10. Result: a mix where the listener's ear goes EXACTLY where you want it",
+    ],
+    tools_required=["EQ Eight", "Utility (stereo width)", "Reverb (space placement)",
+                   "Volume automation", "Mid/Side EQ"],
+    dubforge_integration="PSBS layers map perfectly: SUB = ninja (felt, not heard), "
+                        "MID = singer in drops, HIGH = ninja texture support. "
+                        "During breakdowns: CHORDS = singer, everything else = ninja.",
+    phi_enhancement="Ninja volume at 1/phi (0.618) of singer volume. "
+                   "Ninja brightness cut at phi × 2kHz. "
+                   "Singer:Band ratio = phi:1 in perceived loudness.",
+)))
+
+DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Low Pass Mastery (5 Killer Techniques)",
+    year_introduced=2024,
+    category=TechniqueType.SOUND_DESIGN.value,
+    description="ill.Gates' 5 essential uses of low pass filter: Narrative filtering, "
+                "high boosting via resonance, filter pinging, low pass gates (Buchla Bongo), "
+                "and audio rate filter FM (his 'secret weapon' for bass). "
+                "The fundamentals are a bottomless well.",
+    steps=[
+        "1. Narrative: automate LP on bus/master from 200 Hz → 20 kHz over 8-16 bars",
+        "2. High boost: LP cutoff at 8 kHz+, boost resonance for creamy presence",
+        "3. Pinging: high resonance LP + short transients = percussive tones",
+        "4. LPG: macro controlling both amplitude AND filter simultaneously",
+        "5. Audio rate FM: route oscillator to filter cutoff, boost resonance",
+        "6. For Reese bass: one detuned osc modulates filter = ALIVE quality",
+        "7. Use analog-modeled filters for pinging (digital filters sound terrible)",
+        "8. Use Analog Heat physical LP circuit on instrumental, let vocal own air",
+        "9. Combine techniques: LPG + filter FM = extreme organic character",
+        "10. Never underestimate fundamentals — low pass is a bottomless well",
+    ],
+    tools_required=["Auto Filter", "Analog-modeled filter (UAD Moog, etc.)",
+                   "Macro controls", "Analog Heat (optional hardware)"],
+    dubforge_integration="All 5 techniques integrated into DUBFORGE signal processing: "
+                        "narrative filtering in RCO energy curves, filter pinging in "
+                        "drum generator, LPG behavior on bass layers, filter FM in "
+                        "growl resampler mid-bass design.",
+    phi_enhancement="LP narrative opens at golden spiral rate. "
+                   "Resonance peak at phi Q factor. "
+                   "Filter FM ratio: carrier:mod = 1:phi. "
+                   "LPG tracking curve: amp^(1/phi).",
+)))
+
+DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="The 14-Minute Hit (Rapid Creation)",
+    year_introduced=2024,
+    category=TechniqueType.WORKFLOW.value,
+    description="Timer-based rapid creation methodology. Sia wrote 'Diamonds' in "
+                "14 minutes. Speed is proof of depth. During flow states, the "
+                "brain's self-monitoring center shuts down while self-expression "
+                "center activates. Ride the wave — don't fight it.",
+    steps=[
+        "1. Set a hard timer: 14-37 minutes (14 = hit, 37 = 1/phi of 60)",
+        "2. Pre-select sounds before starting (128 Rack ready, drums loaded)",
+        "3. Start the timer and IMMEDIATELY begin creating",
+        "4. Capture first instincts — do NOT second-guess",
+        "5. No EQ, no mixing, no processing — just CAPTURE the idea",
+        "6. When decision fatigue appears (audition paralysis), commit to current choice",
+        "7. If it doesn't feel right in 3 attempts, move on (Fibonacci decision limit)",
+        "8. When timer ends: STOP. Save. Rate: 🔥 / ⭐ / ♻️",
+        "9. Do NOT revise in the same session — separate creation from revision",
+        "10. Sessions with 🔥 ratings become full tracks. ⭐ become sound design fodder. "
+            "♻️ gets composted — no shame, just volume.",
+    ],
+    tools_required=["Timer (phone/app)", "Pre-loaded 128 Rack",
+                   "Pre-loaded drum kit", "Session View ready"],
+    dubforge_integration="DUBFORGE fibonacci_feedback engine can auto-rate output "
+                        "quality. 14-minute hit sessions feed the lessons_learned "
+                        "engine for cross-track improvement.",
+    phi_enhancement=f"Golden timer: 1/phi of 60 min = {round(60 / PHI, 1)} min. "
+                   f"Decision limit: Fibonacci 3 (try 3 times then commit). "
+                   f"Session rating ratio target: phi quality tracks per 5 sessions.",
+)))
+
+DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Stock Device Mastery",
+    year_introduced=2024,
+    category=TechniqueType.WORKFLOW.value,
+    description="Master Ableton's stock devices before buying third-party plugins. "
+                "The fundamentals are a bottomless well. Sampler (#1), Operator, "
+                "Saturator Digital Clip ('beats 9/10 clippers'), OTT ('still slaps'), "
+                "Erosion ('defined whole genres of bass'), Glue Compressor "
+                "('nearly indistinguishable from SSL hardware'). "
+                "From ill.Gates' 'Invest in Stock! ...Devices.' blog (Jan 2026).",
+    steps=[
+        "1. Learn Sampler deeply — it IS the 128 Rack engine",
+        "2. Master Operator for FM synthesis before reaching for Serum",
+        "3. Discover Meld, Drift, and Wavetable — three world-class synths you own",
+        "4. Use Saturator Digital Clip mode for clean hard clipping",
+        "5. Embrace OTT preset — it's been the secret weapon for years",
+        "6. Add Erosion for fizzy, buzzy bass character ('defined whole genres')",
+        "7. Explore Roar's routing options (serial/parallel/M-S/multiband)",
+        "8. Use Glue Compressor on every bus (SSL quality)",
+        "9. Try Echo's ducking and modulation features",
+        "10. Open the free Max for Live devices — untapped goldmine",
+    ],
+    tools_required=["Ableton Live Suite", "Time and curiosity"],
+    dubforge_integration="All DUBFORGE signal processing chains reference stock "
+                        "devices as primary tools. Third-party plugins are optional "
+                        "enhancements, not requirements.",
+    phi_enhancement="Master each device for phi hours (1.618h) before moving to "
+                   "the next. Fibonacci learning order: Sampler first, then 1 more, "
+                   "then 2 more, then 3 more, etc.",
+)))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ILL.GATES PRODUCTION RULES — Distilled wisdom for DUBFORGE integration
+# ═══════════════════════════════════════════════════════════════════════════
+
+ILL_GATES_RULES: list[str] = [
+    "1.  FINISH MUSIC. Completion > perfection. Always.",
+    "2.  Separate creation from revision — never mix while creating.",
+    "3.  First instinct beats labored revision 90% of the time.",
+    "4.  Volume is the teacher. Speed is how you let it teach.",
+    "5.  Decision fatigue kills creativity — commit early, move forward.",
+    f"6.  Use a timer: {round(60 / PHI, 1)} minutes creation, "
+    f"    {round(60 - 60 / PHI, 1)} minutes evaluation (phi split).",
+    "7.  Most sounds should be NINJAS — invisible, supportive, essential.",
+    "8.  Only ONE element is the 'singer' at any given moment.",
+    "9.  Clear the pain zone (2-4.5 kHz) on everything except the singer.",
+    "10. The fundamentals are a bottomless well — master stock devices first.",
+    "11. Saturator Digital Clip beats 9/10 third-party clippers.",
+    "12. Erosion defined whole genres of bass music. Use it.",
+    "13. OTT still slaps. Will always slap.",
+    "14. Glue Compressor is nearly indistinguishable from SSL hardware.",
+    "15. Not every technique, sound, or song needs to be crazy.",
+    "16. Your audience cares about one thing: the FEELING.",
+    "17. Style is confidence in self-expression.",
+    "18. You can always add complexity later. You can't unmake a mess.",
+    "19. Go the extra mile during PREP — but let the writing be effortless.",
+    "20. Low pass filter is far from fancy but it's one of the most powerful tools.",
+    "21. Audio rate filter FM is a secret weapon for bass sounds.",
+    f"22. A finished track teaches more than {round(PHI)} unfinished tracks with pristine mix buses.",
+    "23. Being nice is important. Not a dick. — Dylan aka ill.Gates",
+]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1497,12 +2323,61 @@ def main() -> None:
         json.dump(phi_data, f, indent=2)
     print(f"  ✓ Phi integration        → {phi_path}")
 
+    # 7) Creative philosophy (NEW — deep dive research)
+    phil_path = out / "dojo_creative_philosophy.json"
+    phil_data = {
+        "creative_philosophy": CREATIVE_PHILOSOPHY,
+        "ill_gates_rules": ILL_GATES_RULES,
+        "rules_count": len(ILL_GATES_RULES),
+    }
+    with open(phil_path, "w") as f:
+        json.dump(phil_data, f, indent=2)
+    print(f"  ✓ Creative philosophy    → {phil_path}")
+
+    # 8) Stock device mastery (NEW — deep dive research)
+    stock_path = out / "dojo_stock_devices.json"
+    stock_data = {
+        "stock_device_mastery": STOCK_DEVICE_MASTERY,
+        "device_count": len(STOCK_DEVICE_MASTERY),
+        "source": "ill.Gates blog: 'Invest in Stock! ...Devices.' (Jan 2026)",
+    }
+    with open(stock_path, "w") as f:
+        json.dump(stock_data, f, indent=2)
+    print(f"  ✓ Stock device mastery   → {stock_path}")
+
+    # 9) Low pass techniques (NEW — deep dive research)
+    lp_path = out / "dojo_low_pass_techniques.json"
+    lp_data = {
+        "low_pass_techniques": LOW_PASS_TECHNIQUES,
+        "technique_count": len(LOW_PASS_TECHNIQUES),
+        "source": "ill.Gates blog: '5 Killer Low Pass Tips' (Jan 2026)",
+    }
+    with open(lp_path, "w") as f:
+        json.dump(lp_data, f, indent=2)
+    print(f"  ✓ Low pass techniques    → {lp_path}")
+
+    # 10) Unbeatable Drums catalog (NEW — deep dive research)
+    drums_path = out / "dojo_unbeatable_drums.json"
+    with open(drums_path, "w") as f:
+        json.dump(UNBEATABLE_DRUMS, f, indent=2)
+    print(f"  ✓ Unbeatable Drums       → {drums_path}")
+
+    # 11) Producer's Path course (NEW — deep dive research)
+    pp_path = out / "dojo_producers_path.json"
+    with open(pp_path, "w") as f:
+        json.dump(PRODUCERS_PATH, f, indent=2)
+    print(f"  ✓ Producer's Path        → {pp_path}")
+
     # Stats
     print()
-    print("  Producer Dojo Engine Stats:")
+    print("  Producer Dojo Engine Stats (Enhanced):")
     print(f"    Belt levels:          {len(BELT_SYSTEM)}")
     print(f"    Approach phases:      {len(THE_APPROACH)}")
     print(f"    Techniques:           {len(DOJO_TECHNIQUES)}")
+    print(f"    Stock devices:        {len(STOCK_DEVICE_MASTERY)}")
+    print(f"    Low pass techniques:  {len(LOW_PASS_TECHNIQUES)}")
+    print(f"    Unbeatable kits:      {len(UNBEATABLE_DRUMS['kits'])}")
+    print(f"    ill.Gates rules:      {len(ILL_GATES_RULES)}")
     print(f"    128 Rack categories:  {len(rack_data['categories'])}")
     print(f"    Session tracks:       {session_data['track_count']}")
     print(f"    Session scenes:       {session_data['scene_count']}")
@@ -1510,6 +2385,8 @@ def main() -> None:
     print(f"    ill.Gates albums:     {len(ARTIST_PROFILE['discography']['albums'])}")
     print(f"    ill.Gates EPs:        {len(ARTIST_PROFILE['discography']['eps'])}")
     print(f"    Star students:        {len(ARTIST_PROFILE['star_students'])}")
+    print(f"    Philosophy essays:    {len(CREATIVE_PHILOSOPHY)}")
+    print(f"    JSON outputs:         11")
 
 
 if __name__ == "__main__":

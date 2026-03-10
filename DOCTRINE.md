@@ -179,12 +179,25 @@
 
 1. **Belt system** mirrors Producer Dojo martial-arts ranking (White → Black Belt).
 2. Belt progression thresholds use **Fibonacci session/asset counts** linked to Memory Engine growth tracking.
-3. **The Approach** workflow: Collect → Sketch → Finish — phi-timed phase durations.
-4. **128 Rack** technique: 128 samples per Sampler, organized into phi-ratio zone categories.
-5. **Mudpies**: chaotic sound collage → extract gems — fractal discovery process.
-6. **Infinite Drum Rack**: organized macro sample library with Fibonacci category counts.
+3. **The Approach** workflow: Collect → Sketch → Arrange → Sound Design → Mix → Master → Release — phi-timed phase durations.
+4. **128 Rack** technique: 128 samples per Sampler, organized into phi-ratio zone categories (Fibonacci distribution: 5/8/13 zones per category).
+5. **Mudpies**: chaotic sound collage → extract gems — fractal discovery process. Golden Mudpie uses phi-ratio source layers.
+6. **Infinite Drum Rack**: organized macro sample library with Fibonacci category counts. Chain selector at phi-position selects "favorite."
 7. Clip launching defaults to 1-bar quantization (matches Ableton Integration Rule 11).
 8. DUBFORGE modules mapped to belt levels — progressive complexity mirrors Dojo pedagogy.
+9. **The 14-Minute Hit**: timer-based rapid creation. Sia wrote "Diamonds" in 14 min. Speed = depth. First instinct > labored revision.
+10. **Ninja Sounds**: most sounds should AVOID listener attention. Only the "singer" demands focus. Band = invisible, essential support.
+11. **Pain Zone** (2–4.5 kHz): clear this range on all "band" elements — it belongs to the "singer" at phi × 2 kHz ≈ 3236 Hz center.
+12. **Stock Device Mastery**: Sampler (#1), Operator, Saturator Digital Clip ("beats 9/10 clippers"), OTT ("still slaps"), Erosion ("defined whole genres of bass"), Glue Comp ("≈SSL hardware"), Echo, Roar, Max for Live free devices.
+13. **Low Pass Mastery**: 5 techniques — narrative filtering, resonance boosting, filter pinging, low pass gates (Buchla Bongo), audio rate filter FM ("secret weapon for bass").
+14. **Unbeatable Drums**: 11 hardware kits (SH-101, Perkons, Modular, Syntakt, Make Noise, MS-20, etc.), 3500+ sounds, 180K combinations per kit.
+15. **Decision fatigue kills creativity** — commit to sounds early, Fibonacci limit (3/5/8 alternatives max).
+16. **Volume is the teacher** — write MORE, not better. Speed is how you let volume teach.
+17. **Separate creation from revision** — NEVER mix while creating, NEVER create while mixing.
+18. **Don't Resist What's Easy** — the direct route is usually best. Audience cares about FEELING. Style = confidence.
+19. **Producer's Path**: 12-week course (near Fibonacci 13), 90 days to music that works.
+20. **ill.Gates rules count**: 23 codified production rules with phi integration.
+21. Being nice is important. — Dylan aka ill.Gates
 
 ---
 
