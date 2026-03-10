@@ -8,6 +8,11 @@ distortion, and formant shifting to create evolving growl textures.
 Outputs Serum-ready wavetable.
 
 Based on MIDBASS_GROWL_RESAMPLER_ENGINE specs from Serum 2 Module Pack v1.
+
+Dojo Integration (ill.Gates):
+  - Mudpie technique: chaos → chop → extract → resample (mudpie_chaos_pipeline)
+  - Audio Rate Filter FM: modulate filter cutoff at audio rates (dojo_audio_rate_fm)
+  - Resampling Chains: iterative render → process → render (3 passes max)
 """
 
 import math
@@ -220,6 +225,123 @@ def growl_resample_pipeline(source_frame: np.ndarray,
         output_frames.append(frame)
 
     return output_frames
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DOJO INTEGRATION — ill.Gates Mudpies & Audio Rate Filter FM
+# ═══════════════════════════════════════════════════════════════════════════
+
+def mudpie_chaos_pipeline(source: np.ndarray, n_passes: int = 5,
+                          seed: int | None = None) -> list[np.ndarray]:
+    """ill.Gates Mudpie technique — randomized processing chain.
+
+    Takes a source waveform and runs it through randomized combinations
+    of pitch shift, distortion, frequency shift, comb filter, bit reduction,
+    and formant filtering. Returns all variations — the user picks the gems.
+
+    Args:
+        source: Input waveform (single-cycle frame)
+        n_passes: Number of random variations to generate (default: 5)
+        seed: Random seed for reproducibility (None = true chaos)
+
+    Returns:
+        List of processed variations (Mudpie outputs)
+    """
+    rng = np.random.default_rng(seed)
+    variations = []
+
+    for pass_num in range(n_passes):
+        frame = np.copy(source)
+
+        # Randomize processing order
+        processors = [
+            ("pitch", lambda f: pitch_shift(f, semitones=rng.uniform(-12, 12),
+                                            formant_preserve=rng.random() > 0.5)),
+            ("distort", lambda f: waveshape_distortion(f, drive=rng.uniform(0.1, 0.9),
+                                                        mix=rng.uniform(0.3, 1.0))),
+            ("freq_shift", lambda f: frequency_shift(f, hz=rng.uniform(10, 200),
+                                                      mix=rng.uniform(0.2, 0.7))),
+            ("comb", lambda f: comb_filter(f, delay_ms=rng.uniform(0.5, 10.0),
+                                            feedback=rng.uniform(0.2, 0.8),
+                                            mix=rng.uniform(0.2, 0.6))),
+            ("bitcrush", lambda f: bit_reduce(f, bits=int(rng.integers(3, 12)),
+                                               sample_rate_reduce=rng.uniform(0.1, 0.8),
+                                               mix=rng.uniform(0.1, 0.5))),
+            ("formant", lambda f: formant_filter(f, vowel=rng.choice(["A", "E", "I", "O", "U"]),
+                                                  depth=rng.uniform(0.3, 1.0),
+                                                  mix=rng.uniform(0.3, 0.8))),
+        ]
+
+        # Randomly select 3-5 processors and randomize order
+        n_procs = rng.integers(3, min(6, len(processors)) + 1)
+        selected = rng.choice(len(processors), size=n_procs, replace=False)
+        rng.shuffle(selected)
+
+        for idx in selected:
+            _name, proc_fn = processors[idx]
+            try:
+                frame = proc_fn(frame)
+            except Exception:
+                pass  # Skip failed processors — chaos is forgiving
+
+        # Normalize output
+        peak = np.max(np.abs(frame))
+        if peak > 0:
+            frame /= peak
+
+        variations.append(frame)
+
+    return variations
+
+
+def dojo_audio_rate_fm(frame: np.ndarray, mod_freq: float = 55.0,
+                       depth: float = 0.5,
+                       sample_rate: int = 48000) -> np.ndarray:
+    """ill.Gates Audio Rate Filter FM — modulate filter cutoff at audio frequencies.
+
+    Creates FM-like timbres by modulating a virtual filter cutoff at audio rate.
+    This produces complex sidebands and metallic/bell-like textures from
+    simple source material — a key ill.Gates sound design technique.
+
+    Args:
+        frame: Single-cycle waveform to process
+        mod_freq: Modulation frequency in Hz (try phi-related: 55, 89, 144)
+        depth: Modulation depth 0.0-1.0
+        sample_rate: Sample rate for frequency calculation
+
+    Returns:
+        Processed waveform with audio-rate filter modulation
+    """
+    n = len(frame)
+    t = np.linspace(0, 2 * np.pi, n, endpoint=False)
+
+    # Generate modulator at audio rate
+    mod_phase = mod_freq / sample_rate * n
+    modulator = np.sin(t * mod_phase) * depth
+
+    # Apply as multiplicative AM + phase modulation hybrid
+    # This creates both sum/difference frequencies (FM sidebands)
+    spectrum = np.fft.rfft(frame)
+    mod_spectrum = np.fft.rfft(modulator)
+
+    # Convolve in frequency domain (= multiply in time domain creates FM)
+    n_spec = min(len(spectrum), len(mod_spectrum))
+    result_spectrum = np.zeros_like(spectrum)
+    for i in range(n_spec):
+        result_spectrum[i] = spectrum[i] * (1.0 + mod_spectrum[i] * depth)
+
+    result = np.fft.irfft(result_spectrum, n=n)
+
+    # Blend with original
+    mix = depth * 0.7
+    output = frame * (1 - mix) + result * mix
+
+    # Normalize
+    peak = np.max(np.abs(output))
+    if peak > 0:
+        output /= peak
+
+    return output
 
 
 # --- Source Generators (if no input provided) -----------------------------

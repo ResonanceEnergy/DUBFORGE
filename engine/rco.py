@@ -8,6 +8,14 @@ The RCO models a track's energy as a time-series and optimizes
 drop placement, build-up slopes, and tension/release using
 Fibonacci bar counts and phi-ratio envelope shapes.
 
+Dojo Integration (ill.Gates — Narrative Filtering):
+    Low-pass filter automation as storytelling device:
+      Intro: LP 400→800 Hz (mystery, underwater)
+      Build: LP 800→4000 Hz (revelation, brightening)
+      Drop:  Fully open 20kHz (full energy payoff)
+      Break: LP 10000→1000 Hz (reflection, cooling)
+    Filter position tells the listener WHERE they are in the story.
+
 Outputs:
     output/analysis/rco_curve.json
     output/analysis/rco_curve.png  (if matplotlib available)
@@ -25,13 +33,20 @@ from engine.config_loader import PHI, load_config
 
 @dataclass
 class Section:
-    """One section of a track arrangement."""
+    """One section of a track arrangement.
+
+    Dojo: filter_cutoff_start/end model ill.Gates narrative filtering.
+    Filter position = story position. Low = mystery. Open = payoff.
+    """
     name: str                    # e.g. "intro", "build_1", "drop_1", "break", "drop_2"
     bars: int                    # length in bars
     energy_start: float          # 0.0 – 1.0
     energy_end: float            # 0.0 – 1.0
-    curve: str = "phi"           # "linear", "phi", "exponential", "fibonacci_step"
+    curve: str = "phi"           # "linear", "phi", "exponential", "fibonacci_step",
+                                 # "low_pass_narrative"
     bpm: float = 150.0
+    filter_cutoff_start: float = 20000.0  # Hz — narrative LP automation start
+    filter_cutoff_end: float = 20000.0    # Hz — narrative LP automation end
 
 
 @dataclass
@@ -46,6 +61,43 @@ class RCOProfile:
     def compute(self):
         self.total_bars = sum(s.bars for s in self.sections)
         self.total_duration_s = (self.total_bars * 4 * 60) / self.bpm  # 4 beats/bar
+
+    def narrative_filter_curve(self, resolution_per_bar: int = 4) -> list[dict]:
+        """ill.Gates Narrative Filtering — generate LP cutoff automation curve.
+
+        Returns list of {time_s, cutoff_hz, section_name} points that map
+        the filter position to the track's emotional journey.
+
+        Usage:
+            profile = default_rco_profile(...)
+            filter_data = profile.narrative_filter_curve()
+            # → [{'time_s': 0.0, 'cutoff_hz': 400.0, 'section': 'intro'}, ...]
+        """
+        self.compute()
+        points = []
+        bar_offset = 0
+        seconds_per_bar = (4 * 60) / self.bpm
+
+        for section in self.sections:
+            n_points = section.bars * resolution_per_bar
+            start_hz = section.filter_cutoff_start
+            end_hz = section.filter_cutoff_end
+
+            for i in range(n_points):
+                t = (bar_offset + i / resolution_per_bar) * seconds_per_bar
+                # Phi-curve interpolation for organic filter movement
+                progress = i / max(n_points - 1, 1)
+                progress_phi = progress ** PHI
+                cutoff = start_hz + (end_hz - start_hz) * progress_phi
+                points.append({
+                    "time_s": round(t, 3),
+                    "cutoff_hz": round(cutoff, 1),
+                    "section": section.name,
+                })
+
+            bar_offset += section.bars
+
+        return points
 
 
 # --- Curve Functions ------------------------------------------------------
@@ -213,6 +265,48 @@ def subtronics_hybrid_preset(bpm: float = 150.0) -> RCOProfile:
     )
 
 
+# --- Dojo Narrative Filtering Preset --------------------------------------
+
+def dojo_narrative_preset(bpm: float = 150.0) -> RCOProfile:
+    """ill.Gates Narrative Filtering — LP automation tells the story.
+
+    Filter cutoff values follow the emotional journey:
+      Intro: 400→800 Hz (mystery, underwater)
+      Build: 800→4000 Hz (revelation, brightening)
+      Drop:  20000 Hz (fully open, maximum energy)
+      Break: 10000→1000 Hz (reflection, cooling)
+      Drop2: 20000 Hz (return of full energy)
+      Outro: 4000→200 Hz (closing, fading)
+    """
+    return RCOProfile(
+        name="DOJO_NARRATIVE",
+        bpm=bpm,
+        sections=[
+            Section("intro", bars=8, energy_start=0.0, energy_end=0.2,
+                    curve="phi", bpm=bpm,
+                    filter_cutoff_start=400.0, filter_cutoff_end=800.0),
+            Section("build_1", bars=8, energy_start=0.2, energy_end=0.85,
+                    curve="phi", bpm=bpm,
+                    filter_cutoff_start=800.0, filter_cutoff_end=4000.0),
+            Section("drop_1", bars=16, energy_start=1.0, energy_end=0.9,
+                    curve="fibonacci_step", bpm=bpm,
+                    filter_cutoff_start=20000.0, filter_cutoff_end=20000.0),
+            Section("break_1", bars=8, energy_start=0.3, energy_end=0.15,
+                    curve="phi", bpm=bpm,
+                    filter_cutoff_start=10000.0, filter_cutoff_end=1000.0),
+            Section("build_2", bars=8, energy_start=0.15, energy_end=0.95,
+                    curve="exponential", bpm=bpm,
+                    filter_cutoff_start=1000.0, filter_cutoff_end=8000.0),
+            Section("drop_2", bars=16, energy_start=1.0, energy_end=0.85,
+                    curve="fibonacci_step", bpm=bpm,
+                    filter_cutoff_start=20000.0, filter_cutoff_end=20000.0),
+            Section("outro", bars=8, energy_start=0.3, energy_end=0.0,
+                    curve="linear", bpm=bpm,
+                    filter_cutoff_start=4000.0, filter_cutoff_end=200.0),
+        ],
+    )
+
+
 # --- YAML-driven profile loader -------------------------------------------
 
 def load_rco_profiles_from_config() -> list[RCOProfile]:
@@ -322,6 +416,7 @@ def main() -> None:
             subtronics_weapon_preset(),
             subtronics_emotive_preset(),
             subtronics_hybrid_preset(),
+            dojo_narrative_preset(),
         ]
 
     for profile in presets:

@@ -966,10 +966,16 @@ def render_full_track(dna: 'SongDNA | None' = None):
       - Arrangement sections from DNA arrangement
       - Bass rotation order from DNA
       - Vocal chop vowels from DNA
+
+    Dojo Integration:
+      Prints ill.Gates Approach phase banners during production:
+        [COLLECT] → [SKETCH] → [ARRANGE] → [MIX] → [FINISH]
     """
     # ═══ DNA SETUP ═══════════════════════════════════
     if dna is None:
         dna = _default_v5_dna()
+
+    print("\n  🥋 [COLLECT] — Gathering sound palette, establishing DNA identity...")
 
     # Import DSP primitives needed throughout
     from engine.dsp_core import svf_highpass, svf_lowpass, multiband_compress
@@ -1046,6 +1052,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Drums (LAYERED, MULTI-SOURCE)
     # ═══════════════════════════════════════════
+    print("\n  🥋 [SKETCH] — Designing sounds, first instincts...")
     print("  [1/9] Drums — layered synthesis...")
 
     # ── KICK ──────────────────────────────────────────
@@ -1796,6 +1803,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # ═══════════════════════════════════════════
     #  ARRANGEMENT
     # ═══════════════════════════════════════════
+    print("\n  🥋 [ARRANGE] — Structuring energy arc, section contrast...")
     print("  [8/9] Arranging...")
 
     L = [0.0] * total_s
@@ -2316,6 +2324,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # ══════════════════════════════════════════════════
     #  MIXDOWN + MASTERING
     # ══════════════════════════════════════════════════
+    print("\n  🥋 [MIX → FINISH] — Surgical mixing, final polish...")
     print("  [9/9] Mixing & mastering...")
 
     # ── Apply sidechain_bus using collected kick positions ──
@@ -2408,6 +2417,87 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
 def main():
     args = sys.argv[1:]
+
+    # ── Dojo mode: --dojo [--song "Song Name"] [--timer 840] ──
+    if "--dojo" in args:
+        import time as _time
+        song_name = "Untitled"
+        style = "dubstep"
+        mood = ""
+        timer_s = 840  # 14 minutes default
+
+        if "--song" in args:
+            si = args.index("--song")
+            song_name = args[si + 1] if si + 1 < len(args) else song_name
+        if "--style" in args:
+            sti = args.index("--style")
+            style = args[sti + 1] if sti + 1 < len(args) else style
+        if "--mood" in args:
+            mi = args.index("--mood")
+            mood = args[mi + 1] if mi + 1 < len(args) else mood
+        if "--timer" in args:
+            ti = args.index("--timer")
+            timer_s = int(args[ti + 1]) if ti + 1 < len(args) else 840
+
+        print("╔══════════════════════════════════════════════╗")
+        print("║  DUBFORGE — 🥋 DOJO MODE                    ║")
+        print(f"║  ill.Gates: {timer_s}s timer | Max 3 decisions  ║")
+        print("╠══════════════════════════════════════════════╣")
+        print("║  The Approach:                               ║")
+        print("║    COLLECT → SKETCH → ARRANGE → MIX →       ║")
+        print("║    FINISH → RELEASE                          ║")
+        print("║  First instinct wins. Timer is sacred.       ║")
+        print("╚══════════════════════════════════════════════╝")
+
+        dojo_start = _time.time()
+
+        from engine.fibonacci_feedback import FibonacciFeedbackEngine
+        engine = FibonacciFeedbackEngine()
+        session = engine.run(song_name, style=style, mood=mood,
+                             dojo_timer=True, dojo_timer_s=timer_s)
+
+        elapsed = _time.time() - dojo_start
+
+        # Belt status after render
+        try:
+            from engine.lessons_learned import LessonsLearned
+            ll = LessonsLearned()
+            belt = ll.evaluate_belt()
+            print(f"\n  🥋 Belt: {belt['current_belt']} | "
+                  f"Tracks: {belt['tracks_completed']}")
+            if belt['tracks_needed'] > 0:
+                print(f"     Next: {belt['next_belt']} "
+                      f"({belt['tracks_needed']} tracks to go)")
+        except ImportError:
+            pass
+
+        if elapsed <= timer_s:
+            print(f"\n  ⏱  Completed in {elapsed:.0f}s — WITHIN TIMER! 🔥")
+        else:
+            print(f"\n  ⏱  Took {elapsed:.0f}s — {elapsed - timer_s:.0f}s over timer")
+            print("     ill.Gates: 'Save it and move on.'")
+        return
+
+    # ── Fibonacci feedback mode: --fibonacci --song "Song Name" ──
+    if "--fibonacci" in args:
+        idx = args.index("--fibonacci")
+        song_name = "Untitled"
+        style = "dubstep"
+        mood = ""
+        if "--song" in args:
+            si = args.index("--song")
+            song_name = args[si + 1] if si + 1 < len(args) else song_name
+        if "--style" in args:
+            sti = args.index("--style")
+            style = args[sti + 1] if sti + 1 < len(args) else style
+        if "--mood" in args:
+            mi = args.index("--mood")
+            mood = args[mi + 1] if mi + 1 < len(args) else mood
+
+        from engine.fibonacci_feedback import FibonacciFeedbackEngine
+        engine = FibonacciFeedbackEngine()
+        session = engine.run(song_name, style=style, mood=mood)
+        return
 
     # ── Song mode: --song "Song Name" [--style dubstep] [--mood dark] ──
     if "--song" in args:

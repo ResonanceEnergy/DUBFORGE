@@ -8,11 +8,17 @@ phase coherence via phi-ratio alignment.
 Layers:
     SUB      — Pure sine / triangle, sub-bass fundamental
     LOW      — Saw/square, main bass body
-    MID      — FM / wavetable, growl zone
+    MID      — FM / wavetable, growl zone (Dojo: SINGER — identity sound)
     HIGH     — Noise + harmonics, presence / grit
     CLICK    — Transient layer for attack definition
 
 All crossover frequencies derived from phi-ratio ladder.
+
+Dojo Integration (ill.Gates — Ninja Sounds: Singer/Band concept):
+    Singer = MID layer (the identity sound, the face of the bass)
+    Band   = SUB + LOW + HIGH + CLICK (supporting layers)
+    The singer is what makes the track memorable.
+    The band provides context without competing.
 
 v2.8.0 — real audio output: multi-frame wavetables, per-layer stems,
          phi-ladder root sweeps. Every preset → Serum-ready 256-frame .wav.
@@ -45,12 +51,38 @@ class BassLayer:
 
 @dataclass
 class PSBSPreset:
-    """Complete PSBS layer stack."""
+    """Complete PSBS layer stack.
+
+    Dojo: Singer/Band concept (ill.Gates Ninja Sounds):
+        singer_layer identifies which layer is the 'singer' (identity sound).
+        Default is MID — the growl zone carries the track's character.
+    """
     name: str
     root_hz: float = 55.0       # Root note frequency
     tuning_a4: float = 432.0    # 432 Hz coherence tuning
     layers: list = field(default_factory=list)
     crossover_mode: str = "phi"  # "phi" | "linear" | "custom"
+    singer_layer: str = "MID"    # Dojo: which layer is the "singer" (identity sound)
+
+    def get_singer(self) -> BassLayer | None:
+        """ill.Gates Ninja Sounds: get the singer (identity) layer.
+
+        The singer is the sound that defines the track — the one people
+        remember and hum after the show. Usually the MID layer.
+        """
+        for layer in self.layers:
+            if layer.name == self.singer_layer:
+                return layer
+        return None
+
+    def get_band(self) -> list[BassLayer]:
+        """ill.Gates Ninja Sounds: get the band (supporting) layers.
+
+        The band supports the singer without competing.
+        SUB provides weight, LOW provides power, HIGH provides presence,
+        CLICK provides attack definition.
+        """
+        return [layer for layer in self.layers if layer.name != self.singer_layer]
 
 
 # --- Phi Crossover Calculator ---------------------------------------------
