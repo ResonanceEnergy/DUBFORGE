@@ -10,9 +10,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 @dataclass
 class LogEntry:
     """A session log entry."""

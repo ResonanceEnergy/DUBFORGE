@@ -10,9 +10,7 @@ import os
 import time
 from dataclasses import dataclass
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 CATEGORY_FOLDERS = [
     "Kicks", "Snares", "Hats", "Percussion", "Claps",
     "Bass", "Leads", "Pads", "FX", "Risers",

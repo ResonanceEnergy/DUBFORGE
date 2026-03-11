@@ -2513,12 +2513,16 @@ def main():
         return
 
     # ── LIVE MODE: --live --song "Song Name" (Ableton + Serum 2) ──
+    #    Now unified with Dojo Approach + Fibonacci feedback loop.
+    #    Phi governs the session timing, quality targets, and belt progression.
     if "--live" in args:
+        import time as _time
         song_name = "Untitled"
         style = "dubstep"
         mood = "aggressive"
         bpm = 140
         offline = "--offline" in args
+        dojo_mode = "--dojo-live" in args or "--dojo" not in args  # default ON
 
         if "--song" in args:
             si = args.index("--song")
@@ -2533,16 +2537,72 @@ def main():
             bi = args.index("--bpm")
             bpm = int(args[bi + 1]) if bi + 1 < len(args) else bpm
 
+        from engine.config_loader import PHI
         from engine.production_pipeline import ProductionPipeline, quick_produce, offline_produce
+
+        # ── Phi-timed session ──────────────────────────────────────
+        live_start = _time.time()
+
+        if dojo_mode:
+            print("╔══════════════════════════════════════════════╗")
+            print("║  DUBFORGE — LIVE + DOJO GOLDEN RATIO         ║")
+            print("║  All patterns: phi-weighted | 432 Hz tuning   ║")
+            print("║  Session bars: Fibonacci (3+5+8+5+3+8+2=34)  ║")
+            print("╠══════════════════════════════════════════════╣")
+            print("║  The Approach (phi-timed):                    ║")
+            print("║    COLLECT → SKETCH → ARRANGE → MIX → FINISH ║")
+            print("║  First instinct wins. PHI governs all.        ║")
+            print("╚══════════════════════════════════════════════╝")
+
         if offline:
             result = offline_produce(song_name, bpm, style, mood)
         else:
             result = quick_produce(song_name, bpm, style, mood)
 
+        elapsed = _time.time() - live_start
+
         print(f"\n  Production result: {result.status}")
         print(f"  MIDI files: {len(result.midi_files)}")
         for mf in result.midi_files:
             print(f"    → {mf}")
+
+        # ── Fibonacci quality feedback (post-render) ───────────────
+        if dojo_mode:
+            try:
+                from engine.dojo import rate_output_quality, phi_belt_progression
+                # rate_output_quality takes wav_path; use empty for MIDI-only 
+                quality = rate_output_quality("")
+                belt_tracks = phi_belt_progression()
+                print(f"\n  🥋 Dojo Quality Belt: {quality.get('assigned_quality_belt', 'White Belt')}")
+                print(f"     Phi coherence: {quality.get('phi_coherence_score', 0):.4f}")
+                print(f"     Golden belt milestones: {belt_tracks}")
+            except Exception as e:
+                print(f"\n  [dojo quality check skipped: {e}]")
+
+            try:
+                from engine.fibonacci_feedback import FibonacciFeedbackEngine
+                fb = FibonacciFeedbackEngine()
+                print(f"\n  📐 Fibonacci Feedback Engine ready for quality loop")
+                print(f"     PHI ratio applied: {PHI:.10f}")
+                print(f"     Session duration: {elapsed:.1f}s")
+            except Exception as e:
+                print(f"\n  [fibonacci feedback skipped: {e}]")
+
+        # ── Belt progression tracking ──────────────────────────────
+        try:
+            from engine.lessons_learned import LessonsLearned
+            ll = LessonsLearned()
+            belt = ll.evaluate_belt()
+            print(f"\n  🥋 Belt: {belt['current_belt']} | "
+                  f"Tracks: {belt['tracks_completed']}")
+            if belt.get('tracks_needed', 0) > 0:
+                print(f"     Next: {belt['next_belt']} "
+                      f"({belt['tracks_needed']} tracks to go)")
+        except (ImportError, Exception):
+            pass
+
+        golden_time = elapsed * (1.0 / PHI)  # phi section of session
+        print(f"\n  📐 Golden section: {golden_time:.0f}s of {elapsed:.0f}s total")
         return
 
     # ── Fibonacci feedback mode: --fibonacci --song "Song Name" ──

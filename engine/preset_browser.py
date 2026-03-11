@@ -10,9 +10,7 @@ import json
 import os
 from dataclasses import dataclass, field
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 @dataclass
 class Preset:
     """A single preset entry."""

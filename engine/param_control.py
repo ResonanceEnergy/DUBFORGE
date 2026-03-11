@@ -8,9 +8,7 @@ Parse module parameters from natural language:
 import re
 from dataclasses import dataclass, field
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 @dataclass
 class ParsedParams:
     """Parameters parsed from user input."""

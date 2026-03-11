@@ -31,8 +31,7 @@ SR = 48000
 BPM = 140
 BEAT = 60.0 / BPM                    # seconds per beat
 BAR = BEAT * 4                       # seconds per bar
-PHI = 1.6180339887
-
+from engine.config_loader import PHI
 # Key of F minor — F G Ab Bb C Db Eb
 # MIDI: F2=41, F3=53, F4=65
 KEY_FREQS = {

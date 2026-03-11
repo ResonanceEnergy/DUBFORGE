@@ -11,7 +11,7 @@ from pathlib import Path
 
 from engine.subphonics import ChatMessage, ChatSession, SubphonicsEngine
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 SESSION_DIR = Path("output/memory/sessions")
 
 

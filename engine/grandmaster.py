@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
 GRANDMASTER_SESSION = 144
 

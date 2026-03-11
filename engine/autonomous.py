@@ -93,7 +93,7 @@ from engine.variation_engine import (
 #  CONSTANTS
 # ═══════════════════════════════════════════════════════════════
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 SR = 48000
 OUTPUT_DIR = Path("output")
 SONGS_DIR = OUTPUT_DIR / "songs"

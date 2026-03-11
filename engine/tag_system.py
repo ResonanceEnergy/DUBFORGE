@@ -11,9 +11,7 @@ import os
 import time
 from dataclasses import dataclass, field
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 # Built-in tag taxonomy for dubstep production
 TAXONOMY = {
     "type": ["bass", "lead", "pad", "fx", "drum", "vocal",

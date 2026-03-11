@@ -54,7 +54,7 @@ import numpy as np
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 SR = 48000
 
 # Fibonacci sequence up to 144

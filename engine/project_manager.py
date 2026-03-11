@@ -10,9 +10,7 @@ import os
 import time
 from dataclasses import dataclass, field
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 @dataclass
 class Asset:
     """A project asset (audio file, preset, etc.)."""

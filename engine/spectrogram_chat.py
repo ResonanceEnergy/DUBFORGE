@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 SAMPLE_RATE = 48000
 
 

@@ -14,9 +14,7 @@ import numpy as np
 
 F = TypeVar("F")
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 class DubforgeError(Exception):
     """Base exception for DUBFORGE errors."""
 

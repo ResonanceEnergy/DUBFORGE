@@ -33,8 +33,18 @@ from pathlib import Path
 from typing import Any
 
 from engine.log import get_logger
+from engine.config_loader import PHI, FIBONACCI, A4_432
 
 _log = get_logger("dubforge.serum2_controller")
+
+# Golden ratio derived constants for sound design
+PHI_INV = 1.0 / PHI          # 0.6180339887… — the golden conjugate
+PHI_FILT = round(PHI_INV, 4) # 0.618 — golden filter cutoff
+PHI_RES = round(PHI_INV ** 2, 4)  # 0.382 — golden resonance
+PHI_DRIVE = round(PHI_INV, 4)     # 0.618 — golden drive
+PHI_LFO = round(1.0 / PHI, 4)     # 0.618 — golden LFO rate (bpm-synced)
+PHI_MIX = round(PHI_INV ** 2, 4)  # 0.382 — golden FX wet/dry mix
+FIB_ENV = [0.001, 0.001, 0.002, 0.003, 0.005, 0.008, 0.013, 0.021]  # Fibonacci ms
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -266,55 +276,61 @@ SERUM_PARAMS = {
 # ═══════════════════════════════════════════════════════════════════════════
 
 DUBFORGE_PRESETS = {
-    # ── BASS PRESETS ─────────────────────────────────────────────────────
+    # ── BASS PRESETS (phi-tuned) ──────────────────────────────────────────
 
     "DUBFORGE_SUB_BASS": {
-        "description": "Deep sub bass — mono, sine-like, low-passed",
+        "description": "Deep sub bass — mono, sine-like, phi-cutoff low-pass",
         "params": {
             "A Level": 1.0, "A WT Pos": 0.0,  # pure sine
             "A Uni Voices": 1,
             "B Level": 0.0,  # B off
-            "Sub Level": 0.8, "Sub Oct": -1,
+            "Sub Level": PHI_INV,  # 0.618 — golden sub level
+            "Sub Oct": -1,
             "Fil1 Cutoff": 0.15, "Fil1 Res": 0.0, "Fil1 Type": 0.0,
-            "Env1 Atk": 0.005, "Env1 Dec": 0.2, "Env1 Sus": 0.9, "Env1 Rel": 0.1,
+            "Env1 Atk": FIB_ENV[4], "Env1 Dec": 0.2, "Env1 Sus": 0.9, "Env1 Rel": 0.1,
             "Mono": 1, "Porta Time": 0.05, "Porta Mode": 2,
-            "Voices": 1, "Master Vol": 0.85,
+            "Voices": 1, "Master Vol": PHI_INV + 0.2,  # ~0.818
         },
     },
 
     "DUBFORGE_GROWL_BASS": {
-        "description": "Aggressive mid-bass growl — Subtronics style, filter LFO modulation",
+        "description": "Aggressive mid-bass growl — phi-weighted filter LFO modulation",
         "params": {
-            "A Level": 0.8, "A WT Pos": 0.35,
-            "A Uni Voices": 5, "A Uni Det": 0.15, "A Uni Blend": 0.7, "A Uni Width": 0.8,
-            "A Warp": 0.4,
-            "B Level": 0.6, "B WT Pos": 0.65,
+            "A Level": PHI_INV + 0.2,  # ~0.818
+            "A WT Pos": PHI_RES,  # 0.382 — golden wavetable position
+            "A Uni Voices": 5, "A Uni Det": 0.15, "A Uni Blend": PHI_INV, "A Uni Width": PHI_INV + 0.2,
+            "A Warp": PHI_RES,  # 0.382
+            "B Level": PHI_INV,  # 0.618
+            "B WT Pos": PHI_FILT,  # 0.618
             "B Uni Voices": 3, "B Uni Det": 0.2, "B Uni Blend": 0.5,
-            "Fil1 Cutoff": 0.3, "Fil1 Res": 0.45, "Fil1 Drive": 0.6, "Fil1 Env": 0.7,
+            "Fil1 Cutoff": PHI_RES, "Fil1 Res": PHI_MIX, "Fil1 Drive": PHI_FILT,
+            "Fil1 Env": PHI_INV + 0.1,  # 0.718
             "Fil1 Type": 0.0,  # LP
-            "Env1 Atk": 0.001, "Env1 Dec": 0.15, "Env1 Sus": 0.6, "Env1 Rel": 0.1,
-            "Env2 Atk": 0.001, "Env2 Dec": 0.25, "Env2 Sus": 0.0, "Env2 Rel": 0.1,
-            "LFO1 Rate": 0.6, "LFO1 BPM Sync": 1,
-            "FX Dist On": 1, "FX Dist Mode": 0.3, "FX Dist Amount": 0.55, "FX Dist Mix": 0.8,
+            "Env1 Atk": FIB_ENV[0], "Env1 Dec": 0.15, "Env1 Sus": PHI_FILT, "Env1 Rel": 0.1,
+            "Env2 Atk": FIB_ENV[0], "Env2 Dec": 0.25, "Env2 Sus": 0.0, "Env2 Rel": 0.1,
+            "LFO1 Rate": PHI_LFO, "LFO1 BPM Sync": 1,
+            "FX Dist On": 1, "FX Dist Mode": PHI_RES, "FX Dist Amount": PHI_FILT,
+            "FX Dist Mix": PHI_INV + 0.2,  # 0.818
             "Mono": 1, "Porta Time": 0.03, "Porta Mode": 2,
-            "Voices": 1, "Master Vol": 0.8,
+            "Voices": 1, "Master Vol": PHI_INV + 0.2,
         },
     },
 
     "DUBFORGE_RIDDIM_BASS": {
-        "description": "Riddim-style bass — tight, mid-range focused, heavy filter",
+        "description": "Riddim-style bass — phi filter resonance, tight golden envelope",
         "params": {
-            "A Level": 0.85, "A WT Pos": 0.5,
-            "A Uni Voices": 7, "A Uni Det": 0.12, "A Uni Blend": 0.6,
-            "B Level": 0.5, "B WT Pos": 0.4,
-            "B Uni Voices": 5, "B Uni Det": 0.18,
-            "Fil1 Cutoff": 0.25, "Fil1 Res": 0.55, "Fil1 Drive": 0.7,
-            "Fil1 Env": 0.8, "Fil1 Type": 0.0,
-            "Env1 Atk": 0.001, "Env1 Dec": 0.1, "Env1 Sus": 0.5, "Env1 Rel": 0.08,
-            "Env2 Atk": 0.001, "Env2 Dec": 0.15, "Env2 Sus": 0.0, "Env2 Rel": 0.08,
-            "FX Dist On": 1, "FX Dist Mode": 0.5, "FX Dist Amount": 0.65, "FX Dist Mix": 0.7,
-            "FX Comp On": 1, "FX Comp Thresh": 0.4, "FX Comp Ratio": 0.6,
-            "Mono": 1, "Porta Time": 0.0, "Voices": 1, "Master Vol": 0.85,
+            "A Level": PHI_INV + 0.25, "A WT Pos": 0.5,
+            "A Uni Voices": 7, "A Uni Det": 0.12, "A Uni Blend": PHI_FILT,
+            "B Level": 0.5, "B WT Pos": PHI_RES,
+            "B Uni Voices": 5, "B Uni Det": PHI_RES * 0.5,
+            "Fil1 Cutoff": 0.25, "Fil1 Res": PHI_FILT, "Fil1 Drive": PHI_INV + 0.1,
+            "Fil1 Env": PHI_INV + 0.2, "Fil1 Type": 0.0,
+            "Env1 Atk": FIB_ENV[0], "Env1 Dec": 0.1, "Env1 Sus": 0.5, "Env1 Rel": FIB_ENV[6],
+            "Env2 Atk": FIB_ENV[0], "Env2 Dec": 0.15, "Env2 Sus": 0.0, "Env2 Rel": FIB_ENV[6],
+            "FX Dist On": 1, "FX Dist Mode": 0.5, "FX Dist Amount": PHI_FILT,
+            "FX Dist Mix": PHI_INV + 0.1,
+            "FX Comp On": 1, "FX Comp Thresh": PHI_RES, "FX Comp Ratio": PHI_FILT,
+            "Mono": 1, "Porta Time": 0.0, "Voices": 1, "Master Vol": PHI_INV + 0.25,
         },
     },
 
@@ -337,65 +353,69 @@ DUBFORGE_PRESETS = {
     },
 
     "DUBFORGE_REESE_BASS": {
-        "description": "Reese bass — detuned saws, phasing movement",
+        "description": "Reese bass — phi-detuned saws, golden phasing movement",
         "params": {
-            "A Level": 0.85, "A WT Pos": 0.0,
-            "A Uni Voices": 3, "A Uni Det": 0.08, "A Uni Blend": 0.3, "A Uni Width": 0.6,
-            "B Level": 0.85, "B WT Pos": 0.0, "B Fine": 8,
-            "B Uni Voices": 3, "B Uni Det": 0.10, "B Uni Blend": 0.3,
-            "Fil1 Cutoff": 0.4, "Fil1 Res": 0.2, "Fil1 Drive": 0.2,
-            "Env1 Atk": 0.01, "Env1 Dec": 0.5, "Env1 Sus": 0.8, "Env1 Rel": 0.3,
-            "LFO1 Rate": 0.15, "LFO1 Smooth": 0.7,
-            "FX Chor On": 1, "FX Chor Rate": 0.2, "FX Chor Depth": 0.3, "FX Chor Mix": 0.15,
-            "Mono": 1, "Porta Time": 0.08, "Porta Mode": 2,
-            "Voices": 1, "Master Vol": 0.8,
+            "A Level": PHI_INV + 0.2, "A WT Pos": 0.0,
+            "A Uni Voices": 3, "A Uni Det": FIB_ENV[6], "A Uni Blend": PHI_RES, "A Uni Width": PHI_FILT,
+            "B Level": PHI_INV + 0.2, "B WT Pos": 0.0, "B Fine": 8,
+            "B Uni Voices": 3, "B Uni Det": 0.10, "B Uni Blend": PHI_RES,
+            "Fil1 Cutoff": PHI_RES + 0.02, "Fil1 Res": 0.2, "Fil1 Drive": 0.2,
+            "Env1 Atk": FIB_ENV[4], "Env1 Dec": 0.5, "Env1 Sus": PHI_INV + 0.2, "Env1 Rel": PHI_RES,
+            "LFO1 Rate": PHI_LFO * 0.25, "LFO1 Smooth": PHI_INV + 0.1,
+            "FX Chor On": 1, "FX Chor Rate": 0.2, "FX Chor Depth": PHI_RES, "FX Chor Mix": 0.15,
+            "Mono": 1, "Porta Time": FIB_ENV[6], "Porta Mode": 2,
+            "Voices": 1, "Master Vol": PHI_INV + 0.2,
         },
     },
 
     "DUBFORGE_FM_BASS": {
-        "description": "FM-style bass — metallic, complex harmonics",
+        "description": "FM-style bass — phi-interval modulation, golden harmonics",
         "params": {
-            "A Level": 0.8, "A WT Pos": 0.0,
+            "A Level": PHI_INV + 0.2, "A WT Pos": 0.0,
             "A Uni Voices": 1,
-            "B Level": 0.6, "B WT Pos": 0.3, "B Semi": 7,
+            "B Level": PHI_FILT, "B WT Pos": PHI_RES, "B Semi": 7,  # perfect fifth ≈ PHI
             "B Uni Voices": 1,
-            "Osc Mix": 0.3,
-            "Fil1 Cutoff": 0.5, "Fil1 Res": 0.3, "Fil1 Drive": 0.4,
+            "Osc Mix": PHI_RES,  # 0.382 — golden FM index
+            "Fil1 Cutoff": 0.5, "Fil1 Res": PHI_RES, "Fil1 Drive": PHI_RES,
             "Fil1 Env": 0.5,
-            "Env1 Atk": 0.001, "Env1 Dec": 0.2, "Env1 Sus": 0.4, "Env1 Rel": 0.1,
-            "Env2 Atk": 0.001, "Env2 Dec": 0.15, "Env2 Sus": 0.0, "Env2 Rel": 0.1,
-            "FX Dist On": 1, "FX Dist Amount": 0.4, "FX Dist Mix": 0.6,
-            "Mono": 1, "Voices": 1, "Master Vol": 0.8,
+            "Env1 Atk": FIB_ENV[0], "Env1 Dec": 0.2, "Env1 Sus": PHI_RES, "Env1 Rel": 0.1,
+            "Env2 Atk": FIB_ENV[0], "Env2 Dec": 0.15, "Env2 Sus": 0.0, "Env2 Rel": 0.1,
+            "FX Dist On": 1, "FX Dist Amount": PHI_RES, "FX Dist Mix": PHI_FILT,
+            "Mono": 1, "Voices": 1, "Master Vol": PHI_INV + 0.2,
         },
     },
 
     # ── LEAD PRESETS ─────────────────────────────────────────────────────
 
     "DUBFORGE_SCREECH_LEAD": {
-        "description": "Screaming lead — bright, aggressive, wide",
+        "description": "Screaming lead — phi-bright, golden resonance, wide",
         "params": {
-            "A Level": 0.9, "A WT Pos": 0.7,
-            "A Uni Voices": 7, "A Uni Det": 0.25, "A Uni Blend": 0.8, "A Uni Width": 1.0,
+            "A Level": 0.9, "A WT Pos": PHI_INV + 0.1,
+            "A Uni Voices": 7, "A Uni Det": 0.25, "A Uni Blend": PHI_INV + 0.2,
+            "A Uni Width": 1.0,
             "A Warp": 0.5,
             "B Level": 0.5, "B WT Pos": 0.9, "B Semi": 12,
-            "Fil1 Cutoff": 0.7, "Fil1 Res": 0.3, "Fil1 Drive": 0.5,
-            "Env1 Atk": 0.001, "Env1 Dec": 0.3, "Env1 Sus": 0.6, "Env1 Rel": 0.15,
-            "FX Dist On": 1, "FX Dist Amount": 0.5, "FX Dist Mix": 0.7,
-            "FX Rev On": 1, "FX Rev Size": 0.3, "FX Rev Mix": 0.1,
-            "FX Delay On": 1, "FX Delay Time": 0.25, "FX Delay Mix": 0.15, "FX Delay BPM": 1,
+            "Fil1 Cutoff": PHI_INV + 0.1, "Fil1 Res": PHI_RES,
+            "Fil1 Drive": 0.5,
+            "Env1 Atk": FIB_ENV[0], "Env1 Dec": PHI_RES, "Env1 Sus": PHI_FILT,
+            "Env1 Rel": 0.15,
+            "FX Dist On": 1, "FX Dist Amount": PHI_FILT, "FX Dist Mix": PHI_INV + 0.1,
+            "FX Rev On": 1, "FX Rev Size": PHI_RES, "FX Rev Mix": 0.1,
+            "FX Delay On": 1, "FX Delay Time": 0.25, "FX Delay Mix": 0.15,
+            "FX Delay BPM": 1,
             "Mono": 0, "Voices": 4, "Master Vol": 0.75,
         },
     },
 
     "DUBFORGE_SUPERSAW_LEAD": {
-        "description": "Thick supersaw lead — massive unison, wide stereo",
+        "description": "Thick supersaw lead — golden unison, phi-wide stereo",
         "params": {
             "A Level": 0.9, "A WT Pos": 0.0,  # saw
-            "A Uni Voices": 16, "A Uni Det": 0.3, "A Uni Blend": 0.5, "A Uni Width": 1.0,
-            "B Level": 0.4, "B WT Pos": 0.0, "B Semi": 12,
+            "A Uni Voices": 16, "A Uni Det": PHI_RES, "A Uni Blend": 0.5, "A Uni Width": 1.0,
+            "B Level": PHI_RES, "B WT Pos": 0.0, "B Semi": 12,
             "B Uni Voices": 8, "B Uni Det": 0.25,
-            "Fil1 Cutoff": 0.65, "Fil1 Res": 0.15, "Fil1 Env": 0.2,
-            "Env1 Atk": 0.01, "Env1 Dec": 0.4, "Env1 Sus": 0.7, "Env1 Rel": 0.3,
+            "Fil1 Cutoff": PHI_FILT + 0.02, "Fil1 Res": 0.15, "Fil1 Env": 0.2,
+            "Env1 Atk": FIB_ENV[4], "Env1 Dec": PHI_RES, "Env1 Sus": PHI_INV + 0.1, "Env1 Rel": PHI_RES,
             "FX Rev On": 1, "FX Rev Size": 0.5, "FX Rev Mix": 0.15,
             "FX Chor On": 1, "FX Chor Rate": 0.15, "FX Chor Mix": 0.1,
             "Mono": 0, "Voices": 8, "Master Vol": 0.75,
@@ -405,65 +425,137 @@ DUBFORGE_PRESETS = {
     # ── PAD PRESETS ──────────────────────────────────────────────────────
 
     "DUBFORGE_DARK_PAD": {
-        "description": "Dark atmospheric pad — slow attack, filtered, reverbed",
+        "description": "Dark atmospheric pad — phi-envelope, golden reverb",
         "params": {
-            "A Level": 0.6, "A WT Pos": 0.3,
+            "A Level": PHI_FILT,  # 0.618
+            "A WT Pos": PHI_RES,  # 0.382
             "A Uni Voices": 5, "A Uni Det": 0.1, "A Uni Width": 1.0,
-            "B Level": 0.5, "B WT Pos": 0.6,
+            "B Level": 0.5, "B WT Pos": PHI_FILT,
             "B Uni Voices": 5, "B Uni Det": 0.12,
             "Fil1 Cutoff": 0.25, "Fil1 Res": 0.1, "Fil1 Env": 0.15,
-            "Env1 Atk": 0.4, "Env1 Dec": 0.6, "Env1 Sus": 0.5, "Env1 Rel": 0.8,
-            "LFO1 Rate": 0.1, "LFO1 Smooth": 0.8,
-            "FX Rev On": 1, "FX Rev Size": 0.8, "FX Rev Mix": 0.4, "FX Rev Decay": 0.7,
+            "Env1 Atk": PHI_RES,  # 0.382 — golden attack
+            "Env1 Dec": PHI_FILT, # 0.618 — golden decay
+            "Env1 Sus": 0.5, "Env1 Rel": PHI_INV + 0.2,
+            "LFO1 Rate": 0.1, "LFO1 Smooth": PHI_INV + 0.2,
+            "FX Rev On": 1, "FX Rev Size": PHI_INV + 0.2,
+            "FX Rev Mix": PHI_RES + 0.02, "FX Rev Decay": PHI_INV + 0.1,
             "FX Chor On": 1, "FX Chor Rate": 0.1, "FX Chor Mix": 0.15,
-            "Mono": 0, "Voices": 8, "Master Vol": 0.6,
+            "Mono": 0, "Voices": 8, "Master Vol": PHI_FILT,
         },
     },
 
     "DUBFORGE_AMBIENT_PAD": {
-        "description": "Ethereal ambient pad — gentle, washed, evolving",
+        "description": "Ethereal ambient pad — phi-evolving, golden reverb wash",
         "params": {
-            "A Level": 0.5, "A WT Pos": 0.4,
-            "A Uni Voices": 7, "A Uni Det": 0.08, "A Uni Width": 1.0,
-            "B Level": 0.4, "B WT Pos": 0.7, "B Semi": 7,
+            "A Level": 0.5, "A WT Pos": PHI_RES,
+            "A Uni Voices": 7, "A Uni Det": FIB_ENV[6], "A Uni Width": 1.0,
+            "B Level": PHI_RES, "B WT Pos": PHI_INV + 0.1, "B Semi": 7,
             "B Uni Voices": 5, "B Uni Det": 0.1,
-            "Fil1 Cutoff": 0.45, "Fil1 Res": 0.05,
-            "Env1 Atk": 0.8, "Env1 Dec": 0.8, "Env1 Sus": 0.6, "Env1 Rel": 1.0,
-            "LFO1 Rate": 0.05, "LFO1 Smooth": 1.0,
-            "FX Rev On": 1, "FX Rev Size": 0.9, "FX Rev Mix": 0.55, "FX Rev Decay": 0.85,
-            "FX Delay On": 1, "FX Delay Time": 0.4, "FX Delay Mix": 0.2, "FX Delay BPM": 1, "FX Delay Feed": 0.5,
-            "Mono": 0, "Voices": 8, "Master Vol": 0.55,
+            "Fil1 Cutoff": PHI_RES + 0.07, "Fil1 Res": FIB_ENV[5],
+            "Env1 Atk": PHI_INV + 0.2, "Env1 Dec": PHI_INV + 0.2, "Env1 Sus": PHI_FILT, "Env1 Rel": 1.0,
+            "LFO1 Rate": FIB_ENV[5], "LFO1 Smooth": 1.0,
+            "FX Rev On": 1, "FX Rev Size": 0.9, "FX Rev Mix": PHI_FILT - 0.07, "FX Rev Decay": PHI_INV + 0.2,
+            "FX Delay On": 1, "FX Delay Time": PHI_RES, "FX Delay Mix": 0.2,
+            "FX Delay BPM": 1, "FX Delay Feed": 0.5,
+            "Mono": 0, "Voices": 8, "Master Vol": PHI_FILT - 0.07,
         },
     },
 
     # ── FX / RISER / HIT PRESETS ─────────────────────────────────────────
 
     "DUBFORGE_RISER": {
-        "description": "Tension riser — rising filter + pitch, noise layer",
+        "description": "Tension riser — phi-timed filter sweep, golden noise",
         "params": {
             "A Level": 0.5, "A WT Pos": 0.5,
             "A Uni Voices": 7, "A Uni Det": 0.15, "A Uni Width": 1.0,
-            "Noise Level": 0.3, "Noise Direct Out": 0,
-            "Fil1 Cutoff": 0.1, "Fil1 Res": 0.3, "Fil1 Env": 1.0,
-            "Env1 Atk": 1.0, "Env1 Dec": 0.5, "Env1 Sus": 0.8, "Env1 Rel": 0.3,
-            "Env2 Atk": 1.0, "Env2 Dec": 0.5, "Env2 Sus": 1.0, "Env2 Rel": 0.3,
-            "FX Rev On": 1, "FX Rev Size": 0.7, "FX Rev Mix": 0.3,
-            "FX Delay On": 1, "FX Delay Time": 0.35, "FX Delay Mix": 0.15, "FX Delay BPM": 1,
-            "Mono": 0, "Voices": 4, "Master Vol": 0.65,
+            "Noise Level": PHI_RES,  # 0.382 — golden noise
+            "Noise Direct Out": 0,
+            "Fil1 Cutoff": 0.1, "Fil1 Res": PHI_RES, "Fil1 Env": 1.0,
+            "Env1 Atk": 1.0, "Env1 Dec": PHI_FILT, "Env1 Sus": PHI_INV + 0.2,
+            "Env1 Rel": PHI_RES,
+            "Env2 Atk": 1.0, "Env2 Dec": PHI_FILT, "Env2 Sus": 1.0,
+            "Env2 Rel": PHI_RES,
+            "FX Rev On": 1, "FX Rev Size": PHI_INV + 0.1, "FX Rev Mix": PHI_RES,
+            "FX Delay On": 1, "FX Delay Time": PHI_RES,
+            "FX Delay Mix": 0.15, "FX Delay BPM": 1,
+            "Mono": 0, "Voices": 4, "Master Vol": PHI_FILT + 0.05,
         },
     },
 
     "DUBFORGE_IMPACT": {
-        "description": "Noise impact hit — short, punchy, layered",
+        "description": "Noise impact hit — golden transient, Fibonacci decay",
         "params": {
-            "A Level": 0.7, "A WT Pos": 0.8,
-            "Noise Level": 0.6,
-            "Fil1 Cutoff": 0.7, "Fil1 Res": 0.4, "Fil1 Env": -0.8,
-            "Env1 Atk": 0.001, "Env1 Dec": 0.15, "Env1 Sus": 0.0, "Env1 Rel": 0.2,
-            "Env2 Atk": 0.001, "Env2 Dec": 0.1, "Env2 Sus": 0.0, "Env2 Rel": 0.1,
-            "FX Dist On": 1, "FX Dist Amount": 0.4, "FX Dist Mix": 0.5,
-            "FX Rev On": 1, "FX Rev Size": 0.3, "FX Rev Mix": 0.2,
-            "Mono": 0, "Voices": 4, "Master Vol": 0.8,
+            "A Level": PHI_INV + 0.1, "A WT Pos": PHI_INV + 0.2,
+            "Noise Level": PHI_FILT,
+            "Fil1 Cutoff": PHI_INV + 0.1, "Fil1 Res": PHI_RES,
+            "Fil1 Env": -PHI_INV - 0.2,
+            "Env1 Atk": FIB_ENV[0], "Env1 Dec": 0.15, "Env1 Sus": 0.0,
+            "Env1 Rel": 0.2,
+            "Env2 Atk": FIB_ENV[0], "Env2 Dec": 0.1, "Env2 Sus": 0.0,
+            "Env2 Rel": 0.1,
+            "FX Dist On": 1, "FX Dist Amount": PHI_RES, "FX Dist Mix": 0.5,
+            "FX Rev On": 1, "FX Rev Size": PHI_RES, "FX Rev Mix": 0.2,
+            "Mono": 0, "Voices": 4, "Master Vol": PHI_INV + 0.2,
+        },
+    },
+
+    # ── PHI-SPECIFIC PRESETS (Dojo doctrine) ─────────────────────────────
+
+    "DUBFORGE_PHI_MORPH": {
+        "description": "Golden morph — all parameters at PHI ratios, LFOs at Fibonacci rates",
+        "params": {
+            "A Level": PHI_FILT, "A WT Pos": PHI_RES,
+            "A Uni Voices": 5, "A Uni Det": PHI_RES * 0.5, "A Uni Blend": PHI_FILT,
+            "A Uni Width": PHI_FILT,
+            "B Level": PHI_RES, "B WT Pos": PHI_FILT, "B Semi": 7,
+            "B Uni Voices": 3, "B Uni Det": PHI_RES * 0.3,
+            "Fil1 Cutoff": PHI_FILT, "Fil1 Res": PHI_RES,
+            "Fil1 Drive": PHI_RES, "Fil1 Env": PHI_FILT,
+            "Env1 Atk": PHI_RES * 0.5, "Env1 Dec": PHI_FILT,
+            "Env1 Sus": PHI_FILT, "Env1 Rel": PHI_RES,
+            "LFO1 Rate": PHI_LFO, "LFO1 Smooth": PHI_FILT,
+            "LFO2 Rate": PHI_LFO * PHI, "LFO2 Smooth": PHI_RES,
+            "FX Rev On": 1, "FX Rev Size": PHI_FILT, "FX Rev Mix": PHI_RES,
+            "FX Delay On": 1, "FX Delay Time": PHI_RES,
+            "FX Delay Mix": PHI_RES * PHI_INV, "FX Delay BPM": 1,
+            "Mono": 0, "Voices": 5, "Master Vol": PHI_FILT + 0.1,
+        },
+    },
+
+    "DUBFORGE_FIBONACCI_ARP": {
+        "description": "Fibonacci arp tone — bright, plucky, designed for Fib arp patterns",
+        "params": {
+            "A Level": PHI_INV + 0.2, "A WT Pos": PHI_RES,
+            "A Uni Voices": 3, "A Uni Det": 0.08, "A Uni Width": PHI_FILT,
+            "B Level": 0.0,
+            "Fil1 Cutoff": PHI_FILT + 0.15, "Fil1 Res": PHI_RES * 0.5,
+            "Fil1 Env": PHI_RES,
+            "Env1 Atk": FIB_ENV[0], "Env1 Dec": PHI_RES * 0.4,
+            "Env1 Sus": PHI_RES * 0.3, "Env1 Rel": PHI_RES,
+            "FX Delay On": 1, "FX Delay Time": PHI_RES,
+            "FX Delay Mix": PHI_RES, "FX Delay Feed": PHI_FILT,
+            "FX Delay BPM": 1,
+            "FX Rev On": 1, "FX Rev Size": PHI_RES, "FX Rev Mix": 0.1,
+            "Mono": 0, "Voices": 4, "Master Vol": PHI_FILT + 0.1,
+        },
+    },
+
+    "DUBFORGE_GOLDEN_DRONE": {
+        "description": "Sacred geometry drone — phi-interval harmonics, infinite sustain",
+        "params": {
+            "A Level": PHI_FILT, "A WT Pos": PHI_RES * 0.5,
+            "A Uni Voices": 7, "A Uni Det": PHI_RES * 0.3,
+            "A Uni Blend": PHI_INV, "A Uni Width": 1.0,
+            "B Level": PHI_RES, "B WT Pos": PHI_FILT, "B Semi": 19,  # ~PHI octave
+            "B Uni Voices": 5, "B Uni Det": PHI_RES * 0.2,
+            "Fil1 Cutoff": PHI_RES + 0.1, "Fil1 Res": PHI_RES * 0.5,
+            "Env1 Atk": PHI_FILT + 0.2, "Env1 Dec": 1.0,
+            "Env1 Sus": 1.0, "Env1 Rel": PHI_FILT + 0.3,
+            "LFO1 Rate": 0.05, "LFO1 Smooth": 1.0,
+            "LFO2 Rate": 0.08, "LFO2 Smooth": PHI_FILT,
+            "FX Rev On": 1, "FX Rev Size": 0.95, "FX Rev Mix": PHI_FILT,
+            "FX Rev Decay": 0.9,
+            "Mono": 0, "Voices": 8, "Master Vol": PHI_FILT * 0.8,
         },
     },
 }

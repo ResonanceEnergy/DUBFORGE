@@ -8,9 +8,7 @@ parameters with scaling, curves, and ranges.
 import math
 from dataclasses import dataclass, field
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 @dataclass
 class ParameterMapping:
     """Maps a macro to a target parameter."""

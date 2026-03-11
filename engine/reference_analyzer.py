@@ -8,7 +8,7 @@ frequency balance, loudness, dynamics, stereo width.
 import math
 from dataclasses import dataclass, field
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 SAMPLE_RATE = 48000
 
 

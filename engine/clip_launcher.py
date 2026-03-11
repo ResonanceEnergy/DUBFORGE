@@ -8,7 +8,7 @@ scene management, and follow actions. Live performance core.
 from dataclasses import dataclass, field
 from enum import Enum
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 SAMPLE_RATE = 48000
 
 

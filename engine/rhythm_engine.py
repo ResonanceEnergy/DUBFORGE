@@ -36,7 +36,7 @@ from engine.groove import (
 )
 
 # ─── Constants ────────────────────────────────────────────────────────
-PHI = 1.6180339887
+from engine.config_loader import PHI
 SR = 48_000
 
 InstrumentName = Literal["kick", "snare", "clap", "hat_c", "hat_o", "ride"]

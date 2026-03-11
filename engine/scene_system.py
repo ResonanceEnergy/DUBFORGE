@@ -9,9 +9,7 @@ import math
 import time
 from dataclasses import dataclass, field
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 @dataclass
 class ParamSnapshot:
     """A single parameter value in a scene."""

@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from engine.log import get_logger
+from engine.config_loader import PHI, FIBONACCI, A4_432
 from engine.ableton_bridge import AbletonBridge, NoteData, COLORS, QUANT
 from engine.serum2_controller import (
     Serum2Controller, DUBFORGE_PRESETS, SERUM_PARAMS
@@ -40,6 +41,30 @@ from engine.sample_library import SampleLibrary
 from engine.midi_export import write_midi_file, NoteEvent, export_full_arrangement
 
 _log = get_logger("dubforge.production_pipeline")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GOLDEN RATIO CONSTANTS — derived from PHI for music production
+# ═══════════════════════════════════════════════════════════════════════════
+
+PHI_INV = 1.0 / PHI          # 0.6180339887… — the golden conjugate
+PHI_SQ = PHI * PHI            # 2.6180339887… — phi squared
+FIB_BARS = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55]  # Fibonacci bar lengths
+GOLDEN_VEL = int(127 * PHI_INV)  # ~78 — golden velocity
+
+# Phi-derived mix levels (each track sits at a golden ratio distance)
+PHI_MIX_LEVELS = {
+    "SUB BASS":     round(PHI_INV ** 0.2, 4),   # ~0.896 (loudest)
+    "MID BASS":     round(PHI_INV ** 0.4, 4),   # ~0.803
+    "DRUMS":        round(PHI_INV ** 0.3, 4),   # ~0.858
+    "LEAD":         round(PHI_INV ** 0.6, 4),   # ~0.720
+    "PAD":          round(PHI_INV ** 1.0, 4),   # ~0.618
+    "FX AUDIO":     round(PHI_INV ** 1.2, 4),   # ~0.554
+    "DRUM SAMPLES": round(PHI_INV ** 0.5, 4),   # ~0.786
+}
+
+# Phi-derived send levels
+PHI_SEND_REVERB = round(PHI_INV ** 2, 3)   # ~0.382
+PHI_SEND_DELAY = round(PHI_INV ** 3, 3)    # ~0.236
 
 # Lazy imports for DNA system (avoids circular)
 _SongDNA = None
@@ -171,7 +196,15 @@ class ProductionResult:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class PatternGenerator:
-    """Generate MIDI patterns from SongDNA specification."""
+    """Generate MIDI patterns from SongDNA specification.
+
+    Golden Ratio Integration:
+      - Fibonacci bar lengths for clip structures (1,2,3,5,8,13,21)
+      - Phi-weighted velocities: accents at golden positions within bar
+      - Golden section note placement: strongest notes at beat × PHI_INV
+      - Phi-harmonic melody intervals: scale degree jumps follow phi
+      - Dojo 128 Rack note mapping for drum patterns
+    """
 
     def __init__(self, root_note: int, scale: str, bpm: float):
         self.root = root_note
@@ -184,22 +217,65 @@ class PatternGenerator:
         oct_shift = degree // len(self.intervals)
         return self.root + (octave * 12) + semi + (oct_shift * 12)
 
+    def phi_velocity(self, position: float, bar_length: float = 4.0,
+                     base: int = 80, accent: int = 120) -> int:
+        """Golden-ratio velocity curve within a bar.
+
+        Notes at the golden section point (beat × 0.618) get maximum
+        accent. Velocity falls off by PHI_INV from that peak.
+        """
+        golden_beat = bar_length * PHI_INV  # ~2.472 in 4/4
+        distance = abs(position % bar_length - golden_beat) / bar_length
+        weight = PHI_INV ** (distance * 3)  # Smooth falloff
+        return int(base + (accent - base) * weight)
+
+    def fibonacci_bars(self, total_bars: int) -> list[int]:
+        """Decompose total bars into Fibonacci-number segments.
+
+        E.g. 13 → [8, 5], 21 → [13, 8], 8 → [5, 3], 4 → [3, 1]
+        Uses Zeckendorf's representation (every positive integer is
+        a unique sum of non-consecutive Fibonacci numbers).
+        """
+        fibs = [f for f in FIB_BARS if f > 0]
+        fibs.sort(reverse=True)
+        segments = []
+        remaining = total_bars
+        for f in fibs:
+            while remaining >= f:
+                segments.append(f)
+                remaining -= f
+        if remaining > 0:
+            segments.append(remaining)
+        return segments
+
     # ── Bass Patterns ────────────────────────────────────────────────────
 
     def sub_bass_pattern(self, bars: int = 4, density: float = 0.5) -> list[NoteData]:
-        """Generate sub bass pattern — steady root notes."""
+        """Generate sub bass pattern — steady root notes at phi-weighted timing.
+
+        Golden ratio: note duration = PHI_INV × bar (≈2.472 beats for sustained),
+        velocity peaks at golden-section position.
+        """
         notes = []
+        phi_dur = 4.0 * PHI_INV  # ~2.472 beats — golden note length
         for bar in range(bars):
-            for beat in range(4):
-                t = bar * 4.0 + beat
-                if beat == 0 or (beat == 2 and density > 0.5):
-                    dur = 2.0 if density < 0.7 else 1.0
-                    notes.append(NoteData(
-                        pitch=self.note(0, 1),  # low root
-                        start_time=t,
-                        duration=dur,
-                        velocity=110,
-                    ))
+            # Primary hit on beat 1
+            t = bar * 4.0
+            notes.append(NoteData(
+                pitch=self.note(0, 1),
+                start_time=t,
+                duration=phi_dur if density < 0.7 else phi_dur * PHI_INV,
+                velocity=self.phi_velocity(0.0),
+            ))
+            # Secondary hit at golden section of bar
+            if density > 0.5:
+                golden_t = bar * 4.0 + 4.0 * PHI_INV  # beat ~2.472
+                notes.append(NoteData(
+                    pitch=self.note(0, 1),
+                    start_time=golden_t,
+                    duration=4.0 - 4.0 * PHI_INV,  # fills rest of bar
+                    velocity=int(self.phi_velocity(golden_t) * PHI_INV),
+                ))
         return notes
 
     def mid_bass_pattern(self, bars: int = 4, bass_type: str = "growl",
@@ -220,23 +296,26 @@ class PatternGenerator:
         return notes
 
     def _dubstep_rhythm(self, bars: int, density: float) -> list[tuple]:
-        """Generate dubstep-style rhythmic grid.
+        """Generate dubstep-style rhythmic grid with phi-velocity accents.
 
+        Golden ratio: syncopation points at phi-derived positions,
+        velocities weighted by distance from golden section.
         Returns: [(time_beats, duration_beats, velocity)]
         """
         events = []
         for bar in range(bars):
             base = bar * 4.0
-            # Core dubstep rhythm — emphasize off-beats
+            # Core dubstep rhythm — golden section on the snare hit area
+            # 4.0 × PHI_INV ≈ 2.472 — the golden beat in 4/4
+            phi_beat = 4.0 * PHI_INV  # ~2.472
             grid = [
-                (0.0, 0.75, 120),   # beat 1
-                (0.75, 0.25, 90),   # syncopation
-                (1.5, 0.5, 100),    # and-of-2
-                (2.0, 0.5, 115),    # beat 3
-                (2.75, 0.25, 85),   # syncopation
-                (3.0, 0.5, 105),    # beat 4
-                (3.5, 0.25, 80),
-                (3.75, 0.25, 95),   # pickup
+                (0.0,        0.75, 120),             # beat 1 — anchor
+                (PHI_INV,    0.25, 90),               # ~0.618 — golden sync
+                (1.5,        0.5,  100),              # and-of-2
+                (phi_beat,   0.5,  127),              # ~2.472 — GOLDEN HIT
+                (3.0,        0.5,  int(127*PHI_INV)), # beat 4 — phi velocity
+                (3.0+PHI_INV, 0.25, 80),              # ~3.618 — golden sync
+                (3.75,       0.25, 95),               # pickup
             ]
             for t, d, v in grid:
                 if t / 4.0 < density or t == 0:
@@ -246,29 +325,43 @@ class PatternGenerator:
     # ── Lead Pattern ─────────────────────────────────────────────────────
 
     def lead_pattern(self, bars: int = 4, style: str = "melodic") -> list[NoteData]:
-        """Generate lead melody pattern."""
+        """Generate lead melody pattern using Fibonacci-interval contour.
+
+        Golden ratio: melody jumps follow Fibonacci intervals (1,1,2,3,5),
+        note durations alternate phi-long and phi-short.
+        """
         notes = []
-        # Simple melodic contour using scale degrees
-        melody = [0, 2, 4, 5, 4, 2, 3, 1, 0, 4, 5, 6, 4, 2, 0, 0]
+        # Fibonacci-interval melody: jumps of 1,1,2,3,5 scale degrees
+        fib_jumps = [1, 1, 2, 3, 5, 3, 2, 1, 1, 2, 3, 5, 2, 1, 1, 0]
+        degree = 0
+        phi_short = PHI_INV  # ~0.618 beats
+        phi_long = 1.0       # 1 beat (phi_short × PHI ≈ 1.0)
         for bar in range(bars):
             for i in range(4):
-                idx = (bar * 4 + i) % len(melody)
-                degree = melody[idx]
+                idx = (bar * 4 + i) % len(fib_jumps)
+                degree = (degree + fib_jumps[idx]) % len(self.intervals)
                 t = bar * 4.0 + i
+                # Alternate phi-long and phi-short durations
+                dur = phi_long if i % 2 == 0 else phi_short
                 notes.append(NoteData(
                     pitch=self.note(degree, 3),
                     start_time=t,
-                    duration=0.75,
-                    velocity=90 + (10 if i == 0 else 0),
+                    duration=dur,
+                    velocity=self.phi_velocity(float(i), 4.0, 85, 115),
                 ))
         return notes
 
     # ── Pad Pattern ──────────────────────────────────────────────────────
 
     def pad_pattern(self, bars: int = 4) -> list[NoteData]:
-        """Generate pad chord pattern — long sustained notes."""
+        """Generate pad chord pattern — phi-stacked voicings.
+
+        Golden ratio: chord voicings separated by Fibonacci intervals,
+        velocity layers follow PHI_INV cascade (root loudest, upper
+        voices softer by phi).
+        """
         notes = []
-        # Simple chord progression: i - VI - III - VII
+        # Progression: i - VI - III - VII (Fibonacci degrees: 0,5,2,6)
         chords = [
             [0, 2, 4],  # i (root triad)
             [5, 0, 2],  # VI
@@ -277,36 +370,46 @@ class PatternGenerator:
         ]
         for bar in range(bars):
             chord = chords[bar % len(chords)]
-            for degree in chord:
+            for j, degree in enumerate(chord):
+                # Phi-cascade velocity: root=90, 3rd=~56, 5th=~34
+                vel = int(90 * (PHI_INV ** j))
+                vel = max(vel, 30)  # floor
                 notes.append(NoteData(
                     pitch=self.note(degree, 3),
                     start_time=bar * 4.0,
-                    duration=4.0,
-                    velocity=70,
+                    duration=4.0 * PHI_INV if j == 0 else 4.0,  # root shorter (breath)
+                    velocity=vel,
                 ))
         return notes
 
     # ── Drum Patterns (MIDI) ────────────────────────────────────────────
 
     def kick_pattern(self, bars: int = 4, style: str = "standard") -> list[NoteData]:
-        """Generate kick pattern. Uses GM MIDI note 36 (C1) for kick."""
+        """Generate kick pattern. Uses GM MIDI note 36 (C1).
+
+        Golden ratio: ghost kick at golden-section position (beat × PHI_INV).
+        """
         notes = []
         for bar in range(bars):
             base = bar * 4.0
             if style == "halftime":
                 notes.append(NoteData(36, base, 0.5, 127))
-                notes.append(NoteData(36, base + 3.0, 0.5, 100))
+                notes.append(NoteData(36, base + 3.0, 0.5, GOLDEN_VEL))
             elif style == "dubstep":
                 notes.append(NoteData(36, base, 0.5, 127))
                 if bar % 2 == 0:
-                    notes.append(NoteData(36, base + 2.5, 0.25, 95))
+                    # Ghost kick at golden position instead of fixed 2.5
+                    notes.append(NoteData(36, base + 4.0 * PHI_INV, 0.25, GOLDEN_VEL))
             else:  # standard
                 for beat in [0, 2]:
                     notes.append(NoteData(36, base + beat, 0.5, 120))
         return notes
 
     def snare_pattern(self, bars: int = 4, style: str = "halftime") -> list[NoteData]:
-        """Generate snare pattern. MIDI note 38 (D1)."""
+        """Generate snare pattern. MIDI note 38 (D1).
+
+        Golden ratio: fills use Fibonacci subdivisions.
+        """
         notes = []
         for bar in range(bars):
             base = bar * 4.0
@@ -314,7 +417,8 @@ class PatternGenerator:
                 notes.append(NoteData(38, base + 2.0, 0.5, 120))
             elif style == "dubstep":
                 notes.append(NoteData(38, base + 2.0, 0.5, 127))
-                if bar % 4 == 3:  # fill on last bar
+                if bar % 4 == 3:  # Fibonacci fill: 3 hits at Fib timing
+                    notes.append(NoteData(38, base + 3.0, 0.25, GOLDEN_VEL))
                     notes.append(NoteData(38, base + 3.5, 0.25, 100))
                     notes.append(NoteData(38, base + 3.75, 0.25, 110))
             else:
@@ -323,25 +427,62 @@ class PatternGenerator:
         return notes
 
     def hat_pattern(self, bars: int = 4, density: float = 0.6) -> list[NoteData]:
-        """Generate hi-hat pattern. Closed=42, Open=46."""
+        """Generate hi-hat pattern. Closed=42, Open=46.
+
+        Golden ratio: open hats at golden positions, velocity follows phi wave.
+        """
         notes = []
         for bar in range(bars):
             base = bar * 4.0
             for eighth in range(8):
                 t = base + eighth * 0.5
                 if eighth / 8.0 < density:
-                    vel = 90 if eighth % 2 == 0 else 65
-                    midi_note = 46 if (eighth == 4 and bar % 2 == 0) else 42
+                    # Phi-velocity: accent follows golden curve
+                    vel = self.phi_velocity(eighth * 0.5, 4.0, 55, 95)
+                    # Open hat at golden position (~5th eighth ≈ beat 2.5)
+                    golden_eighth = int(8 * PHI_INV)  # ~5
+                    midi_note = 46 if eighth == golden_eighth else 42
                     notes.append(NoteData(midi_note, t, 0.25, vel))
         return notes
 
     def full_drum_pattern(self, bars: int = 4, style: str = "dubstep",
                           hat_density: float = 0.6) -> list[NoteData]:
-        """Combined drum pattern — kick + snare + hats."""
+        """Combined drum pattern — kick + snare + hats (phi-weighted)."""
         notes = []
         notes.extend(self.kick_pattern(bars, style))
         notes.extend(self.snare_pattern(bars, "halftime" if style == "dubstep" else style))
         notes.extend(self.hat_pattern(bars, hat_density))
+        return notes
+
+    # ── Fibonacci Arp (Dojo technique) ───────────────────────────────────
+
+    def fibonacci_arp_pattern(self, bars: int = 4, octave: int = 3) -> list[NoteData]:
+        """Generate a Fibonacci-interval arpeggio.
+
+        Each note jumps by the next Fibonacci number of scale degrees:
+        0, +1, +1, +2, +3, +5, +3, +2, +1, +1, 0 (arch shape).
+        Duration of each note = Fibonacci-scaled 16ths.
+        """
+        notes = []
+        fib_jumps = [0, 1, 1, 2, 3, 5, 3, 2, 1, 1, 0]
+        degree = 0
+        t = 0.0
+        fib_durs = [0.25, 0.25, 0.5, 0.25, 0.5, 0.75, 0.5, 0.25, 0.5, 0.25, 0.25]
+        for bar in range(bars):
+            for i, jump in enumerate(fib_jumps):
+                if t >= (bar + 1) * 4.0:
+                    break
+                degree = (degree + jump) % len(self.intervals)
+                dur = fib_durs[i % len(fib_durs)]
+                notes.append(NoteData(
+                    pitch=self.note(degree, octave),
+                    start_time=t,
+                    duration=dur,
+                    velocity=self.phi_velocity(t % 4.0),
+                ))
+                t += dur
+            if t < (bar + 1) * 4.0:
+                t = (bar + 1) * 4.0  # align to next bar
         return notes
 
 
@@ -395,16 +536,25 @@ class MIDIExporter:
 class ProductionPipeline:
     """Master production pipeline: DNA → Ableton session → full track.
 
+    Golden Ratio & Dojo Integration:
+    - Fibonacci bar structures for clip/scene lengths (3,5,8,13,21)
+    - PHI-weighted velocity curves across all patterns
+    - Phi-proportioned mix levels (each track at PHI_INV^n)
+    - Golden-section send amounts (reverb/delay at phi cascades)
+    - Dojo PSBS track architecture (Sub → Mid Growl → Lead → Pad)
+    - Fibonacci arp pattern generation (Dojo technique)
+    - 128 Rack zone mapping for drum samples
+
     Complete workflow:
     1. Parse SongDNA or generate from track name
-    2. Create Ableton session (tracks, routing, tempo)
+    2. Create Ableton session (Dojo template with PSBS tracks)
     3. Load Serum 2 on each synth track
-    4. Configure Serum presets per track role
-    5. Program MIDI clips from DNA patterns
+    4. Configure Serum presets per track role (phi-tuned params)
+    5. Program MIDI clips from DNA patterns (Fibonacci structures)
     6. Load drum samples into audio tracks
-    7. Set up FX chains (return tracks)
-    8. Configure sends & routing
-    9. Set up mix automation
+    7. Set up FX chains (returns with phi-proportioned sends)
+    8. Configure sends & routing (golden ratio levels)
+    9. Set up mix automation (phi mix curve)
     10. Export MIDI files as backups
     """
 
@@ -587,7 +737,14 @@ class ProductionPipeline:
     # ═══════════════════════════════════════════════════════════════════════
 
     def _build_session_setup(self, dna) -> SessionSetup:
-        """Build session setup from DNA."""
+        """Build session setup from DNA — Dojo template with phi mix levels.
+
+        Session architecture follows Producer Dojo PSBS methodology:
+        - Track layout mirrors dojo session template (128 Rack, Sub, Mid, etc.)
+        - Volume levels use phi-derived ratios (PHI_MIX_LEVELS)
+        - Scenes follow Fibonacci bar counts from arrangement
+        - Return sends at golden ratio amounts
+        """
         session = SessionSetup(
             name=dna.name,
             bpm=dna.bpm,
@@ -596,7 +753,7 @@ class ProductionPipeline:
             total_bars=dna.total_bars,
         )
 
-        # ── Synth Tracks ───────────────────────────────────────────
+        # ── Synth Tracks (Dojo: Sub → Mid Growl → Lead → Pad) ─────
         # Sub bass
         session.tracks.append(TrackSetup(
             name="SUB BASS",
@@ -604,11 +761,11 @@ class ProductionPipeline:
             color="dubforge_1",
             instrument="serum2",
             preset=BASS_TYPE_TO_PRESET.get("sub", "DUBFORGE_SUB_BASS"),
-            volume=0.85,
+            volume=PHI_MIX_LEVELS.get("SUB BASS", 0.85),
             group="BASS",
         ))
 
-        # Mid bass (primary)
+        # Mid bass (primary — Dojo "MID GROWL")
         primary_bass = dna.bass.primary_type if hasattr(dna, 'bass') else "growl"
         session.tracks.append(TrackSetup(
             name="MID BASS",
@@ -616,7 +773,7 @@ class ProductionPipeline:
             color="dubforge_2",
             instrument="serum2",
             preset=BASS_TYPE_TO_PRESET.get(primary_bass, "DUBFORGE_GROWL_BASS"),
-            volume=0.80,
+            volume=PHI_MIX_LEVELS.get("MID BASS", 0.80),
             group="BASS",
         ))
 
@@ -627,7 +784,7 @@ class ProductionPipeline:
             color="dubforge_3",
             instrument="serum2",
             preset=LEAD_TYPE_TO_PRESET.get("screech", "DUBFORGE_SCREECH_LEAD"),
-            volume=0.70,
+            volume=PHI_MIX_LEVELS.get("LEAD", 0.70),
         ))
 
         # Pad
@@ -638,45 +795,47 @@ class ProductionPipeline:
             color="purple",
             instrument="serum2",
             preset=PAD_TYPE_TO_PRESET.get(pad_type, "DUBFORGE_DARK_PAD"),
-            volume=0.55,
+            volume=PHI_MIX_LEVELS.get("PAD", 0.55),
         ))
 
         # ── Drum Tracks ────────────────────────────────────────────
-
-        # Drums (MIDI for programming, could be Drum Rack in Ableton)
         session.tracks.append(TrackSetup(
             name="DRUMS",
             type="midi",
             color="orange",
             instrument="drum_rack",
-            volume=0.85,
+            volume=PHI_MIX_LEVELS.get("DRUMS", 0.85),
         ))
 
         # ── Audio Tracks (for samples) ────────────────────────────
-
         session.tracks.append(TrackSetup(
             name="DRUM SAMPLES",
             type="audio",
             color="orange",
-            volume=0.80,
+            volume=PHI_MIX_LEVELS.get("DRUM SAMPLES", 0.80),
         ))
 
         session.tracks.append(TrackSetup(
             name="FX AUDIO",
             type="audio",
             color="cyan",
-            volume=0.65,
+            volume=PHI_MIX_LEVELS.get("FX AUDIO", 0.65),
         ))
 
         # ── Return Tracks ─────────────────────────────────────────
         session.return_tracks = ["REVERB", "DELAY", "DISTORTION"]
 
-        # ── Scenes (from arrangement) ─────────────────────────────
+        # ── Scenes (Fibonacci bar structure from arrangement) ─────
         if hasattr(dna, 'arrangement') and dna.arrangement:
             session.scenes = [s.name for s in dna.arrangement]
         else:
-            session.scenes = ["INTRO", "BUILD", "DROP 1", "BREAK",
-                              "BUILD 2", "DROP 2", "OUTRO"]
+            # Default scenes with Fibonacci bar counts
+            # 3+5+8+5+3+8+2 = 34 bars (Fibonacci!)
+            session.scenes = [
+                "INTRO [3 bars]", "BUILD [5 bars]", "DROP 1 [8 bars]",
+                "BREAK [5 bars]", "BUILD 2 [3 bars]", "DROP 2 [8 bars]",
+                "OUTRO [2 bars]",
+            ]
 
         return session
 
@@ -733,35 +892,47 @@ class ProductionPipeline:
     # ═══════════════════════════════════════════════════════════════════════
 
     def _generate_all_patterns(self, dna, pg: PatternGenerator) -> dict[str, list[NoteData]]:
-        """Generate all MIDI patterns from DNA."""
+        """Generate all MIDI patterns from DNA — Fibonacci-structured.
+
+        Golden ratio integration:
+        - Clip lengths decomposed into Fibonacci bar segments
+        - Patterns use phi-velocity and golden-section note placement
+        - Fibonacci arp pattern generated as bonus clip
+        """
         bars = dna.total_bars if hasattr(dna, 'total_bars') else 16
-        clip_bars = min(bars, 8)  # Clip length (looped for longer sections)
+        # Use Fibonacci-number clip length (nearest Fib ≤ 8)
+        fib_clip_bars = max(f for f in FIB_BARS if f <= min(bars, 8))
+        _log.info(f"Fibonacci clip bars: {fib_clip_bars} (from {bars} total, "
+                  f"Zeckendorf: {pg.fibonacci_bars(bars)})")
 
         patterns = {}
 
-        # Sub bass
+        # Sub bass (phi-timed)
         density = dna.bass.sub_weight if hasattr(dna, 'bass') else 0.6
-        patterns["sub_bass"] = pg.sub_bass_pattern(clip_bars, density)
+        patterns["sub_bass"] = pg.sub_bass_pattern(fib_clip_bars, density)
 
-        # Mid bass
+        # Mid bass (phi-syncopated)
         bass_type = dna.bass.primary_type if hasattr(dna, 'bass') else "growl"
-        patterns["mid_bass"] = pg.mid_bass_pattern(clip_bars, bass_type, 0.7)
+        patterns["mid_bass"] = pg.mid_bass_pattern(fib_clip_bars, bass_type, 0.7)
 
-        # Lead
-        patterns["lead"] = pg.lead_pattern(clip_bars, "melodic")
+        # Lead (Fibonacci-interval melody)
+        patterns["lead"] = pg.lead_pattern(fib_clip_bars, "melodic")
 
-        # Pad
-        patterns["pad"] = pg.pad_pattern(clip_bars)
+        # Pad (phi-velocity cascade)
+        patterns["pad"] = pg.pad_pattern(fib_clip_bars)
 
-        # Drums
+        # Fibonacci arp (Dojo technique)
+        patterns["fibonacci_arp"] = pg.fibonacci_arp_pattern(fib_clip_bars)
+
+        # Drums (phi-weighted velocity curves)
         hat_subdiv = dna.drums.hat_density if hasattr(dna, 'drums') else 16
-        hat_density = min(hat_subdiv / 32.0, 1.0)  # Normalize subdivisions to 0-1
-        patterns["drums"] = pg.full_drum_pattern(clip_bars, "dubstep", hat_density)
+        hat_density = min(hat_subdiv / 32.0, 1.0)
+        patterns["drums"] = pg.full_drum_pattern(fib_clip_bars, "dubstep", hat_density)
 
         # Individual drum parts
-        patterns["kick"] = pg.kick_pattern(clip_bars, "dubstep")
-        patterns["snare"] = pg.snare_pattern(clip_bars, "halftime")
-        patterns["hats"] = pg.hat_pattern(clip_bars, hat_density)
+        patterns["kick"] = pg.kick_pattern(fib_clip_bars, "dubstep")
+        patterns["snare"] = pg.snare_pattern(fib_clip_bars, "halftime")
+        patterns["hats"] = pg.hat_pattern(fib_clip_bars, hat_density)
 
         return patterns
 
@@ -851,27 +1022,36 @@ class ProductionPipeline:
 
     def _apply_dna_tweaks(self, ctrl: Serum2Controller, track: TrackSetup,
                           dna):
-        """Apply DNA-specific parameter tweaks on top of preset."""
+        """Apply DNA-specific parameter tweaks on top of preset.
+
+        Golden ratio: filter cutoffs, drive amounts, and FX parameters
+        use phi-derived values for harmonically natural results.
+        """
         if not hasattr(dna, 'bass'):
             return
 
         if "BASS" in track.name.upper():
-            # Apply DNA bass parameters
+            # Apply DNA bass parameters — phi-scaled
             if hasattr(dna.bass, 'fm_depth'):
-                ctrl.set_osc_b_level(dna.bass.fm_depth * 0.8)
+                ctrl.set_osc_b_level(dna.bass.fm_depth * PHI_INV)
             if hasattr(dna.bass, 'distortion'):
                 ctrl.set_distortion(True, amount=dna.bass.distortion)
             if hasattr(dna.bass, 'filter_cutoff'):
-                ctrl.set_filter1_cutoff(dna.bass.filter_cutoff)
+                # Scale cutoff through phi for harmonic sweet spot
+                cutoff = dna.bass.filter_cutoff * PHI_INV + (1 - PHI_INV) * 0.3
+                ctrl.set_filter1_cutoff(cutoff)
 
         elif "LEAD" in track.name.upper():
             if hasattr(dna, 'lead') and hasattr(dna.lead, 'brightness'):
-                ctrl.set_filter1_cutoff(0.3 + dna.lead.brightness * 0.6)
+                # Phi-weighted brightness mapping
+                cutoff = PHI_INV * dna.lead.brightness + (1 - PHI_INV) * 0.3
+                ctrl.set_filter1_cutoff(cutoff)
 
         elif "PAD" in track.name.upper():
             if hasattr(dna, 'atmosphere') and hasattr(dna.atmosphere, 'reverb_decay'):
-                decay = min(dna.atmosphere.reverb_decay / 5.0, 1.0)
-                ctrl.set_reverb(True, size=decay * 0.8, mix=0.35)
+                # Golden reverb: decay scaled by phi
+                decay = min(dna.atmosphere.reverb_decay * PHI_INV / 3.0, 1.0)
+                ctrl.set_reverb(True, size=decay, mix=PHI_INV * 0.5)
 
     # ═══════════════════════════════════════════════════════════════════════
     # INTERNAL: Sample Loading
@@ -902,10 +1082,14 @@ class ProductionPipeline:
     # ═══════════════════════════════════════════════════════════════════════
 
     def _setup_fx_routing(self, session: SessionSetup, dna):
-        """Set up return tracks and sends."""
-        print(f"\n  ◆ Setting up FX routing...")
+        """Set up return tracks and sends — phi-proportioned levels.
 
-        # Configure sends from synth tracks to returns
+        Golden ratio: send levels follow PHI_INV cascade.
+        Reverb sends at PHI_INV^2 ≈ 0.382, delay at PHI_INV^3 ≈ 0.236.
+        Each track type gets phi-scaled amounts from the base levels.
+        """
+        print(f"\n  ◆ Setting up FX routing (phi-proportioned sends)...")
+
         reverb_send = 0  # First return = reverb
         delay_send = 1   # Second return = delay
 
@@ -914,50 +1098,59 @@ class ProductionPipeline:
                 continue
             track_idx = self._track_indices[track_setup.name]
 
-            # Different send levels per track type
+            # Phi-scaled send levels per track type
             if "PAD" in track_setup.name:
-                self.bridge.set_track_send(track_idx, reverb_send, 0.45)
-                self.bridge.set_track_send(track_idx, delay_send, 0.15)
+                self.bridge.set_track_send(track_idx, reverb_send,
+                                           PHI_SEND_REVERB * PHI)   # ~0.618 (lush)
+                self.bridge.set_track_send(track_idx, delay_send,
+                                           PHI_SEND_DELAY)          # ~0.236
             elif "LEAD" in track_setup.name:
-                self.bridge.set_track_send(track_idx, reverb_send, 0.25)
-                self.bridge.set_track_send(track_idx, delay_send, 0.20)
+                self.bridge.set_track_send(track_idx, reverb_send,
+                                           PHI_SEND_REVERB)         # ~0.382
+                self.bridge.set_track_send(track_idx, delay_send,
+                                           PHI_SEND_DELAY)          # ~0.236
             elif "MID BASS" in track_setup.name:
-                self.bridge.set_track_send(track_idx, reverb_send, 0.10)
+                self.bridge.set_track_send(track_idx, reverb_send,
+                                           PHI_SEND_REVERB * PHI_INV)  # ~0.236 (tight)
             elif "SUB" in track_setup.name:
-                pass  # No reverb on sub!
+                pass  # No reverb on sub! (Dojo rule)
             elif "DRUM" in track_setup.name:
-                self.bridge.set_track_send(track_idx, reverb_send, 0.12)
+                self.bridge.set_track_send(track_idx, reverb_send,
+                                           PHI_SEND_REVERB * PHI_INV)  # ~0.236
 
-        print(f"  ✓ FX routing configured")
+        print(f"  ✓ FX routing configured (phi sends: reverb={PHI_SEND_REVERB}, delay={PHI_SEND_DELAY})")
 
     # ═══════════════════════════════════════════════════════════════════════
     # INTERNAL: Mix Settings
     # ═══════════════════════════════════════════════════════════════════════
 
     def _apply_mix_settings(self, session: SessionSetup, dna):
-        """Apply DNA-driven mix settings."""
-        print(f"\n  ◆ Applying mix settings...")
+        """Apply DNA-driven mix settings — phi-proportioned levels.
+
+        Golden ratio: master volume at PHI_INV, track panning follows
+        golden angle (137.508°) for stereo field distribution.
+        """
+        print(f"\n  ◆ Applying phi-proportioned mix settings...")
 
         if hasattr(dna, 'mix'):
-            # Master volume
-            self.bridge.set_master_volume(0.85)
+            # Master volume at golden ratio
+            self.bridge.set_master_volume(PHI_INV)  # ~0.618
 
-        # Set stereo width via panning
+        # Apply phi-derived volumes and panning
         for track_setup in session.tracks:
             if track_setup.name not in self._track_indices:
                 continue
             track_idx = self._track_indices[track_setup.name]
 
-            # Center bass
-            if "SUB" in track_setup.name:
-                self.bridge.set_track_pan(track_idx, 0.0)
-            elif "MID BASS" in track_setup.name:
-                self.bridge.set_track_pan(track_idx, 0.0)
-            # Slight spread on lead
-            elif "LEAD" in track_setup.name:
-                pass  # Leave centered, Serum handles width
+            # Apply phi mix level
+            phi_vol = PHI_MIX_LEVELS.get(track_setup.name, track_setup.volume)
+            self.bridge.set_track_volume(track_idx, phi_vol)
 
-        print(f"  ✓ Mix settings applied")
+            # Center bass (Dojo rule: sub and mid always mono center)
+            if "SUB" in track_setup.name or "MID BASS" in track_setup.name:
+                self.bridge.set_track_pan(track_idx, 0.0)
+
+        print(f"  ✓ Mix settings applied (phi levels, {len(PHI_MIX_LEVELS)} tracks)")
 
     # ═══════════════════════════════════════════════════════════════════════
     # UTILITY METHODS

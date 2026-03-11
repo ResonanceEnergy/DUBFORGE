@@ -11,9 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 @dataclass
 class PluginMeta:
     """Metadata for a registered plugin."""

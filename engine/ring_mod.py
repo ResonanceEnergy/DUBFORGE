@@ -11,7 +11,7 @@ import struct
 import wave
 from dataclasses import dataclass
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 A4_432 = 432.0
 SAMPLE_RATE = 48000
 

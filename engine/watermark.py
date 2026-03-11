@@ -10,7 +10,7 @@ import os
 import struct
 import wave
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 SAMPLE_RATE = 48000
 
 

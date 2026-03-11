@@ -24,7 +24,7 @@ import numpy as np
 # ═══════════════════════════════════════════════════════════════════════════
 
 SAMPLE_RATE = 48000
-PHI = 1.6180339887
+from engine.config_loader import PHI
 TWO_PI = 2.0 * math.pi
 
 

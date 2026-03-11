@@ -16,7 +16,7 @@ with bar counts and which elements are active per section.
 
 from dataclasses import dataclass, field
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55]
 
 

@@ -19,8 +19,7 @@ import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PHI = 1.6180339887
-
+from engine.config_loader import PHI
 # FXP constants
 FXP_MAGIC = b'CcnK'
 FXP_VERSION = 1

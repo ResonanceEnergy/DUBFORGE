@@ -15,9 +15,7 @@ import numpy as np
 
 from engine.phi_core import SAMPLE_RATE
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════

@@ -11,9 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-PHI = 1.6180339887
-
-
+from engine.config_loader import PHI
 @dataclass
 class AuditReport:
     """Comprehensive audit report."""

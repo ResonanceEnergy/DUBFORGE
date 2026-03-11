@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-PHI = 1.6180339887
+from engine.config_loader import PHI
 PHI_INV = 1.0 / PHI
 
 
