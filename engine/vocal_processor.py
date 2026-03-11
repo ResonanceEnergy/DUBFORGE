@@ -18,7 +18,7 @@ import numpy as np
 
 from engine.phi_core import SAMPLE_RATE
 
-from engine.config_loader import PHI
+from engine.config_loader import PHI, A4_432, A4_440
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -160,8 +160,8 @@ def apply_pitch_correct(signal: np.ndarray, preset: VocalPreset,
     out = np.zeros(n)
     normalizer = np.zeros(n)
 
-    # Chromatic frequencies in the root's scale
-    root_freq = 440.0 * (2.0 ** ((preset.scale_root - 9) / 12.0))
+    # Chromatic frequencies in the root's scale (A4=432 DUBFORGE standard)
+    root_freq = A4_432 * (2.0 ** ((preset.scale_root - 9) / 12.0))
     chromatic = [root_freq * (2.0 ** (s / 12.0))
                  for s in range(-36, 49)]  # wide range
 

@@ -7,10 +7,7 @@ Maps emotional descriptors to synthesis parameters and module choices.
 
 from dataclasses import dataclass, field
 
-from engine.config_loader import PHI
-A4_432 = 432.0
-
-
+from engine.config_loader import PHI, A4_432
 @dataclass
 class MoodProfile:
     """Mapping from mood descriptor to sound parameters."""

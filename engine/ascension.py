@@ -26,9 +26,8 @@ import time
 import wave
 from dataclasses import dataclass, field
 
-from engine.config_loader import PHI
+from engine.config_loader import PHI, A4_432
 FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
-A4_432 = 432.0
 SAMPLE_RATE = 48000
 
 # ═══════════════════════════════════════════════════════════

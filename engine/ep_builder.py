@@ -13,11 +13,8 @@ import time
 import wave
 from dataclasses import dataclass, field
 
-from engine.config_loader import PHI
+from engine.config_loader import PHI, A4_432
 SAMPLE_RATE = 48000
-A4_432 = 432.0
-
-
 @dataclass
 class Track:
     """An EP track."""

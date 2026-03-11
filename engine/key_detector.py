@@ -8,10 +8,8 @@ chromagram analysis (DFT-based pitch class profiling).
 import math
 from dataclasses import dataclass
 
-from engine.config_loader import PHI
+from engine.config_loader import PHI, A4_432
 SAMPLE_RATE = 48000
-A4_432 = 432.0
-
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F",
               "F#", "G", "G#", "A", "A#", "B"]
 

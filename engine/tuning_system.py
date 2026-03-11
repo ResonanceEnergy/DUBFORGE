@@ -9,10 +9,7 @@ PHI-based tuning, micro-tuning support.
 import math
 from dataclasses import dataclass
 
-from engine.config_loader import PHI
-A4_432 = 432.0
-
-
+from engine.config_loader import PHI, A4_432
 @dataclass
 class Note:
     """A musical note with frequency."""

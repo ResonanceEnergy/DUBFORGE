@@ -585,13 +585,13 @@ def lush_pad_bank() -> PadBank:
     return PadBank(
         name="LUSH_PADS",
         presets=[
-            PadPreset("lush_C3", "lush", 130.81, duration_s=6.0,
+            PadPreset("lush_C3", "lush", 128.43, duration_s=6.0,
                       detune_cents=12, filter_cutoff=0.4, attack_s=0.8),
-            PadPreset("lush_E3", "lush", 164.81, duration_s=6.0,
+            PadPreset("lush_E3", "lush", 161.81, duration_s=6.0,
                       detune_cents=15, filter_cutoff=0.5, attack_s=0.6),
-            PadPreset("lush_G3", "lush", 196.00, duration_s=6.0,
+            PadPreset("lush_G3", "lush", 192.44, duration_s=6.0,
                       detune_cents=10, filter_cutoff=0.6, attack_s=1.0),
-            PadPreset("lush_A3", "lush", 220.00, duration_s=6.0,
+            PadPreset("lush_A3", "lush", 216.00, duration_s=6.0,
                       detune_cents=18, filter_cutoff=0.35, attack_s=0.5),
         ],
     )
@@ -619,13 +619,13 @@ def shimmer_pad_bank() -> PadBank:
     return PadBank(
         name="SHIMMER_PADS",
         presets=[
-            PadPreset("shimmer_C4", "shimmer", 261.63, duration_s=5.0,
+            PadPreset("shimmer_C4", "shimmer", 256.87, duration_s=5.0,
                       brightness=0.8, attack_s=0.3),
-            PadPreset("shimmer_E4", "shimmer", 329.63, duration_s=5.0,
+            PadPreset("shimmer_E4", "shimmer", 323.64, duration_s=5.0,
                       brightness=0.9, attack_s=0.4),
-            PadPreset("shimmer_G4", "shimmer", 392.00, duration_s=5.0,
+            PadPreset("shimmer_G4", "shimmer", 384.87, duration_s=5.0,
                       brightness=0.7, attack_s=0.5),
-            PadPreset("shimmer_A4", "shimmer", 440.00, duration_s=5.0,
+            PadPreset("shimmer_A4", "shimmer", 432.00, duration_s=5.0,
                       brightness=1.0, attack_s=0.2),
         ],
     )
@@ -636,13 +636,13 @@ def evolving_pad_bank() -> PadBank:
     return PadBank(
         name="EVOLVING_PADS",
         presets=[
-            PadPreset("evolve_C3", "evolving", 130.81, duration_s=8.0,
+            PadPreset("evolve_C3", "evolving", 128.43, duration_s=8.0,
                       detune_cents=15, filter_cutoff=0.3, attack_s=1.0),
             PadPreset("evolve_D3", "evolving", 146.83, duration_s=8.0,
                       detune_cents=12, filter_cutoff=0.4, attack_s=1.2),
-            PadPreset("evolve_E3", "evolving", 164.81, duration_s=8.0,
+            PadPreset("evolve_E3", "evolving", 161.81, duration_s=8.0,
                       detune_cents=20, filter_cutoff=0.25, attack_s=0.8),
-            PadPreset("evolve_G3", "evolving", 196.00, duration_s=8.0,
+            PadPreset("evolve_G3", "evolving", 192.44, duration_s=8.0,
                       detune_cents=10, filter_cutoff=0.35, attack_s=1.5),
         ],
     )
@@ -653,13 +653,13 @@ def choir_pad_bank() -> PadBank:
     return PadBank(
         name="CHOIR_PADS",
         presets=[
-            PadPreset("choir_C3", "choir", 130.81, duration_s=6.0,
+            PadPreset("choir_C3", "choir", 128.43, duration_s=6.0,
                       attack_s=0.6, brightness=0.6),
-            PadPreset("choir_E3", "choir", 164.81, duration_s=6.0,
+            PadPreset("choir_E3", "choir", 161.81, duration_s=6.0,
                       attack_s=0.8, brightness=0.7),
-            PadPreset("choir_G3", "choir", 196.00, duration_s=6.0,
+            PadPreset("choir_G3", "choir", 192.44, duration_s=6.0,
                       attack_s=0.5, brightness=0.5),
-            PadPreset("choir_A3", "choir", 220.00, duration_s=6.0,
+            PadPreset("choir_A3", "choir", 216.00, duration_s=6.0,
                       attack_s=0.7, brightness=0.8),
         ],
     )
@@ -670,13 +670,13 @@ def glass_pad_bank() -> PadBank:
     return PadBank(
         name="GLASS_PADS",
         presets=[
-            PadPreset("glass_C3", "glass", 130.81, duration_s=5.0,
+            PadPreset("glass_C3", "glass", 128.43, duration_s=5.0,
                       brightness=0.8, filter_cutoff=0.7, attack_s=0.4),
-            PadPreset("glass_E3", "glass", 164.81, duration_s=5.0,
+            PadPreset("glass_E3", "glass", 161.81, duration_s=5.0,
                       brightness=0.9, filter_cutoff=0.8, attack_s=0.3),
-            PadPreset("glass_G3", "glass", 196.00, duration_s=5.0,
+            PadPreset("glass_G3", "glass", 192.44, duration_s=5.0,
                       brightness=0.7, filter_cutoff=0.6, attack_s=0.5),
-            PadPreset("glass_A3", "glass", 220.00, duration_s=5.0,
+            PadPreset("glass_A3", "glass", 216.00, duration_s=5.0,
                       brightness=1.0, filter_cutoff=0.9, attack_s=0.2),
         ],
     )
@@ -687,13 +687,13 @@ def warm_pad_bank() -> PadBank:
     return PadBank(
         name="WARM_PADS",
         presets=[
-            PadPreset("warm_C3", "warm", 130.81, duration_s=7.0,
+            PadPreset("warm_C3", "warm", 128.43, duration_s=7.0,
                       detune_cents=15, filter_cutoff=0.3, attack_s=1.0),
             PadPreset("warm_D3", "warm", 146.83, duration_s=7.0,
                       detune_cents=12, filter_cutoff=0.25, attack_s=1.2),
-            PadPreset("warm_E3", "warm", 164.81, duration_s=7.0,
+            PadPreset("warm_E3", "warm", 161.81, duration_s=7.0,
                       detune_cents=18, filter_cutoff=0.35, attack_s=0.8),
-            PadPreset("warm_G3", "warm", 196.00, duration_s=7.0,
+            PadPreset("warm_G3", "warm", 192.44, duration_s=7.0,
                       detune_cents=10, filter_cutoff=0.2, attack_s=1.5),
         ],
     )
@@ -704,13 +704,13 @@ def granular_pad_bank() -> PadBank:
     return PadBank(
         name="GRANULAR_PADS",
         presets=[
-            PadPreset("granular_C3", "granular", 130.81, duration_s=6.0,
+            PadPreset("granular_C3", "granular", 128.43, duration_s=6.0,
                       detune_cents=20, brightness=0.6, attack_s=0.5),
-            PadPreset("granular_E3", "granular", 164.81, duration_s=6.0,
+            PadPreset("granular_E3", "granular", 161.81, duration_s=6.0,
                       detune_cents=30, brightness=0.7, attack_s=0.6),
-            PadPreset("granular_G3", "granular", 196.00, duration_s=6.0,
+            PadPreset("granular_G3", "granular", 192.44, duration_s=6.0,
                       detune_cents=15, brightness=0.5, attack_s=0.8),
-            PadPreset("granular_A3", "granular", 220.00, duration_s=6.0,
+            PadPreset("granular_A3", "granular", 216.00, duration_s=6.0,
                       detune_cents=25, brightness=0.8, attack_s=0.4),
         ],
     )
@@ -721,13 +721,13 @@ def crystal_pad_bank() -> PadBank:
     return PadBank(
         name="CRYSTAL_PADS",
         presets=[
-            PadPreset("crystal_C3", "crystal", 130.81, duration_s=5.0,
+            PadPreset("crystal_C3", "crystal", 128.43, duration_s=5.0,
                       detune_cents=8, brightness=0.8, attack_s=0.3, lfo_rate=0.3),
-            PadPreset("crystal_E3", "crystal", 164.81, duration_s=5.0,
+            PadPreset("crystal_E3", "crystal", 161.81, duration_s=5.0,
                       detune_cents=12, brightness=0.9, attack_s=0.4, lfo_rate=0.25),
-            PadPreset("crystal_G3", "crystal", 196.00, duration_s=5.0,
+            PadPreset("crystal_G3", "crystal", 192.44, duration_s=5.0,
                       detune_cents=6, brightness=0.75, attack_s=0.35, lfo_rate=0.35),
-            PadPreset("crystal_A3", "crystal", 220.00, duration_s=5.0,
+            PadPreset("crystal_A3", "crystal", 216.00, duration_s=5.0,
                       detune_cents=10, brightness=0.85, attack_s=0.3, lfo_rate=0.2),
         ],
     )
@@ -738,13 +738,13 @@ def metallic_pad_bank() -> PadBank:
     return PadBank(
         name="METALLIC_PADS",
         presets=[
-            PadPreset("metallic_C3", "metallic", 130.81, duration_s=5.0,
+            PadPreset("metallic_C3", "metallic", 128.43, duration_s=5.0,
                       detune_cents=5, brightness=0.6, attack_s=0.4, lfo_rate=0.15),
-            PadPreset("metallic_E3", "metallic", 164.81, duration_s=5.0,
+            PadPreset("metallic_E3", "metallic", 161.81, duration_s=5.0,
                       detune_cents=8, brightness=0.5, attack_s=0.5, lfo_rate=0.2),
-            PadPreset("metallic_G3", "metallic", 196.00, duration_s=5.0,
+            PadPreset("metallic_G3", "metallic", 192.44, duration_s=5.0,
                       detune_cents=10, brightness=0.55, attack_s=0.45, lfo_rate=0.18),
-            PadPreset("metallic_A3", "metallic", 220.00, duration_s=5.0,
+            PadPreset("metallic_A3", "metallic", 216.00, duration_s=5.0,
                       detune_cents=7, brightness=0.65, attack_s=0.35, lfo_rate=0.22),
         ],
     )
@@ -755,13 +755,13 @@ def noise_pad_bank() -> PadBank:
     return PadBank(
         name="NOISE_PADS",
         presets=[
-            PadPreset("noise_C3", "noise", 130.81, duration_s=5.0,
+            PadPreset("noise_C3", "noise", 128.43, duration_s=5.0,
                       brightness=0.6, attack_s=0.5, lfo_rate=0.15),
-            PadPreset("noise_E3", "noise", 164.81, duration_s=5.0,
+            PadPreset("noise_E3", "noise", 161.81, duration_s=5.0,
                       brightness=0.7, attack_s=0.4, lfo_rate=0.2),
-            PadPreset("noise_G3", "noise", 196.00, duration_s=5.0,
+            PadPreset("noise_G3", "noise", 192.44, duration_s=5.0,
                       brightness=0.5, attack_s=0.6, lfo_rate=0.1),
-            PadPreset("noise_A3", "noise", 220.00, duration_s=5.0,
+            PadPreset("noise_A3", "noise", 216.00, duration_s=5.0,
                       brightness=0.8, attack_s=0.45, lfo_rate=0.18),
         ],
     )
@@ -772,13 +772,13 @@ def spectral_pad_bank() -> PadBank:
     return PadBank(
         name="SPECTRAL_PADS",
         presets=[
-            PadPreset("spectral_C3", "spectral", 130.81, duration_s=5.0,
+            PadPreset("spectral_C3", "spectral", 128.43, duration_s=5.0,
                       brightness=0.7, attack_s=0.4, lfo_rate=0.12),
-            PadPreset("spectral_E3", "spectral", 164.81, duration_s=5.0,
+            PadPreset("spectral_E3", "spectral", 161.81, duration_s=5.0,
                       brightness=0.6, attack_s=0.5, lfo_rate=0.15),
-            PadPreset("spectral_G3", "spectral", 196.00, duration_s=5.0,
+            PadPreset("spectral_G3", "spectral", 192.44, duration_s=5.0,
                       brightness=0.8, attack_s=0.35, lfo_rate=0.1),
-            PadPreset("spectral_A3", "spectral", 220.00, duration_s=5.0,
+            PadPreset("spectral_A3", "spectral", 216.00, duration_s=5.0,
                       brightness=0.65, attack_s=0.45, lfo_rate=0.2),
         ],
     )
@@ -789,13 +789,13 @@ def vocal_pad_bank() -> PadBank:
     return PadBank(
         name="VOCAL_PADS",
         presets=[
-            PadPreset("vocal_C3", "vocal", 130.81, duration_s=5.0,
+            PadPreset("vocal_C3", "vocal", 128.43, duration_s=5.0,
                       brightness=0.5, attack_s=0.5, lfo_rate=0.1),
-            PadPreset("vocal_E3", "vocal", 164.81, duration_s=5.0,
+            PadPreset("vocal_E3", "vocal", 161.81, duration_s=5.0,
                       brightness=0.6, attack_s=0.4, lfo_rate=0.15),
-            PadPreset("vocal_G3", "vocal", 196.00, duration_s=5.0,
+            PadPreset("vocal_G3", "vocal", 192.44, duration_s=5.0,
                       brightness=0.55, attack_s=0.55, lfo_rate=0.12),
-            PadPreset("vocal_A3", "vocal", 220.00, duration_s=5.0,
+            PadPreset("vocal_A3", "vocal", 216.00, duration_s=5.0,
                       brightness=0.7, attack_s=0.35, lfo_rate=0.18),
         ],
     )
@@ -806,13 +806,13 @@ def ambient_pad_bank() -> PadBank:
     return PadBank(
         name="AMBIENT_PADS",
         presets=[
-            PadPreset("ambient_C3", "ambient_pad", 130.81, duration_s=6.0,
+            PadPreset("ambient_C3", "ambient_pad", 128.43, duration_s=6.0,
                       brightness=0.4, attack_s=1.0, lfo_rate=0.08),
-            PadPreset("ambient_E3", "ambient_pad", 164.81, duration_s=5.0,
+            PadPreset("ambient_E3", "ambient_pad", 161.81, duration_s=5.0,
                       brightness=0.5, attack_s=0.8, lfo_rate=0.1),
-            PadPreset("ambient_G3", "ambient_pad", 196.00, duration_s=7.0,
+            PadPreset("ambient_G3", "ambient_pad", 192.44, duration_s=7.0,
                       brightness=0.35, attack_s=1.2, lfo_rate=0.06),
-            PadPreset("ambient_A3", "ambient_pad", 220.00, duration_s=5.0,
+            PadPreset("ambient_A3", "ambient_pad", 216.00, duration_s=5.0,
                       brightness=0.45, attack_s=0.9, lfo_rate=0.12),
         ],
     )
@@ -823,13 +823,13 @@ def fm_pad_bank() -> PadBank:
     return PadBank(
         name="FM_PADS",
         presets=[
-            PadPreset("fm_pad_C3", "fm_pad", 130.81, duration_s=5.0,
+            PadPreset("fm_pad_C3", "fm_pad", 128.43, duration_s=5.0,
                       brightness=0.6, attack_s=0.5, lfo_rate=0.1),
-            PadPreset("fm_pad_E3", "fm_pad", 164.81, duration_s=4.0,
+            PadPreset("fm_pad_E3", "fm_pad", 161.81, duration_s=4.0,
                       brightness=0.7, attack_s=0.4, lfo_rate=0.15),
-            PadPreset("fm_pad_G3", "fm_pad", 196.00, duration_s=6.0,
+            PadPreset("fm_pad_G3", "fm_pad", 192.44, duration_s=6.0,
                       brightness=0.5, attack_s=0.6, lfo_rate=0.08),
-            PadPreset("fm_pad_A3", "fm_pad", 220.00, duration_s=5.0,
+            PadPreset("fm_pad_A3", "fm_pad", 216.00, duration_s=5.0,
                       brightness=0.65, attack_s=0.45, lfo_rate=0.12),
         ],
     )

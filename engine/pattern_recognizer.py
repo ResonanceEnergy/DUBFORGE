@@ -8,8 +8,7 @@ detecting repetitions and motifs with PHI-ratio awareness.
 import math
 from dataclasses import dataclass, field
 
-from engine.config_loader import PHI
-A4_432 = 432.0
+from engine.config_loader import PHI, A4_432
 SAMPLE_RATE = 48000
 
 

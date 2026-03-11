@@ -22,7 +22,7 @@ import numpy as np
 
 from engine.phi_core import SAMPLE_RATE
 
-from engine.config_loader import PHI
+from engine.config_loader import PHI, A4_432
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -257,10 +257,10 @@ def bass_pipeline_bank() -> PipelineBank:
 
 def lead_pipeline_bank() -> PipelineBank:
     return PipelineBank("lead", [
-        PipelinePreset("lead_bright", "lead", _lead_stages(), base_freq=220.0),
-        PipelinePreset("lead_mid", "lead", _lead_stages(), base_freq=330.0),
-        PipelinePreset("lead_high", "lead", _lead_stages(), base_freq=440.0, gain_db=-2.0),
-        PipelinePreset("lead_phi", "lead", _lead_stages(), base_freq=220.0 * PHI),
+        PipelinePreset("lead_bright", "lead", _lead_stages(), base_freq=A4_432 / 2),  # A3=216
+        PipelinePreset("lead_mid", "lead", _lead_stages(), base_freq=A4_432 * 0.75),  # ~324
+        PipelinePreset("lead_high", "lead", _lead_stages(), base_freq=A4_432, gain_db=-2.0),
+        PipelinePreset("lead_phi", "lead", _lead_stages(), base_freq=(A4_432 / 2) * PHI),
     ])
 
 

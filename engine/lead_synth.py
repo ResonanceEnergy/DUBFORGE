@@ -580,13 +580,13 @@ def screech_lead_bank() -> LeadBank:
     return LeadBank(
         name="SCREECH_LEADS",
         presets=[
-            LeadPreset("screech_C4", "screech", 261.63,
+            LeadPreset("screech_C4", "screech", 256.87,
                        distortion=0.5, filter_cutoff=0.7, resonance=0.4),
-            LeadPreset("screech_E4", "screech", 329.63,
+            LeadPreset("screech_E4", "screech", 323.64,
                        distortion=0.6, filter_cutoff=0.8, resonance=0.5),
-            LeadPreset("screech_G4", "screech", 392.00,
+            LeadPreset("screech_G4", "screech", 384.87,
                        distortion=0.4, filter_cutoff=0.6, resonance=0.3),
-            LeadPreset("screech_A4", "screech", 440.00,
+            LeadPreset("screech_A4", "screech", 432.00,
                        distortion=0.7, filter_cutoff=0.9, resonance=0.6),
         ],
     )
@@ -597,13 +597,13 @@ def pluck_lead_bank() -> LeadBank:
     return LeadBank(
         name="PLUCK_LEADS",
         presets=[
-            LeadPreset("pluck_C4", "pluck", 261.63, duration_s=0.4,
+            LeadPreset("pluck_C4", "pluck", 256.87, duration_s=0.4,
                        attack_s=0.002, decay_s=0.15, sustain=0.3, release_s=0.1),
-            LeadPreset("pluck_E4", "pluck", 329.63, duration_s=0.4,
+            LeadPreset("pluck_E4", "pluck", 323.64, duration_s=0.4,
                        attack_s=0.003, decay_s=0.12, sustain=0.25, release_s=0.08),
-            LeadPreset("pluck_G4", "pluck", 392.00, duration_s=0.4,
+            LeadPreset("pluck_G4", "pluck", 384.87, duration_s=0.4,
                        attack_s=0.002, decay_s=0.18, sustain=0.35, release_s=0.12),
-            LeadPreset("pluck_A4", "pluck", 440.00, duration_s=0.4,
+            LeadPreset("pluck_A4", "pluck", 432.00, duration_s=0.4,
                        attack_s=0.001, decay_s=0.1, sustain=0.2, release_s=0.08),
         ],
     )
@@ -614,13 +614,13 @@ def fm_lead_bank() -> LeadBank:
     return LeadBank(
         name="FM_LEADS",
         presets=[
-            LeadPreset("fm_lead_C4", "fm_lead", 261.63,
+            LeadPreset("fm_lead_C4", "fm_lead", 256.87,
                        fm_ratio=2.0, fm_depth=3.0, distortion=0.1),
-            LeadPreset("fm_lead_E4", "fm_lead", 329.63,
+            LeadPreset("fm_lead_E4", "fm_lead", 323.64,
                        fm_ratio=3.0, fm_depth=2.5, distortion=0.15),
-            LeadPreset("fm_lead_G4", "fm_lead", 392.00,
+            LeadPreset("fm_lead_G4", "fm_lead", 384.87,
                        fm_ratio=1.5, fm_depth=4.0, distortion=0.2),
-            LeadPreset("fm_lead_A4", "fm_lead", 440.00,
+            LeadPreset("fm_lead_A4", "fm_lead", 432.00,
                        fm_ratio=2.5, fm_depth=2.0, distortion=0.05),
         ],
     )
@@ -631,13 +631,13 @@ def supersaw_lead_bank() -> LeadBank:
     return LeadBank(
         name="SUPERSAW_LEADS",
         presets=[
-            LeadPreset("supersaw_C4", "supersaw", 261.63, duration_s=1.0,
+            LeadPreset("supersaw_C4", "supersaw", 256.87, duration_s=1.0,
                        detune_cents=15, filter_cutoff=0.7, attack_s=0.05),
-            LeadPreset("supersaw_E4", "supersaw", 329.63, duration_s=1.0,
+            LeadPreset("supersaw_E4", "supersaw", 323.64, duration_s=1.0,
                        detune_cents=20, filter_cutoff=0.8, attack_s=0.03),
-            LeadPreset("supersaw_G4", "supersaw", 392.00, duration_s=1.0,
+            LeadPreset("supersaw_G4", "supersaw", 384.87, duration_s=1.0,
                        detune_cents=12, filter_cutoff=0.6, attack_s=0.08),
-            LeadPreset("supersaw_A4", "supersaw", 440.00, duration_s=1.0,
+            LeadPreset("supersaw_A4", "supersaw", 432.00, duration_s=1.0,
                        detune_cents=18, filter_cutoff=0.75, attack_s=0.04),
         ],
     )
@@ -648,13 +648,13 @@ def acid_lead_bank() -> LeadBank:
     return LeadBank(
         name="ACID_LEADS",
         presets=[
-            LeadPreset("acid_C3", "acid", 130.81, duration_s=0.6,
+            LeadPreset("acid_C3", "acid", 128.43, duration_s=0.6,
                        filter_cutoff=0.9, resonance=0.7, distortion=0.3),
-            LeadPreset("acid_E3", "acid", 164.81, duration_s=0.6,
+            LeadPreset("acid_E3", "acid", 161.81, duration_s=0.6,
                        filter_cutoff=0.8, resonance=0.6, distortion=0.25),
-            LeadPreset("acid_G3", "acid", 196.00, duration_s=0.6,
+            LeadPreset("acid_G3", "acid", 192.44, duration_s=0.6,
                        filter_cutoff=0.95, resonance=0.8, distortion=0.4),
-            LeadPreset("acid_A3", "acid", 220.00, duration_s=0.6,
+            LeadPreset("acid_A3", "acid", 216.00, duration_s=0.6,
                        filter_cutoff=0.85, resonance=0.5, distortion=0.2),
         ],
     )
@@ -665,13 +665,13 @@ def saw_lead_bank() -> LeadBank:
     return LeadBank(
         name="SAW_LEADS",
         presets=[
-            LeadPreset("saw_C4", "saw", 261.63, duration_s=0.6,
+            LeadPreset("saw_C4", "saw", 256.87, duration_s=0.6,
                        detune_cents=8, filter_cutoff=0.8, resonance=0.3),
-            LeadPreset("saw_E4", "saw", 329.63, duration_s=0.6,
+            LeadPreset("saw_E4", "saw", 323.64, duration_s=0.6,
                        detune_cents=10, filter_cutoff=0.85, resonance=0.35),
-            LeadPreset("saw_G4", "saw", 392.00, duration_s=0.6,
+            LeadPreset("saw_G4", "saw", 384.87, duration_s=0.6,
                        detune_cents=6, filter_cutoff=0.75, resonance=0.25),
-            LeadPreset("saw_A4", "saw", 440.00, duration_s=0.6,
+            LeadPreset("saw_A4", "saw", 432.00, duration_s=0.6,
                        detune_cents=12, filter_cutoff=0.9, resonance=0.4),
         ],
     )
@@ -682,13 +682,13 @@ def pwm_lead_bank() -> LeadBank:
     return LeadBank(
         name="PWM_LEADS",
         presets=[
-            LeadPreset("pwm_C4", "pwm", 261.63, duration_s=0.8,
+            LeadPreset("pwm_C4", "pwm", 256.87, duration_s=0.8,
                        filter_cutoff=0.7, distortion=0.1),
-            LeadPreset("pwm_E4", "pwm", 329.63, duration_s=0.8,
+            LeadPreset("pwm_E4", "pwm", 323.64, duration_s=0.8,
                        filter_cutoff=0.75, distortion=0.15),
-            LeadPreset("pwm_G4", "pwm", 392.00, duration_s=0.8,
+            LeadPreset("pwm_G4", "pwm", 384.87, duration_s=0.8,
                        filter_cutoff=0.65, distortion=0.05),
-            LeadPreset("pwm_A4", "pwm", 440.00, duration_s=0.8,
+            LeadPreset("pwm_A4", "pwm", 432.00, duration_s=0.8,
                        filter_cutoff=0.8, distortion=0.2),
         ],
     )
@@ -699,13 +699,13 @@ def formant_lead_bank() -> LeadBank:
     return LeadBank(
         name="FORMANT_LEADS",
         presets=[
-            LeadPreset("formant_C4", "formant", 261.63, duration_s=0.7,
+            LeadPreset("formant_C4", "formant", 256.87, duration_s=0.7,
                        resonance=0.6, distortion=0.15),
-            LeadPreset("formant_E4", "formant", 329.63, duration_s=0.7,
+            LeadPreset("formant_E4", "formant", 323.64, duration_s=0.7,
                        resonance=0.5, distortion=0.1),
-            LeadPreset("formant_G4", "formant", 392.00, duration_s=0.7,
+            LeadPreset("formant_G4", "formant", 384.87, duration_s=0.7,
                        resonance=0.7, distortion=0.2),
-            LeadPreset("formant_A4", "formant", 440.00, duration_s=0.7,
+            LeadPreset("formant_A4", "formant", 432.00, duration_s=0.7,
                        resonance=0.55, distortion=0.12),
         ],
     )
@@ -716,13 +716,13 @@ def phase_lead_bank() -> LeadBank:
     return LeadBank(
         name="PHASE_LEADS",
         presets=[
-            LeadPreset("phase_C4", "phase_lead", 261.63, duration_s=0.6,
+            LeadPreset("phase_C4", "phase_lead", 256.87, duration_s=0.6,
                        filter_cutoff=0.7, distortion=0.1),
-            LeadPreset("phase_E4", "phase_lead", 329.63, duration_s=0.6,
+            LeadPreset("phase_E4", "phase_lead", 323.64, duration_s=0.6,
                        filter_cutoff=0.8, distortion=0.15),
-            LeadPreset("phase_G4", "phase_lead", 392.00, duration_s=0.6,
+            LeadPreset("phase_G4", "phase_lead", 384.87, duration_s=0.6,
                        filter_cutoff=0.6, distortion=0.05),
-            LeadPreset("phase_A4", "phase_lead", 440.00, duration_s=0.6,
+            LeadPreset("phase_A4", "phase_lead", 432.00, duration_s=0.6,
                        filter_cutoff=0.75, distortion=0.12),
         ],
     )
@@ -733,13 +733,13 @@ def ring_mod_lead_bank() -> LeadBank:
     return LeadBank(
         name="RING_MOD_LEADS",
         presets=[
-            LeadPreset("ring_mod_C4", "ring_mod", 261.63, duration_s=0.5,
+            LeadPreset("ring_mod_C4", "ring_mod", 256.87, duration_s=0.5,
                        fm_ratio=1.5, fm_depth=0.6, distortion=0.1),
-            LeadPreset("ring_mod_E4", "ring_mod", 329.63, duration_s=0.5,
+            LeadPreset("ring_mod_E4", "ring_mod", 323.64, duration_s=0.5,
                        fm_ratio=2.0, fm_depth=0.5, distortion=0.15),
-            LeadPreset("ring_mod_G4", "ring_mod", 392.00, duration_s=0.5,
+            LeadPreset("ring_mod_G4", "ring_mod", 384.87, duration_s=0.5,
                        fm_ratio=1.618, fm_depth=0.7, distortion=0.08),
-            LeadPreset("ring_mod_A4", "ring_mod", 440.00, duration_s=0.5,
+            LeadPreset("ring_mod_A4", "ring_mod", 432.00, duration_s=0.5,
                        fm_ratio=1.333, fm_depth=0.55, distortion=0.12),
         ],
     )
@@ -750,13 +750,13 @@ def wavetable_lead_bank() -> LeadBank:
     return LeadBank(
         name="WAVETABLE_LEADS",
         presets=[
-            LeadPreset("wavetable_C4", "wavetable", 261.63, duration_s=0.5,
+            LeadPreset("wavetable_C4", "wavetable", 256.87, duration_s=0.5,
                        filter_cutoff=0.7, distortion=0.1),
-            LeadPreset("wavetable_E4", "wavetable", 329.63, duration_s=0.5,
+            LeadPreset("wavetable_E4", "wavetable", 323.64, duration_s=0.5,
                        filter_cutoff=0.8, distortion=0.2),
-            LeadPreset("wavetable_G4", "wavetable", 392.00, duration_s=0.6,
+            LeadPreset("wavetable_G4", "wavetable", 384.87, duration_s=0.6,
                        filter_cutoff=0.6, distortion=0.05),
-            LeadPreset("wavetable_A4", "wavetable", 440.00, duration_s=0.5,
+            LeadPreset("wavetable_A4", "wavetable", 432.00, duration_s=0.5,
                        filter_cutoff=0.9, distortion=0.15),
         ],
     )
@@ -767,13 +767,13 @@ def granular_lead_bank() -> LeadBank:
     return LeadBank(
         name="GRANULAR_LEADS",
         presets=[
-            LeadPreset("granular_C4", "granular", 261.63, duration_s=0.6,
+            LeadPreset("granular_C4", "granular", 256.87, duration_s=0.6,
                        filter_cutoff=0.6, distortion=0.1),
-            LeadPreset("granular_E4", "granular", 329.63, duration_s=0.5,
+            LeadPreset("granular_E4", "granular", 323.64, duration_s=0.5,
                        filter_cutoff=0.7, distortion=0.15),
-            LeadPreset("granular_G4", "granular", 392.00, duration_s=0.5,
+            LeadPreset("granular_G4", "granular", 384.87, duration_s=0.5,
                        filter_cutoff=0.5, distortion=0.05),
-            LeadPreset("granular_A4", "granular", 440.00, duration_s=0.6,
+            LeadPreset("granular_A4", "granular", 432.00, duration_s=0.6,
                        filter_cutoff=0.8, distortion=0.2),
         ],
     )
@@ -784,13 +784,13 @@ def sync_lead_bank() -> LeadBank:
     return LeadBank(
         name="SYNC_LEADS",
         presets=[
-            LeadPreset("sync_C4", "sync", 261.63, duration_s=0.5,
+            LeadPreset("sync_C4", "sync", 256.87, duration_s=0.5,
                        fm_ratio=PHI, distortion=0.15),
-            LeadPreset("sync_E4", "sync", 329.63, duration_s=0.5,
+            LeadPreset("sync_E4", "sync", 323.64, duration_s=0.5,
                        fm_ratio=2.0, distortion=0.2),
-            LeadPreset("sync_G4", "sync", 392.00, duration_s=0.5,
+            LeadPreset("sync_G4", "sync", 384.87, duration_s=0.5,
                        fm_ratio=1.5, distortion=0.1),
-            LeadPreset("sync_A4", "sync", 440.00, duration_s=0.5,
+            LeadPreset("sync_A4", "sync", 432.00, duration_s=0.5,
                        fm_ratio=2.5, distortion=0.25),
         ],
     )
@@ -801,13 +801,13 @@ def chip_lead_bank() -> LeadBank:
     return LeadBank(
         name="CHIP_LEADS",
         presets=[
-            LeadPreset("chip_C4", "chip", 261.63, duration_s=0.5,
+            LeadPreset("chip_C4", "chip", 256.87, duration_s=0.5,
                        filter_cutoff=0.9),
-            LeadPreset("chip_E4", "chip", 329.63, duration_s=0.5,
+            LeadPreset("chip_E4", "chip", 323.64, duration_s=0.5,
                        filter_cutoff=0.8),
-            LeadPreset("chip_G4", "chip", 392.00, duration_s=0.5,
+            LeadPreset("chip_G4", "chip", 384.87, duration_s=0.5,
                        filter_cutoff=0.7),
-            LeadPreset("chip_A4", "chip", 440.00, duration_s=0.5,
+            LeadPreset("chip_A4", "chip", 432.00, duration_s=0.5,
                        filter_cutoff=0.85),
         ],
     )
@@ -818,13 +818,13 @@ def distorted_lead_bank() -> LeadBank:
     return LeadBank(
         name="DISTORTED_LEADS",
         presets=[
-            LeadPreset("dist_lead_C4", "distorted_lead", 261.63, duration_s=0.5,
+            LeadPreset("dist_lead_C4", "distorted_lead", 256.87, duration_s=0.5,
                        distortion=0.7, filter_cutoff=0.9),
-            LeadPreset("dist_lead_E4", "distorted_lead", 329.63, duration_s=0.5,
+            LeadPreset("dist_lead_E4", "distorted_lead", 323.64, duration_s=0.5,
                        distortion=0.8, filter_cutoff=0.85),
-            LeadPreset("dist_lead_G4", "distorted_lead", 392.00, duration_s=0.5,
+            LeadPreset("dist_lead_G4", "distorted_lead", 384.87, duration_s=0.5,
                        distortion=0.6, filter_cutoff=0.95),
-            LeadPreset("dist_lead_A4", "distorted_lead", 440.00, duration_s=0.5,
+            LeadPreset("dist_lead_A4", "distorted_lead", 432.00, duration_s=0.5,
                        distortion=0.9, filter_cutoff=0.8),
         ],
     )
@@ -835,13 +835,13 @@ def harmonic_lead_bank() -> LeadBank:
     return LeadBank(
         name="HARMONIC_LEADS",
         presets=[
-            LeadPreset("harmonic_C4", "harmonic_lead", 261.63, duration_s=0.5,
+            LeadPreset("harmonic_C4", "harmonic_lead", 256.87, duration_s=0.5,
                        filter_cutoff=0.8),
-            LeadPreset("harmonic_E4", "harmonic_lead", 329.63, duration_s=0.5,
+            LeadPreset("harmonic_E4", "harmonic_lead", 323.64, duration_s=0.5,
                        filter_cutoff=0.7),
-            LeadPreset("harmonic_G4", "harmonic_lead", 392.00, duration_s=0.5,
+            LeadPreset("harmonic_G4", "harmonic_lead", 384.87, duration_s=0.5,
                        filter_cutoff=0.9, distortion=0.1),
-            LeadPreset("harmonic_A4", "harmonic_lead", 440.00, duration_s=0.5,
+            LeadPreset("harmonic_A4", "harmonic_lead", 432.00, duration_s=0.5,
                        filter_cutoff=0.75, distortion=0.15),
         ],
     )

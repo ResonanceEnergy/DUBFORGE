@@ -32,7 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
-from engine.config_loader import PHI
+from engine.config_loader import PHI, A4_432, A4_440
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
 
@@ -43,9 +43,13 @@ _log = get_logger("dubforge.bass_oneshot")
 # MIDI NOTE FREQUENCIES
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _midi_to_freq(note: int) -> float:
-    """Convert MIDI note number to frequency in Hz (A4=440)."""
-    return 440.0 * (2 ** ((note - 69) / 12))
+def _midi_to_freq(note: int, a4: float = A4_432) -> float:
+    """Convert MIDI note number to frequency in Hz.
+
+    Default: A4=432 Hz (DUBFORGE golden-ratio standard).
+    Pass a4=A4_440 for standard concert pitch.
+    """
+    return a4 * (2 ** ((note - 69) / 12))
 
 
 NOTE_C1 = _midi_to_freq(24)   # ~32.70 Hz
