@@ -14,6 +14,8 @@ Usage:
     python forge.py --serum      # wavetables only
     python forge.py --ableton    # .als project only
     python forge.py --track      # mixed track only
+    python forge.py --live --song "NAME"   # LIVE: Ableton + Serum 2 via OSC
+    python forge.py --live --song "NAME" --offline  # MIDI files only (no Ableton)
 
 Output tree:
     output/
@@ -903,17 +905,147 @@ def _default_v5_dna() -> SongDNA:
 # ═══════════════════════════════════════════
 
 def _ott_simulate(sig: list[float], amount: float = 0.4) -> list[float]:
-    """Simulate OTT multiband upward compression — gentle settings."""
+    """Simulate OTT multiband upward compression — AGGRESSIVE Subtronics-tier.
+
+    Three-band compression: lows get glued, mids get SMASHED, highs get air.
+    """
+    from engine.dsp_core import svf_lowpass, svf_highpass
     sat = SaturationEngine(sample_rate=SR)
-    compressed = compress(sig, CompressorSettings(
-        threshold_db=-12.0, ratio=3.0, attack_ms=2.0,
-        release_ms=50.0, knee_db=8.0, makeup_db=3.0, mix=amount
+    sig_np = np.array(sig, dtype=np.float64) if not isinstance(sig, np.ndarray) else sig
+
+    # Split into 3 bands  (< 200 Hz, 200-3000 Hz, > 3000 Hz)
+    lo = svf_lowpass(sig_np, 200.0, 0.0, SR)
+    hi = svf_highpass(sig_np, 3000.0, 0.0, SR)
+    mid = sig_np - lo - hi
+
+    # Low band — gentle glue
+    lo_list = lo.tolist() if isinstance(lo, np.ndarray) else list(lo)
+    lo_comp = compress(lo_list, CompressorSettings(
+        threshold_db=-18.0, ratio=3.0, attack_ms=5.0,
+        release_ms=80.0, knee_db=6.0, makeup_db=2.0, mix=amount * 0.6
     ))
-    excited = sat.harmonic_exciter(compressed, amount=amount * 0.25, frequency=3000)
-    result = sat.saturate(excited, SatConfig(
-        sat_type="tape", drive=0.1 * amount, mix=amount * 0.2
+    # Mid band — HEAVY upward compression (the OTT character)
+    mid_list = mid.tolist() if isinstance(mid, np.ndarray) else list(mid)
+    mid_comp = compress(mid_list, CompressorSettings(
+        threshold_db=-24.0, ratio=6.0, attack_ms=0.5,
+        release_ms=20.0, knee_db=3.0, makeup_db=8.0 * amount, mix=amount
+    ))
+    mid_comp = sat.saturate(mid_comp, SatConfig(
+        sat_type="tube", drive=0.3 * amount, mix=amount * 0.5
+    ))
+    # High band — airy excitement
+    hi_list = hi.tolist() if isinstance(hi, np.ndarray) else list(hi)
+    hi_comp = compress(hi_list, CompressorSettings(
+        threshold_db=-20.0, ratio=4.0, attack_ms=1.0,
+        release_ms=30.0, knee_db=5.0, makeup_db=5.0 * amount, mix=amount * 0.8
+    ))
+    hi_comp = sat.harmonic_exciter(hi_comp, amount=amount * 0.4, frequency=4500)
+
+    # Recombine
+    n = min(len(lo_comp), len(mid_comp), len(hi_comp))
+    result = [0.0] * n
+    for i in range(n):
+        result[i] = lo_comp[i] + mid_comp[i] + hi_comp[i]
+    # Final saturation glue
+    result = sat.saturate(result, SatConfig(
+        sat_type="tape", drive=0.15 * amount, mix=amount * 0.3
     ))
     return result
+
+
+def _unison_bass(sig, n_voices: int = 5, detune_cents: float = 12.0,
+                 stereo: bool = False):
+    """Create MASSIVE unison by duplicating signal with pitch shifts.
+
+    Returns mono (summed) or stereo (L/R) unison stack.
+    Subtronics uses 5-7 voices with ~10-15 cents detune.
+    """
+    sig_np = np.array(sig, dtype=np.float64) if not isinstance(sig, np.ndarray) else sig.copy()
+    n = len(sig_np)
+
+    # Voice offsets symmetric around center:  -2, -1, 0, +1, +2 for 5 voices
+    half = n_voices // 2
+    offsets = list(range(-half, half + 1)) if n_voices % 2 == 1 else list(range(-half, half))
+    if len(offsets) < n_voices:
+        offsets.append(half)
+
+    voices_l = np.zeros(n)
+    voices_r = np.zeros(n)
+
+    for idx, off in enumerate(offsets):
+        # Pitch shift via resampling (fast approximation)
+        ratio = 2 ** (off * detune_cents / (1200.0 * half)) if half > 0 else 1.0
+        if abs(ratio - 1.0) < 1e-6:
+            voice = sig_np.copy()
+        else:
+            # Resample: stretch/compress the signal
+            new_len = int(n / ratio)
+            indices = np.linspace(0, n - 1, new_len)
+            voice_resampled = np.interp(indices, np.arange(n), sig_np)
+            # Fit back to original length
+            voice = np.zeros(n)
+            copy_len = min(n, len(voice_resampled))
+            voice[:copy_len] = voice_resampled[:copy_len]
+
+        # Pan voices across stereo field
+        if stereo:
+            pan = off / max(half, 1)  # -1 to +1
+            l_gain = np.cos(max(0, pan) * np.pi / 2)
+            r_gain = np.cos(max(0, -pan) * np.pi / 2)
+            voices_l += voice * l_gain
+            voices_r += voice * r_gain
+        else:
+            voices_l += voice
+
+    # Normalize by sqrt of voices (constant power)
+    scale = 1.0 / np.sqrt(n_voices)
+    voices_l *= scale
+    voices_r *= scale
+
+    if stereo:
+        return voices_l, voices_r
+    return voices_l.tolist()
+
+
+def _stack_distortion(sig, drive: float = 1.0, stages: int = 3):
+    """Multi-stage serial distortion — Subtronics-style processing chain.
+
+    Each stage uses a different distortion type for harmonic richness:
+    1. Tube warmth (even harmonics)
+    2. Tape compression (soft knee)
+    3. Foldback (aggressive odd harmonics)
+
+    Drive scales all stages proportionally.
+    """
+    sig_np = np.array(sig, dtype=np.float64) if not isinstance(sig, np.ndarray) else sig.copy()
+
+    if stages >= 1:
+        # Stage 1: Tube — asymmetric tanh for even harmonics
+        sig_np = apply_multiband_distortion(sig_np, MultibandDistPreset(
+            name="Stack1Tube", dist_type="tube",
+            low_drive=0.1, mid_drive=drive * 0.8, high_drive=0.15,
+            crossover_low=120.0, crossover_high=3000.0, output_gain=0.9
+        ))
+
+    if stages >= 2:
+        # Stage 2: Tape — soft compression adds body
+        sig_np = apply_multiband_distortion(sig_np, MultibandDistPreset(
+            name="Stack2Tape", dist_type="tape",
+            low_drive=0.05, mid_drive=drive * 0.6, high_drive=0.1,
+            crossover_low=100.0, crossover_high=3500.0, output_gain=0.88
+        ))
+
+    if stages >= 3:
+        # Stage 3: Aggressive — wavefolder/hard clip for edge
+        sig_np = apply_multiband_distortion(sig_np, MultibandDistPreset(
+            name="Stack3Agg", dist_type="aggressive",
+            low_drive=0.0, mid_drive=drive * 0.5, high_drive=0.2,
+            crossover_low=150.0, crossover_high=2500.0, output_gain=0.85
+        ))
+
+    if isinstance(sig, list):
+        return sig_np.tolist() if isinstance(sig_np, np.ndarray) else list(sig_np)
+    return sig_np
 
 
 def _wavetable_to_audio(frames: list[np.ndarray], freq: float,
@@ -1283,15 +1415,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
         sync_division=2.0
     ), duration_s=BEAT * 2)
     fm_growl_np = fm_growl_np * (0.2 + 0.8 * lfo_fg[:len(fm_growl_np)])
-    # Multiband distortion — DNA-driven mids (gentle)
-    fm_growl_np = apply_multiband_distortion(fm_growl_np, MultibandDistPreset(
-        name="FMDist", dist_type="tube", low_drive=0.15,
-        mid_drive=bd.mid_drive * 0.5, high_drive=0.2,
-        crossover_low=130.0, crossover_high=3000.0, output_gain=0.85
-    ))
+    # UNISON — 5 detuned voices for massive width
+    fm_growl_np = np.array(_unison_bass(fm_growl_np, n_voices=5, detune_cents=12.0))
+    # STACKED DISTORTION — 3 serial stages (tube → tape → aggressive)
+    fm_growl_np = _stack_distortion(fm_growl_np, drive=bd.mid_drive * 2.0, stages=3)
     fm_growl = to_list(fm_growl_np)
-    fm_growl = _ott_simulate(fm_growl, bd.ott_amount)
-    fm_growl = normalize(fm_growl, 0.60)
+    fm_growl = _ott_simulate(fm_growl, min(bd.ott_amount * 1.3, 1.0))
+    fm_growl = normalize(fm_growl, 0.65)
 
     # BASS 2: Growl Resampler — DNA fm_depth drives wavetable character
     print("    Growl Resampler wavetable...")
@@ -1300,14 +1430,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
     growl_frames = growl_resample_pipeline(growl_source, n_output_frames=256)
     growl_wt_np = _wavetable_to_audio(growl_frames, freq=FREQ["F2"],
                                        duration_s=BEAT * 2, sr=SR)
-    growl_wt_np = apply_multiband_distortion(growl_wt_np, MultibandDistPreset(
-        name="GrlWTDist", dist_type="tube", low_drive=0.2,
-        mid_drive=bd.mid_drive * 0.5, high_drive=0.15,
-        crossover_low=120.0, crossover_high=2800.0, output_gain=0.85
-    ))
+    # UNISON — 5 voices for Subtronics-tier width
+    growl_wt_np = np.array(_unison_bass(growl_wt_np, n_voices=5, detune_cents=10.0))
+    # STACKED DISTORTION — 3 stages
+    growl_wt_np = _stack_distortion(growl_wt_np, drive=bd.mid_drive * 2.0, stages=3)
     growl_wt = to_list(growl_wt_np)
-    growl_wt = _ott_simulate(growl_wt, bd.ott_amount)
-    growl_wt = normalize(growl_wt, 0.58)
+    growl_wt = _ott_simulate(growl_wt, min(bd.ott_amount * 1.3, 1.0))
+    growl_wt = normalize(growl_wt, 0.62)
 
     # BASS 3: Dist FM — DNA distortion + filter
     print(f"    Dist FM (dist={bd.distortion:.2f})...")
@@ -1317,13 +1446,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
         distortion=bd.distortion, filter_cutoff=bd.filter_cutoff
     )))
     dist_fm_np = to_np(dist_fm)
-    dist_fm_np = apply_multiband_distortion(dist_fm_np, MultibandDistPreset(
-        name="DFMDist", dist_type="tube", low_drive=0.15,
-        mid_drive=bd.mid_drive * 0.5, high_drive=0.2, output_gain=0.85
-    ))
+    # UNISON — 5 voices
+    dist_fm_np = np.array(_unison_bass(dist_fm_np, n_voices=5, detune_cents=14.0))
+    # STACKED DISTORTION — 3 stages
+    dist_fm_np = _stack_distortion(dist_fm_np, drive=bd.mid_drive * 2.5, stages=3)
     dist_fm = to_list(dist_fm_np)
-    dist_fm = _ott_simulate(dist_fm, bd.ott_amount)
-    dist_fm = normalize(dist_fm, 0.58)
+    dist_fm = _ott_simulate(dist_fm, min(bd.ott_amount * 1.3, 1.0))
+    dist_fm = normalize(dist_fm, 0.62)
 
     # BASS 4: Sync bass — DNA lfo_rate drives sweep
     print("    Sync bass...")
@@ -1338,13 +1467,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
         depth=bd.lfo_depth * 0.88, polarity="unipolar"
     ), duration_s=BEAT * 1.5)
     sync_np = sync_np * (0.3 + 0.7 * lfo_sync[:len(sync_np)])
-    sync_np = apply_multiband_distortion(sync_np, MultibandDistPreset(
-        name="SyncDist", dist_type="tube", low_drive=0.2,
-        mid_drive=bd.mid_drive * 0.5, high_drive=0.15, output_gain=0.85
-    ))
+    # UNISON — 5 voices
+    sync_np = np.array(_unison_bass(sync_np, n_voices=5, detune_cents=10.0))
+    # STACKED DISTORTION — 3 stages
+    sync_np = _stack_distortion(sync_np, drive=bd.mid_drive * 2.0, stages=3)
     sync_bass = to_list(sync_np)
-    sync_bass = _ott_simulate(sync_bass, bd.ott_amount * 0.88)
-    sync_bass = normalize(sync_bass, 0.58)
+    sync_bass = _ott_simulate(sync_bass, min(bd.ott_amount * 1.2, 1.0))
+    sync_bass = normalize(sync_bass, 0.60)
 
     # BASS 5: Acid bass — DNA acid_resonance drives filter character
     print(f"    Acid bass (res={bd.acid_resonance:.2f})...")
@@ -1354,13 +1483,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
         filter_cutoff=bd.filter_cutoff * 1.12
     )))
     acid_np = to_np(acid)
-    acid_np = apply_multiband_distortion(acid_np, MultibandDistPreset(
-        name="AcidDist", dist_type="tube", low_drive=0.15,
-        mid_drive=bd.mid_drive * 0.5, high_drive=0.1, output_gain=0.88
-    ))
+    # UNISON — 5 voices
+    acid_np = np.array(_unison_bass(acid_np, n_voices=5, detune_cents=8.0))
+    # STACKED DISTORTION — 2 stages (acid needs to keep filter character)
+    acid_np = _stack_distortion(acid_np, drive=bd.mid_drive * 1.8, stages=2)
     acid = to_list(acid_np)
-    acid = _ott_simulate(acid, bd.ott_amount * 0.75)
-    acid = normalize(acid, 0.55)
+    acid = _ott_simulate(acid, min(bd.ott_amount * 1.1, 1.0))
+    acid = normalize(acid, 0.58)
 
     # BASS 6: Neuro — DNA fm_depth + lfo_rate for phase distortion chaos
     print(f"    Neuro bass (fm={bd.fm_depth:.1f})...")
@@ -1375,15 +1504,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
         depth=bd.lfo_depth * 0.94, polarity="unipolar", pulse_width=0.3
     ), duration_s=BEAT)
     neuro_np = neuro_np * (0.25 + 0.75 * lfo_n[:len(neuro_np)])
-    neuro_np = apply_multiband_distortion(neuro_np, MultibandDistPreset(
-        name="NroDist", dist_type="tube", low_drive=0.1,
-        mid_drive=bd.mid_drive * 0.6,
-        high_drive=0.25, crossover_low=100.0, crossover_high=3500.0,
-        output_gain=0.82
-    ))
+    # UNISON — 7 voices for maximum chaos
+    neuro_np = np.array(_unison_bass(neuro_np, n_voices=7, detune_cents=15.0))
+    # STACKED DISTORTION — 3 stages, HARDEST of all bass types
+    neuro_np = _stack_distortion(neuro_np, drive=bd.mid_drive * 3.0, stages=3)
     neuro = to_list(neuro_np)
-    neuro = _ott_simulate(neuro, bd.ott_amount)
-    neuro = normalize(neuro, 0.55)
+    neuro = _ott_simulate(neuro, min(bd.ott_amount * 1.4, 1.0))
+    neuro = normalize(neuro, 0.58)
 
     # BASS 7: Formant "yoi" — DNA distortion + brightness
     print("    Formant bass...")
@@ -1394,13 +1521,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
         distortion=bd.distortion * 0.44
     ))
     form_np = to_np(formant_raw)
-    form_np = apply_multiband_distortion(form_np, MultibandDistPreset(
-        name="FormDist", dist_type="tube", low_drive=0.2,
-        mid_drive=bd.mid_drive * 0.5, high_drive=0.12, output_gain=0.85
-    ))
+    # UNISON — 5 voices
+    form_np = np.array(_unison_bass(form_np, n_voices=5, detune_cents=10.0))
+    # STACKED DISTORTION — 3 stages
+    form_np = _stack_distortion(form_np, drive=bd.mid_drive * 2.0, stages=3)
     formant = to_list(form_np)
-    formant = _ott_simulate(formant, bd.ott_amount * 0.88)
-    formant = normalize(formant, 0.55)
+    formant = _ott_simulate(formant, min(bd.ott_amount * 1.2, 1.0))
+    formant = normalize(formant, 0.58)
 
     # Pitch-dive variant — DNA pitch_dive_semi
     dive_raw = to_list(fm_growl)
@@ -1468,54 +1595,68 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Leads (DNA-DRIVEN)
     # ═══════════════════════════════════════════
-    print(f"  [3/9] Leads — {ld.additive_partials}p {ld.additive_rolloff} + FM...")
+    print(f"  [3/9] Leads — SCREECH + FM + {ld.additive_partials}p additive, unison...")
 
-    # Lead maker — DNA-driven partial count, rolloff, FM depth
+    # Lead maker — UPGRADED: screech layer + FM + additive, 5-voice unison,
+    # SVF filter, stacked distortion. Sounds like Subtronics, not MIDI.
     def make_lead(freq, dur):
         ld_parts = []
-        if ld.use_additive:
-            add_patch = AdditivePatch(
-                name="Lead",
-                partials=harmonic_partials(ld.additive_partials, rolloff=ld.additive_rolloff),
-                master_gain=0.7,
-            )
-            ld_parts.append(("add", render_additive(add_patch, freq=freq, duration=dur)))
 
+        # Layer 1: SCREECH — the main lead sound (bandlimited square → SVF → saturation)
+        screech_sig = synthesize_screech_lead(LeadPreset(
+            name="Screech", lead_type="screech", frequency=freq, duration_s=dur,
+            filter_cutoff=0.65 + ld.brightness * 0.3,
+            resonance=0.4, distortion=0.5 + ld.brightness * 0.3,
+            attack_s=0.003, decay_s=0.1, sustain=0.7, release_s=min(dur * 0.3, 0.15),
+        ))
+        ld_parts.append(("screech", screech_sig.tolist()))
+
+        # Layer 2: FM — metallic harmonics for bite
         if ld.use_fm:
             fm_ops = [
-                FMOperator(freq_ratio=1.0, amplitude=0.7, mod_index=ld.fm_depth,
-                           feedback=0.15, envelope=(0.003, 0.1, 0.5, 0.15)),
-                FMOperator(freq_ratio=PHI, amplitude=0.4, mod_index=ld.fm_depth * 0.67,
+                FMOperator(freq_ratio=1.0, amplitude=0.7, mod_index=ld.fm_depth * 1.5,
+                           feedback=0.2, envelope=(0.003, 0.1, 0.5, 0.15)),
+                FMOperator(freq_ratio=PHI, amplitude=0.4, mod_index=ld.fm_depth,
                            feedback=0.0, envelope=(0.005, 0.08, 0.3, 0.1)),
             ]
             if ld.fm_operators >= 3:
                 fm_ops.append(FMOperator(
-                    freq_ratio=PHI * 2, amplitude=0.2, mod_index=ld.fm_depth * 0.33,
-                    feedback=0.05, envelope=(0.002, 0.06, 0.2, 0.08)))
+                    freq_ratio=PHI * 2, amplitude=0.25, mod_index=ld.fm_depth * 0.5,
+                    feedback=0.08, envelope=(0.002, 0.06, 0.2, 0.08)))
             fm_ld = render_fm(FMPatch(
                 name="LeadFM", operators=fm_ops,
                 algorithm=0, master_gain=0.5,
             ), freq=freq, duration=dur)
             ld_parts.append(("fm", fm_ld))
 
-        # Mix layers
-        if len(ld_parts) == 2:
-            mix_a, mix_b = 0.6, 0.4
-        elif len(ld_parts) == 1:
-            mix_a, mix_b = 1.0, 0.0
-        else:
-            mix_a, mix_b = 0.5, 0.5
+        # Layer 3: Additive — harmonic body (optional, thins if too many layers)
+        if ld.use_additive:
+            add_patch = AdditivePatch(
+                name="Lead",
+                partials=harmonic_partials(ld.additive_partials, rolloff=ld.additive_rolloff),
+                master_gain=0.4,
+            )
+            ld_parts.append(("add", render_additive(add_patch, freq=freq, duration=dur)))
 
+        # Mix layers — screech dominates
+        weights = {"screech": 0.55, "fm": 0.30, "add": 0.15}
         max_len = max(len(p[1]) for p in ld_parts) if ld_parts else 0
         ld_sig = [0.0] * max_len
-        for idx_p, (_, sig) in enumerate(ld_parts):
-            gain = mix_a if idx_p == 0 else mix_b
+        for lbl, sig in ld_parts:
+            g = weights.get(lbl, 0.3)
             for i in range(len(sig)):
-                ld_sig[i] += sig[i] * gain
+                ld_sig[i] += sig[i] * g
+
+        # 5-voice UNISON for width
+        ld_sig_np = np.array(_unison_bass(ld_sig, n_voices=5, detune_cents=8.0))
+        ld_sig = ld_sig_np.tolist()
+
+        # Stacked distortion (2 stages — not as hard as bass)
+        ld_sig = _stack_distortion(ld_sig, drive=ld.brightness * 1.5, stages=2)
 
         # Process — DNA-driven OTT and brightness
-        ld_sig = _ott_simulate(ld_sig, ld.ott_amount)
-        ld_sig = sat.harmonic_exciter(ld_sig, amount=ld.brightness * 0.57, frequency=3500)
+        ld_sig = _ott_simulate(ld_sig, min(ld.ott_amount * 1.2, 1.0))
+        ld_sig = sat.harmonic_exciter(ld_sig, amount=ld.brightness * 0.7, frequency=4000)
         ld_np = apply_reverb_delay(to_np(ld_sig), ReverbDelayPreset(
             name="LdVerb", effect_type="plate", decay_time=ld.reverb_decay,
             diffusion=0.75, damping=0.5, mix=0.18
@@ -2369,6 +2510,39 @@ def main():
         else:
             print(f"\n  ⏱  Took {elapsed:.0f}s — {elapsed - timer_s:.0f}s over timer")
             print("     ill.Gates: 'Save it and move on.'")
+        return
+
+    # ── LIVE MODE: --live --song "Song Name" (Ableton + Serum 2) ──
+    if "--live" in args:
+        song_name = "Untitled"
+        style = "dubstep"
+        mood = "aggressive"
+        bpm = 140
+        offline = "--offline" in args
+
+        if "--song" in args:
+            si = args.index("--song")
+            song_name = args[si + 1] if si + 1 < len(args) else song_name
+        if "--style" in args:
+            sti = args.index("--style")
+            style = args[sti + 1] if sti + 1 < len(args) else style
+        if "--mood" in args:
+            mi = args.index("--mood")
+            mood = args[mi + 1] if mi + 1 < len(args) else mood
+        if "--bpm" in args:
+            bi = args.index("--bpm")
+            bpm = int(args[bi + 1]) if bi + 1 < len(args) else bpm
+
+        from engine.production_pipeline import ProductionPipeline, quick_produce, offline_produce
+        if offline:
+            result = offline_produce(song_name, bpm, style, mood)
+        else:
+            result = quick_produce(song_name, bpm, style, mood)
+
+        print(f"\n  Production result: {result.status}")
+        print(f"  MIDI files: {len(result.midi_files)}")
+        for mf in result.midi_files:
+            print(f"    → {mf}")
         return
 
     # ── Fibonacci feedback mode: --fibonacci --song "Song Name" ──
