@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────
+# DUBFORGE — Production Queue v1
+# Feed this to: python -m engine.autonomous --queue configs/production_queue.yaml
+# ─────────────────────────────────────────────────────────────
+
+version: "1.0"
+producer: subtronics
+
+tracks:
+  - name: "CYCLOPS FURY"
+    style: dubstep
+    mood: aggressive
+    scale: phrygian
+    bpm: 145
+
+  - name: "FRACTAL STORM"
+    style: riddim
+    mood: dark
+    scale: minor
+    bpm: 142
+
+  - name: "VOID DIMENSION"
+    style: dubstep
+    mood: sinister
+    scale: harmonic_minor
+    bpm: 148
+
+  - name: "CHROME IMPACT"
+    style: hybrid bass
+    mood: driving
+    scale: phrygian
+    bpm: 140
+
+  - name: "QUANTUM RAGE"
+    style: tearout
+    mood: brutal
+    scale: locrian
+    bpm: 150
