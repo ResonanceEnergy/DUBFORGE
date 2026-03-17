@@ -1,0 +1,55 @@
+{
+  "repo": "DUBFORGE",
+  "timestamp": "2026-03-16T11:38:46.527394-06:00",
+  "head": "186a6adf9702626ebb9a64994537f1b083dcc2a5",
+  "since": "186a6adf9702626ebb9a64994537f1b083dcc2a5",
+  "summary": {
+    "ncl": 0,
+    "tests": 0,
+    "docs": 0,
+    "code": 0
+  },
+  "changes": {
+    "ncl": [],
+    "tests": [],
+    "docs": [],
+    "code": []
+  },
+  "mandate_snapshot": {
+    "repo": "{{REPO_NAME}}",
+    "visibility": "{{VISIBILITY}}",
+    "tier": "TBD",
+    "owner": "Nathan",
+    "mission": "|",
+    "scope": [
+      "TBD",
+      "TBD"
+    ],
+    "includes": "",
+    "excludes": "",
+    "guardrails": [
+      "No use of private/non-consented data",
+      "No secrets in repo; use local keyring",
+      "Local-first; data egress requires consent receipt"
+    ],
+    "ethics": "",
+    "security": "",
+    "privacy": "",
+    "autonomy": [
+      "external_api_calls",
+      "financial_actions",
+      "data_sharing_outside_device"
+    ],
+    "default_level": "L1",
+    "consent_required": "",
+    "kpis": [
+      "name: delivery_cadence",
+      "name: defects_escaped"
+    ],
+    "target": "<=1 per release",
+    "risk": null
+  },
+  "next_actions": [
+    "Increase test coverage for modified code."
+  ]
+}
