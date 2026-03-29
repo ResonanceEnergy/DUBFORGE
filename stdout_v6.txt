@@ -1,0 +1,19 @@
+============================================================
+  DUBFORGE -- "Wild Ones" V6 (Electro House Remix — Studio)
+============================================================
+  BPM: 127  |  Key: Ab major  |  Tuning: 440 Hz  |  SR: 44100
+  Bit Depth: 24-bit  |  Dither: PHI
+  Chords: Ab - Cm - Fm - Db  (I - iii - vi - IV)
+  Structure: 144 bars (Fibonacci!)  |  3 drops + VIP  |  real acapella + hook
+
+  [1/16] Loading Serum 2 patch definitions...
+         8 Serum 2 patches -> JSON
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Fractal_Sub.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Phi_Growl.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Fibonacci_FM_Screec.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Golden_Reese.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Spectral_Tear.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Granular_Atmosphere.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Weapon.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Phi_Pad.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXB bank: WILD_ONES_V6_BANK.fxb (8 presets)

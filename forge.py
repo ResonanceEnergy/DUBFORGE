@@ -410,6 +410,92 @@ def generate_wavetables():
     return wt_dir
 
 
+def install_to_ableton_user_library() -> None:
+    """Copy DUBFORGE outputs into Ableton User Library for drag-and-drop access.
+
+    Copies:
+        Samples   → ~/Music/Ableton/User Library/Samples/DUBFORGE/
+        Presets   → ~/Music/Ableton/User Library/Presets/Instruments/DUBFORGE/
+    """
+    import shutil
+
+    print("\n═══ Ableton User Library Install ═══")
+
+    # Detect Ableton User Library path (Windows / macOS)
+    candidates = [
+        Path.home() / "Music" / "Ableton" / "User Library",  # macOS
+        Path.home() / "Documents" / "Ableton" / "User Library",  # Windows alt
+        Path(os.environ.get("ABLETON_USER_LIBRARY", "")) if os.environ.get("ABLETON_USER_LIBRARY") else None,
+    ]
+    user_lib = None
+    for c in candidates:
+        if c and c.exists():
+            user_lib = c
+            break
+
+    if user_lib is None:
+        print("  → Ableton User Library not found.")
+        print("    Expected at: ~/Music/Ableton/User Library/")
+        print("    Set ABLETON_USER_LIBRARY env var to override.")
+        return
+
+    copied = 0
+
+    # Copy sample packs
+    sample_src = OUTPUT / "sample_packs"
+    if sample_src.exists():
+        sample_dst = user_lib / "Samples" / "DUBFORGE"
+        sample_dst.mkdir(parents=True, exist_ok=True)
+        for wav in sample_src.rglob("*.wav"):
+            rel = wav.relative_to(sample_src)
+            dst = sample_dst / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(wav, dst)
+            copied += 1
+        print(f"  → Samples: {copied} files → {sample_dst}")
+
+    # Copy stems
+    stems_src = OUTPUT / "stems"
+    if stems_src.exists():
+        stems_dst = user_lib / "Samples" / "DUBFORGE" / "Stems"
+        stems_dst.mkdir(parents=True, exist_ok=True)
+        stem_count = 0
+        for wav in stems_src.glob("*.wav"):
+            shutil.copy2(wav, stems_dst / wav.name)
+            stem_count += 1
+        copied += stem_count
+        print(f"  → Stems: {stem_count} files → {stems_dst}")
+
+    # Copy wavetables
+    wt_src = OUTPUT / "wavetables"
+    if wt_src.exists():
+        wt_dst = user_lib / "Samples" / "DUBFORGE" / "Wavetables"
+        wt_dst.mkdir(parents=True, exist_ok=True)
+        wt_count = 0
+        for wav in wt_src.glob("*.wav"):
+            shutil.copy2(wav, wt_dst / wav.name)
+            wt_count += 1
+        copied += wt_count
+        print(f"  → Wavetables: {wt_count} files → {wt_dst}")
+
+    # Copy presets
+    preset_src = OUTPUT / "presets"
+    if preset_src.exists():
+        preset_dst = user_lib / "Presets" / "Instruments" / "DUBFORGE"
+        preset_dst.mkdir(parents=True, exist_ok=True)
+        preset_count = 0
+        for fxp in preset_src.glob("*.fxp"):
+            shutil.copy2(fxp, preset_dst / fxp.name)
+            preset_count += 1
+        copied += preset_count
+        print(f"  → Presets: {preset_count} files → {preset_dst}")
+
+    if copied == 0:
+        print("  → No output files found yet. Run forge.py --all first.")
+    else:
+        print(f"  ✓ {copied} total files installed to Ableton User Library")
+
+
 def _gen_neuro_wavetable(style: str = "aggressive", n_frames: int = 256) -> list[np.ndarray]:
     """Generate neuro bass wavetable with harmonic stacking and distortion."""
     frames = []
@@ -2698,6 +2784,35 @@ def main():
 
     if run_all or "--track" in args:
         render_full_track()
+
+    # ── New modules ──────────────────────────────────────────────
+    if run_all or "--wavetable-packs" in args:
+        from engine.wavetable_pack import export_all_wavetable_packs
+        export_all_wavetable_packs(str(OUTPUT))
+
+    if run_all or "--rack" in args:
+        from engine.ableton_rack_builder import export_128_rack_adg
+        export_128_rack_adg(str(OUTPUT))
+
+    if run_all or "--vip" in args:
+        from engine.vip_pack import export_all_vip_packs
+        export_all_vip_packs(str(OUTPUT))
+
+    if run_all or "--metadata" in args:
+        from engine.marketplace_metadata import export_marketplace_metadata
+        export_marketplace_metadata(
+            pack_dir=str(OUTPUT / "sample_packs"),
+            pack_name="DUBFORGE",
+            output_dir=str(OUTPUT),
+        )
+
+    if run_all or "--galatcia" in args:
+        from engine.galatcia import export_all_galatcia
+        export_all_galatcia(output_dir=str(OUTPUT))
+
+    # Auto-install to Ableton User Library
+    if run_all or "--install" in args:
+        install_to_ableton_user_library()
 
     print("\n╔══════════════════════════════════════════════╗")
     print("║  PIPELINE COMPLETE                          ║")

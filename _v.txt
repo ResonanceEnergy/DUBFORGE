@@ -1,0 +1,29 @@
+=== V3 OUTPUT VERIFICATION ===
+Wavetables: 6
+  APOLOGY_V3_GROWL_DEEP.wav (262,205 bytes)
+  APOLOGY_V3_GROWL_FM.wav (262,205 bytes)
+  APOLOGY_V3_GROWL_SAW.wav (262,205 bytes)
+  APOLOGY_V3_MORPH_FRACTAL.wav (65,597 bytes)
+  APOLOGY_V3_MORPH_PHI.wav (65,597 bytes)
+  APOLOGY_V3_MORPH_SPECTRAL.wav (65,597 bytes)
+Presets: 14
+  APOLOGY_V3_BANK.fxb (1,180 bytes)
+  DUBFORGE_BANK.fxb (540 bytes)
+  DUBFORGE_Fibonacci_FM_Screec.fxp (156 bytes)
+  DUBFORGE_Fractal_Sub.fxp (156 bytes)
+  DUBFORGE_GROWL.fxp (136 bytes)
+  DUBFORGE_Golden_Reese.fxp (156 bytes)
+  DUBFORGE_Granular_Atmosphere.fxp (156 bytes)
+  DUBFORGE_LEAD.fxp (120 bytes)
+  DUBFORGE_PAD.fxp (120 bytes)
+  DUBFORGE_Phi_Growl.fxp (156 bytes)
+  DUBFORGE_Phi_Pad.fxp (156 bytes)
+  DUBFORGE_SUB.fxp (120 bytes)
+  DUBFORGE_Spectral_Tear.fxp (156 bytes)
+  DUBFORGE_Weapon.fxp (156 bytes)
+Stems: 14
+Mixdown: True
+MIDI: True
+ALS: True
+
+ALL PASS

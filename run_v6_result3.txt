@@ -1,0 +1,229 @@
+============================================================
+  DUBFORGE -- "Wild Ones" V6 (Electro House Remix — Studio)
+============================================================
+  BPM: 127  |  Key: Ab major  |  Tuning: 440 Hz  |  SR: 44100
+  Bit Depth: 24-bit  |  Dither: PHI
+  Chords: Ab - Cm - Fm - Db  (I - iii - vi - IV)
+  Structure: 144 bars (Fibonacci!)  |  3 drops + VIP  |  real acapella + hook
+
+  [1/16] Loading Serum 2 patch definitions...
+         8 Serum 2 patches -> JSON
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Fractal_Sub.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Phi_Growl.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Fibonacci_FM_Screec.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Golden_Reese.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Spectral_Tear.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Granular_Atmosphere.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Weapon.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXP: DUBFORGE_Phi_Pad.fxp (25 params)
+[dubforge.fxp_writer] Wrote FXB bank: WILD_ONES_V6_BANK.fxb (8 presets)
+         8 .fxp presets + 1 .fxb bank written
+  [2/16] Loading GALATCIA drum samples...
+         kick=41344 snare=165375 clap=82688 hh_c=18249 hh_o=36497 impact=1167890
+  [3/16] Bass (sub + electro wobble)...
+         sub + wobble + 4 chord root bass tones
+  [4/16] Phi-harmonic sub reinforcement...
+         phi harmonics: 8 partials
+  [5/16] Growl resampler bass (phi-modulated mid-bass)...
+         growl: 3.78s one-shot from 32 frames
+  [6/16] Supersaw chords (Ab - Cm - Fm - Db)...
+         4 chord walls + 4 stabs (Ab/Cm/Fm/Db)
+  [7/16] Hook lead melody (pluck + FM)...
+         32 hook melody notes (Eb4-C5 range)
+  [8/16] Loading studio acapella...
+         246.0s  130.2 bars  peak=1.275 -> normalised to 0.95
+         studio acapella loaded + 3 synth chops for FX
+  [9/16] Pads...
+  [10/16] Ambient texture...
+         texture: 15.1s crystal texture
+  [11/16] Arp synth...
+  [12/16] Risers, impacts & transitions...
+  [13/16] Drone...
+  [14/16] FM hit...
+  [15/16] Granular shimmer texture (v6)...
+         granular shimmer: 15.1s
+         granular dust:    7.6s
+  [16/16] Noise textures (vinyl + air) (v6)...
+         vinyl crackle: 15.1s
+         white noise air: 7.6s
+  Sound design complete (16/16 steps).
+
+  Structure: 144 bars (FIBONACCI!) = 272.1s (4:32)
+  Sections: 8/16/8/16/8/8/8/16/8/16/16/16
+  Golden Section Point: bar ~88 (144/phi = 89.0) -> Bridge (emotional pivot)
+
+  Rendering Intro (8 bars)...
+  Rendering Verse 1 (16 bars)...
+  Rendering Pre-Chorus 1 (8 bars)...
+  Rendering Chorus 1 (16 bars — full drop)...
+  Rendering Break (8 bars — ACAPELLA section)...
+  Rendering Verse 2 (8 bars)...
+  Rendering Pre-Chorus 2 (8 bars — bigger build)...
+  Rendering Chorus 2 (16 bars — maximum energy)...
+  Rendering Bridge (8 bars — emotional breakdown, GOLDEN SECTION)...
+  Rendering VIP Drop (16 bars — GROWL BASS VIP)...
+  Rendering Final Chorus (16 bars — CLIMAX)...
+  Rendering Outro (16 bars — dissolving)...
+
+  v5: Applying phi crossfades between sections...
+    11 boundaries x 12 stems
+  v5: Per-stem dynamics processing...
+    DRUMS   -> transient_shaper (attack=1.3, sustain=0.85)
+    BASS    -> compress (ratio=4.0, threshold=-12dB)
+    GROWL   -> compress (ratio=4.0, threshold=-12dB)
+    VOCAL   -> de_ess (6500Hz) + compress (ratio=3.5)
+    DRUMS   -> compress (ratio=3.0, threshold=-8dB)
+
+  Applying DSP processing...
+    PAD     -> sidechain + hall
+    VOCAL   -> hall
+    ARP     -> room
+    HOOK    -> room
+    CHORDS  -> hall
+    DRONE   -> hall
+    TEXTURE -> hall
+    GROWL   -> room
+  v5: Multi-technique stereo imaging...
+    PAD     -> Haas (12ms, width=1.2)
+    CHORDS  -> psychoacoustic (width=1.4)
+    ARP     -> frequency_split (2kHz, width=1.1)
+    HOOK    -> mid_side (width=0.9)
+  Insight 38/84: SaturationEngine (tape/tube saturation — v6)...
+    BASS   -> SaturationEngine tape (drive=2.5, mix=20%)
+    GROWL  -> SaturationEngine tube (drive=4.0, mix=30%)
+    HOOK   -> SaturationEngine tape (drive=1.8, mix=12%)
+  Insight 19: Low Pass Gate on drone...
+    DRONE  -> LPG (rate=0.12Hz, depth=50%)
+
+  v5: Stem dynamics analysis...
+    DRUMS         peak=-0.8dB  rms=-18.4dB  crest=17.6dB
+    BASS          peak=-3.8dB  rms=-11.9dB  crest=8.1dB
+    GROWL         peak=-4.2dB  rms=-16.2dB  crest=12.0dB
+    CHORDS        peak=-10.0dB  rms=-27.1dB  crest=17.1dB
+    HOOK          peak=-6.3dB  rms=-24.2dB  crest=17.9dB
+    PAD           peak=-11.5dB  rms=-31.8dB  crest=20.3dB
+    VOCAL         peak=+2.4dB  rms=-15.4dB  crest=17.8dB
+    ARP           peak=-14.9dB  rms=-27.8dB  crest=12.9dB
+    RISER         peak=-6.2dB  rms=-27.7dB  crest=21.6dB
+    FX            peak=-8.4dB  rms=-31.3dB  crest=22.9dB
+    TEXTURE       peak=-15.3dB  rms=-38.9dB  crest=23.6dB
+    DRONE         peak=-11.3dB  rms=-33.6dB  crest=22.3dB
+  v6: DC removal (highpass 5Hz)...
+    12 stems DC-cleaned
+
+  Bouncing stems (24-bit)...
+    DRUMS             272.1s  -0.8dB  34.3MB
+    BASS              272.1s  -3.5dB  34.3MB
+    GROWL             272.1s  -4.0dB  34.3MB
+    CHORDS            272.1s  -8.0dB  68.7MB
+    HOOK              272.1s  -6.5dB  34.3MB
+    PAD               272.1s  -11.1dB  68.7MB
+    VOCAL             272.1s  2.4dB  34.3MB
+    ARP               272.1s  -15.2dB  68.7MB
+    RISER             272.1s  -5.9dB  34.3MB
+    FX                272.1s  -8.6dB  34.3MB
+    TEXTURE           272.1s  -15.4dB  34.3MB
+    DRONE             272.1s  -11.3dB  34.3MB
+
+  Stereo mixdown...
+  Mastering (electro house preset — v6 Studio)...
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Python314\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 48: character maps to <undefined>
+Call stack:
+  File "<string>", line 9, in <module>
+    exec(compile(code, 'make_wild_ones_v6.py', 'exec'), {'__file__': 'make_wild_ones_v6.py', '__name__': '__main__'})
+  File "make_wild_ones_v6.py", line 1959, in <module>
+    mastered, master_report = master(stereo, SR, master_settings)
+FATAL ERROR: UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 133: character maps to <undefined>
+Traceback (most recent call last):
+  File "C:\Python314\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 48: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<string>", line 9, in <module>
+    exec(compile(code, 'make_wild_ones_v6.py', 'exec'), {'__file__': 'make_wild_ones_v6.py', '__name__': '__main__'})
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "make_wild_ones_v6.py", line 1959, in <module>
+    mastered, master_report = master(stereo, SR, master_settings)
+                              ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Traceback (most recent call last):
+  File "C:\Python314\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 48: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<string>", line 9, in <module>
+    exec(compile(code, 'make_wild_ones_v6.py', 'exec'), {'__file__': 'make_wild_ones_v6.py', '__name__': '__main__'})
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "make_wild_ones_v6.py", line 1959, in <module>
+    mastered, master_report = master(stereo, SR, master_settings)
+                              ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Traceback (most recent call last):
+  File "C:\Python314\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 48: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<string>", line 9, in <module>
+  File "make_wild_ones_v6.py", line 1959, in <module>
+    mastered, master_report = master(stereo, SR, master_settings)
+  File "c:\dev\SuperAgency-Shared\repos\DUBFORGE\engine\mastering_chain.py", line 388, in master
+      File "C:\Python314\Lib\logging\__init__.py", line 1520, in info
+    self._log(INFO, msg, args, **kwargs)
+  File "C:\Python314\Lib\logging\__init__.py", line 1665, in _log
+    self.handle(record)
+  File "C:\Python314\Lib\logging\__init__.py", line 1681, in handle
+    self.callHandlers(record)
+  File "C:\Python314\Lib\logging\__init__.py", line 1737, in callHandlers
+    hdlr.handle(record)
+  File "C:\Python314\Lib\logging\__init__.py", line 1027, in handle
+    self.emit(record)
+  File "C:\Python314\Lib\logging\__init__.py", line 1159, in emit
+    self.handleError(record)
+  File "C:\Python314\Lib\logging\__init__.py", line 1085, in handleError
+    traceback.print_stack(frame, file=sys.stderr)
+  File "C:\Python314\Lib\traceback.py", line 241, in print_stack
+    print_list(extract_stack(f, limit=limit), file=file)
+  File "C:\Python314\Lib\traceback.py", line 35, in print_list
+    print(item, file=file, end="")
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 133: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<string>", line 13, in <module>
+  File "C:\Python314\Lib\traceback.py", line 210, in print_exc
+    print_exception(sys.exception(), limit=limit, file=file, chain=chain)
+  File "C:\Python314\Lib\traceback.py", line 134, in print_exception
+    te.print(file=file, chain=chain, colorize=colorize)
+  File "C:\Python314\Lib\traceback.py", line 1575, in print
+    print(line, file=file, end="")
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 133: character maps to <undefined>

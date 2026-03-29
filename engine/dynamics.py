@@ -8,8 +8,10 @@ with PHI-tuned attack/release and auto-gain.
 import math
 from dataclasses import dataclass
 
-from engine.config_loader import PHI
-SAMPLE_RATE = 48000
+import numpy as np
+
+PHI = 1.6180339887
+SAMPLE_RATE = 44100
 
 
 @dataclass
@@ -46,7 +48,33 @@ class DynamicsProfile:
 def analyze_dynamics(signal: list[float],
                       sample_rate: int = SAMPLE_RATE) -> DynamicsProfile:
     """Analyze dynamic range of signal."""
-    if not signal:
+    if isinstance(signal, np.ndarray):
+        if signal.size == 0:
+            return DynamicsProfile()
+        # Flatten stereo to mono for analysis
+        if signal.ndim == 2:
+            signal = signal.mean(axis=1)
+        peak = float(np.max(np.abs(signal)))
+        rms = float(np.sqrt(np.mean(signal ** 2)))
+        peak_db = 20 * math.log10(max(peak, 1e-10))
+        rms_db = 20 * math.log10(max(rms, 1e-10))
+        crest = peak_db - rms_db
+        lufs = rms_db - 0.691
+        block_size = int(sample_rate * 0.05)
+        block_rms_list: list[float] = []
+        for i in range(0, len(signal) - block_size, block_size):
+            block = signal[i:i + block_size]
+            br = float(np.sqrt(np.mean(block ** 2)))
+            if br > 1e-10:
+                block_rms_list.append(20 * math.log10(br))
+        dynamic_range = (max(block_rms_list) - min(block_rms_list)
+                         if block_rms_list else 0.0)
+        return DynamicsProfile(
+            peak_db=peak_db, rms_db=rms_db,
+            crest_factor_db=crest,
+            dynamic_range_db=dynamic_range, lufs=lufs,
+        )
+    elif not signal:
         return DynamicsProfile()
 
     peak = max(abs(x) for x in signal)
@@ -87,7 +115,10 @@ def compress(signal: list[float],
              sample_rate: int = SAMPLE_RATE) -> list[float]:
     """Apply compression."""
     s = settings or CompressorSettings()
-    if not signal:
+    if isinstance(signal, np.ndarray):
+        if signal.size == 0:
+            return []
+    elif not signal:
         return []
 
     attack_coeff = math.exp(-1.0 / (s.attack_ms / 1000.0 * sample_rate))

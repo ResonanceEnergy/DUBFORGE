@@ -73,13 +73,48 @@ def cmd_export(args: argparse.Namespace) -> None:
         paths = export_mix_demos(out)
         print(f"Mix demos: {len(paths)} files in {time.time()-t0:.1f}s")
 
+    elif target == "wavetable-packs":
+        from engine.wavetable_pack import export_all_wavetable_packs
+        paths = export_all_wavetable_packs(out)
+        print(f"Wavetable packs: {len(paths)} files in {time.time()-t0:.1f}s")
+
+    elif target == "rack":
+        from engine.ableton_rack_builder import export_128_rack_adg
+        paths = export_128_rack_adg(out)
+        print(f"Drum racks: {len(paths)} files in {time.time()-t0:.1f}s")
+
+    elif target == "metadata":
+        from engine.marketplace_metadata import export_marketplace_metadata
+        paths = export_marketplace_metadata(
+            pack_dir=str(Path(out) / "sample_packs"),
+            pack_name="DUBFORGE",
+            output_dir=out,
+        )
+        print(f"Marketplace metadata: {len(paths)} files in {time.time()-t0:.1f}s")
+
+    elif target == "vip":
+        from engine.vip_pack import export_all_vip_packs
+        paths = export_all_vip_packs(out)
+        print(f"VIP packs: {len(paths)} files in {time.time()-t0:.1f}s")
+
+    elif target == "galatcia":
+        from engine.galatcia import export_all_galatcia
+        result = export_all_galatcia(output_dir=out)
+        n = result.get("total_files", 0)
+        print(f"GALATCIA integration: {n} files in {time.time()-t0:.1f}s")
+
     elif target == "all":
+        from engine.ableton_rack_builder import export_128_rack_adg
         from engine.als_generator import export_all_als
+        from engine.marketplace_metadata import export_marketplace_metadata
         from engine.preset_pack_builder import export_all_preset_packs
         from engine.sample_pack_builder import export_all_packs
         from engine.spectral_resynthesis import export_resynth_wavetables
         from engine.stem_mixer import export_mix_demos
+        from engine.galatcia import export_all_galatcia
+        from engine.vip_pack import export_all_vip_packs
         from engine.wavetable_morph import export_morph_wavetables
+        from engine.wavetable_pack import export_all_wavetable_packs
 
         total: list[str] = []
         total.extend(export_all_packs(out))
@@ -88,6 +123,15 @@ def cmd_export(args: argparse.Namespace) -> None:
         total.extend(export_resynth_wavetables(out))
         total.extend(export_all_als(out))
         total.extend(export_mix_demos(out))
+        total.extend(export_all_wavetable_packs(out))
+        total.extend(export_128_rack_adg(out))
+        total.extend(export_all_vip_packs(out))
+        gal = export_all_galatcia(output_dir=out)
+        export_marketplace_metadata(
+            pack_dir=str(Path(out) / "sample_packs"),
+            pack_name="DUBFORGE",
+            output_dir=out,
+        )
         print(f"All exports: {len(total)} files in {time.time()-t0:.1f}s")
     else:
         print(f"Unknown target: {target}")
@@ -137,7 +181,7 @@ def cmd_info(_args: argparse.Namespace) -> None:
     eng_dir = Path(__file__).parent
     modules = sorted(f.stem for f in eng_dir.glob("*.py") if not f.stem.startswith("_"))
 
-    print("DUBFORGE — Planck × φ Fractal Basscraft Engine")
+    print("DUBFORGE \u2014 Planck x phi Fractal Basscraft Engine")
     print(f"  Modules:     {len(modules)}")
     print(f"  PHI:         {PHI}")
     print(f"  FIBONACCI:   {FIBONACCI[:8]}…")
@@ -153,6 +197,12 @@ def cmd_subphonics(args: argparse.Namespace) -> None:
     port = args.port
     print(f"Launching SUBPHONICS on port {port}...")
     start_server(port=port)
+
+
+def cmd_install(_args: argparse.Namespace) -> None:
+    """Install DUBFORGE output to Ableton User Library."""
+    from forge import install_to_ableton_user_library
+    install_to_ableton_user_library()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -175,7 +225,8 @@ def main() -> None:
     p_export = sub.add_parser("export", help="Export packs / wavetables / ALS")
     p_export.add_argument(
         "target",
-        choices=["samples", "presets", "wavetables", "resynth", "als", "mix", "all"],
+        choices=["samples", "presets", "wavetables", "resynth", "als", "mix",
+                 "wavetable-packs", "rack", "metadata", "vip", "galatcia", "all"],
         help="What to export",
     )
     p_export.add_argument("--output", "-o", default="output", help="Output directory")
@@ -199,6 +250,9 @@ def main() -> None:
     p_sub.add_argument("--port", "-p", type=int, default=8433,
                        help="Server port (default: 8433)")
 
+    # --- install ---
+    sub.add_parser("install", help="Install output to Ableton User Library")
+
     args = parser.parse_args()
     if args.command is None:
         parser.print_help()
@@ -210,6 +264,7 @@ def main() -> None:
         "analyze": cmd_analyze,
         "info": cmd_info,
         "subphonics": cmd_subphonics,
+        "install": cmd_install,
     }
     handlers[args.command](args)
 
