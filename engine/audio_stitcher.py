@@ -12,6 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    decompress_audio_buffer,
+)
+
 SAMPLE_RATE = 48000
 
 
@@ -213,6 +220,34 @@ class AudioStitcher:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._write_wav(path, samples)
         return path
+
+    def export_compressed(self, samples: list[float],
+                          label: str = "",
+                          config: TurboQuantConfig | None = None) -> CompressedAudioBuffer:
+        """Compress stitched audio for archival/streaming.
+
+        Args:
+            samples: Stitched audio samples.
+            label: Label for the compressed buffer.
+            config: TurboQuant config (default: 3-bit).
+
+        Returns:
+            CompressedAudioBuffer.
+        """
+        cfg = config or TurboQuantConfig(bit_width=3, chunk_size=256)
+        return compress_audio_buffer(
+            samples,
+            buffer_id=label or "stitch",
+            config=cfg,
+            sample_rate=self.sample_rate,
+            label=label,
+        )
+
+    @staticmethod
+    def decompress_arrangement(cab: CompressedAudioBuffer,
+                               config: TurboQuantConfig | None = None) -> list[float]:
+        """Decompress a previously compressed arrangement."""
+        return decompress_audio_buffer(cab, config)
 
 
 def main() -> None:

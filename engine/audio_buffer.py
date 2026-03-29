@@ -12,6 +12,14 @@ import wave
 from dataclasses import dataclass
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    decompress_audio_buffer,
+    phi_optimal_bits,
+)
+
 SAMPLE_RATE = 48000
 
 
@@ -67,6 +75,7 @@ class AudioBufferPool:
         self.default_size = default_size
         self.buffers: dict[str, AudioBuffer] = {}
         self._counter = 0
+        self._archive: dict[str, CompressedAudioBuffer] = {}
 
     def _next_id(self) -> str:
         self._counter += 1
@@ -89,10 +98,10 @@ class AudioBufferPool:
 
         # Allocate new
         if len(self.buffers) >= self.max_buffers:
-            # Evict oldest unused
+            # Evict oldest unused — compress to archive instead of discarding
             for bid, buf in list(self.buffers.items()):
                 if not buf.in_use:
-                    del self.buffers[bid]
+                    self._archive_buffer(bid)
                     break
 
         bid = self._next_id()
@@ -114,8 +123,15 @@ class AudioBufferPool:
         return True
 
     def get(self, buffer_id: str) -> AudioBuffer | None:
-        """Get a buffer by ID."""
-        return self.buffers.get(buffer_id)
+        """Get a buffer by ID. Restores from compressed archive if evicted."""
+        buf = self.buffers.get(buffer_id)
+        if buf is not None:
+            return buf
+        # Check compressed archive
+        cab = self._archive.get(buffer_id)
+        if cab is not None:
+            return self._restore_buffer(buffer_id)
+        return None
 
     def from_samples(self, samples: list[float],
                      label: str = "") -> AudioBuffer:
@@ -282,6 +298,9 @@ class AudioBufferPool:
         """Get pool statistics."""
         in_use = sum(1 for b in self.buffers.values() if b.in_use)
         total_samples = sum(len(b.samples) for b in self.buffers.values())
+        archived_bytes = sum(
+            cab.compressed_bytes for cab in self._archive.values()
+        )
         return {
             "total_buffers": len(self.buffers),
             "in_use": in_use,
@@ -290,7 +309,59 @@ class AudioBufferPool:
             "memory_mb": round(
                 total_samples * 8 / 1024 / 1024, 2
             ),
+            "archived": len(self._archive),
+            "archive_bytes": archived_bytes,
         }
+
+    # --- TurboQuant Archive ---
+
+    def _archive_buffer(self, buffer_id: str) -> None:
+        """Compress a buffer and move it to the archive."""
+        buf = self.buffers.get(buffer_id)
+        if buf is None:
+            return
+        bits = phi_optimal_bits(len(buf.samples))
+        cab = compress_audio_buffer(
+            buf.samples,
+            buffer_id=buf.buffer_id,
+            config=TurboQuantConfig(bit_width=bits),
+            sample_rate=buf.sample_rate,
+            label=buf.label,
+        )
+        cab.channels = buf.channels
+        self._archive[buffer_id] = cab
+        del self.buffers[buffer_id]
+
+    def _restore_buffer(self, buffer_id: str) -> AudioBuffer | None:
+        """Decompress a buffer from the archive back into the pool."""
+        cab = self._archive.get(buffer_id)
+        if cab is None:
+            return None
+        samples = decompress_audio_buffer(cab)
+        buf = AudioBuffer(
+            buffer_id=cab.buffer_id,
+            samples=samples,
+            sample_rate=cab.sample_rate,
+            channels=cab.channels,
+            label=cab.label,
+            in_use=True,
+        )
+        self.buffers[buffer_id] = buf
+        del self._archive[buffer_id]
+        return buf
+
+    def compress_idle(self) -> int:
+        """Compress all idle (not in_use) buffers to the archive.
+
+        Returns the number of buffers archived.
+        """
+        count = 0
+        for bid in list(self.buffers):
+            buf = self.buffers[bid]
+            if not buf.in_use:
+                self._archive_buffer(bid)
+                count += 1
+        return count
 
 
 def main() -> None:

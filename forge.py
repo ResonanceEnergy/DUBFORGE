@@ -105,6 +105,12 @@ from engine.variation_engine import (
     DrumDNA, BassDNA, LeadDNA, AtmosphereDNA, FxDNA, MixDNA,
     ArrangementSection, SCALE_INTERVALS, NOTES,
 )
+from engine.turboquant import (
+    TurboQuantConfig,
+    compress_audio_buffer,
+    decompress_audio_buffer,
+)
+from engine.phi_core import write_compressed_wavetable
 
 # ── Constants ────────────────────────────────────────────────────────
 SR = 48000
@@ -370,28 +376,34 @@ def generate_wavetables():
     saw = generate_saw_source()
     saw_frames = growl_resample_pipeline(saw, n_output_frames=256)
     write_serum_wav(str(wt_dir / "DUBFORGE_GROWL_SAW.wav"), saw_frames)
+    write_compressed_wavetable(str(wt_dir / "DUBFORGE_GROWL_SAW.wav"), saw_frames, name="GROWL_SAW")
 
     print("  [2/6] GROWL_FM — FM → growl resampling pipeline...")
     fm = generate_fm_source(fm_ratio=PHI, fm_depth=3.0)
     fm_frames = growl_resample_pipeline(fm, n_output_frames=256)
     write_serum_wav(str(wt_dir / "DUBFORGE_GROWL_FM.wav"), fm_frames)
+    write_compressed_wavetable(str(wt_dir / "DUBFORGE_GROWL_FM.wav"), fm_frames, name="GROWL_FM")
 
     # Neuro bass wavetables — custom spectral morphs
     print("  [3/6] NEURO_A — Harmonic stacking with waveshaping...")
     neuro_a_frames = _gen_neuro_wavetable(style="aggressive")
     write_serum_wav(str(wt_dir / "DUBFORGE_NEURO_A.wav"), neuro_a_frames)
+    write_compressed_wavetable(str(wt_dir / "DUBFORGE_NEURO_A.wav"), neuro_a_frames, name="NEURO_A")
 
     print("  [4/6] NEURO_B — Phase distortion morph...")
     neuro_b_frames = _gen_neuro_wavetable(style="phase")
     write_serum_wav(str(wt_dir / "DUBFORGE_NEURO_B.wav"), neuro_b_frames)
+    write_compressed_wavetable(str(wt_dir / "DUBFORGE_NEURO_B.wav"), neuro_b_frames, name="NEURO_B")
 
     print("  [5/6] SCREECH — Metallic screech lead...")
     screech_frames = _gen_screech_wavetable()
     write_serum_wav(str(wt_dir / "DUBFORGE_SCREECH.wav"), screech_frames)
+    write_compressed_wavetable(str(wt_dir / "DUBFORGE_SCREECH.wav"), screech_frames, name="SCREECH")
 
     print("  [6/6] SUB_MORPH — Sub bass morphing sine→saw...")
     sub_frames = _gen_sub_morph_wavetable()
     write_serum_wav(str(wt_dir / "DUBFORGE_SUB_MORPH.wav"), sub_frames)
+    write_compressed_wavetable(str(wt_dir / "DUBFORGE_SUB_MORPH.wav"), sub_frames, name="SUB_MORPH")
 
     # Copy wavetables to Serum's user folder if it exists
     serum_tables = Path.home() / "Documents" / "Xfer" / "Serum Presets" / "Tables" / "DUBFORGE"

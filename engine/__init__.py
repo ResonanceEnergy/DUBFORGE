@@ -1839,4 +1839,101 @@ __all__ = [
     "ChatSession",
     "CommandResult",
     "get_engine",
+    # dubstep taste analyzer
+    "STEM_TYPES",
+    "StemFeatures",
+    "TrackAnalysis",
+    "TastePrototype",
+    "TasteProfile",
+    "extract_features",
+    "estimate_wobble_rate",
+    "analyze_track",
+    "build_prototypes",
+    "score_against_prototype",
+    "compute_banger_score",
+    "generate_m4l_suggestions",
+    "export_analysis",
+    "export_prototypes",
+    "export_taste_report",
+    "write_taste_manifest",
+    # serum blueprint generator
+    "SerumBlueprint",
+    "ChaosRecommendation",
+    "recommend_chaos_attractor",
+    "generate_serum_blueprint",
+    "generate_serum_fx_chain",
+    "generate_blueprints_from_analysis",
+    "export_stem_as_wavetable",
+    "export_blueprint",
+    "export_all_blueprints",
+    "write_serum_blueprint_manifest",
+    # soundcloud pipeline
+    "DownloadedTrack",
+    "PipelineResult",
+    "download_soundcloud_likes",
+    "separate_stems",
+    "run_pipeline",
+    "analyze_local_files",
+    "apply_feedback",
 ]
+
+# --- dubstep taste analyzer ---
+from engine.dubstep_taste_analyzer import (
+    STEM_TYPES,
+    StemFeatures,
+    TrackAnalysis,
+    TastePrototype,
+    TasteProfile,
+    extract_features,
+    estimate_wobble_rate,
+    analyze_track,
+    build_prototypes,
+    score_against_prototype,
+    compute_banger_score,
+    generate_m4l_suggestions,
+    export_analysis,
+    export_prototypes,
+    export_taste_report,
+    write_taste_manifest,
+)
+
+# --- serum blueprint generator ---
+from engine.serum_blueprint import (
+    SerumBlueprint,
+    ChaosRecommendation,
+    recommend_chaos_attractor,
+    generate_serum_blueprint,
+    generate_serum_fx_chain,
+    generate_blueprints_from_analysis,
+    export_stem_as_wavetable,
+    export_blueprint,
+    export_all_blueprints,
+    write_serum_blueprint_manifest,
+)
+
+# --- soundcloud pipeline ---
+from engine.soundcloud_pipeline import (
+    DownloadedTrack,
+    PipelineResult,
+    download_soundcloud_likes,
+    separate_stems,
+    run_pipeline,
+    analyze_local_files,
+    apply_feedback,
+)
+
+# --- TurboQuant vector quantization (arXiv:2504.19874) ---
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    CompressedVector,
+    CompressedWavetable,
+    SpectralVectorIndex,
+    TurboQuantConfig,
+    TurboQuantEngine,
+    compress_audio_buffer,
+    compress_wavetable,
+    decompress_audio_buffer,
+    decompress_wavetable,
+    estimate_compression_stats,
+    phi_optimal_bits,
+)

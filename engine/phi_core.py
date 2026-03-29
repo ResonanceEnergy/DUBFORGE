@@ -11,12 +11,19 @@ Outputs:
 
 import math as _math
 import os
+import pickle
 import struct
 from pathlib import Path
 
 import numpy as np
 
 from engine.config_loader import A4_440, FIBONACCI, PHI
+from engine.turboquant import (
+    CompressedWavetable,
+    TurboQuantConfig,
+    compress_wavetable,
+    decompress_wavetable,
+)
 
 # --- Constants -----------------------------------------------------------
 
@@ -208,6 +215,49 @@ def generate_phi_core_v2_wook(n_frames: int = DEFAULT_FRAMES) -> list[np.ndarray
 
 # --- Main -----------------------------------------------------------------
 
+def write_compressed_wavetable(path: str, frames: list[np.ndarray],
+                               name: str = "",
+                               config: TurboQuantConfig | None = None) -> CompressedWavetable:
+    """Compress wavetable frames and save as .tq sidecar file.
+
+    Args:
+        path: Output path (will append .tq extension).
+        frames: Wavetable frames (list of np.ndarray).
+        name: Wavetable name.
+        config: TurboQuant config (default: 3-bit).
+
+    Returns:
+        The CompressedWavetable object.
+    """
+    cfg = config or TurboQuantConfig(bit_width=3)
+    frames_list = [f.tolist() for f in frames]
+    cw = compress_wavetable(frames_list, cfg, name=name)
+
+    tq_path = path + ".tq" if not path.endswith(".tq") else path
+    os.makedirs(os.path.dirname(tq_path) or ".", exist_ok=True)
+    with open(tq_path, "wb") as f:
+        pickle.dump(cw, f)
+
+    return cw
+
+
+def load_compressed_wavetable(path: str,
+                              config: TurboQuantConfig | None = None) -> list[np.ndarray]:
+    """Load and decompress a .tq wavetable file.
+
+    Args:
+        path: Path to .tq file.
+        config: TurboQuant config (must match compression settings).
+
+    Returns:
+        List of np.ndarray frames.
+    """
+    with open(path, "rb") as f:
+        cw: CompressedWavetable = pickle.load(f)
+    frames_list = decompress_wavetable(cw, config)
+    return [np.array(frame) for frame in frames_list]
+
+
 def main() -> None:
     out_dir = Path('output/wavetables')
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -216,13 +266,17 @@ def main() -> None:
     v1_frames = generate_phi_core_v1()
     v1_path = str(out_dir / 'DUBFORGE_PHI_CORE.wav')
     write_wav(v1_path, v1_frames)
+    v1_cw = write_compressed_wavetable(v1_path, v1_frames, name="PHI_CORE_v1")
     print(f'  -> {v1_path}  ({len(v1_frames)} frames x {WAVETABLE_SIZE} samples)')
+    print(f'  -> {v1_path}.tq  ({v1_cw.compression_ratio:.1f}× compression)')
 
     print('Generating PHI CORE v2 — WOOK EDITION...')
     v2_frames = generate_phi_core_v2_wook()
     v2_path = str(out_dir / 'DUBFORGE_PHI_CORE_v2_WOOK.wav')
     write_wav(v2_path, v2_frames)
+    v2_cw = write_compressed_wavetable(v2_path, v2_frames, name="PHI_CORE_v2_WOOK")
     print(f'  -> {v2_path}  ({len(v2_frames)} frames x {WAVETABLE_SIZE} samples)')
+    print(f'  -> {v2_path}.tq  ({v2_cw.compression_ratio:.1f}× compression)')
 
     print('Done.')
 

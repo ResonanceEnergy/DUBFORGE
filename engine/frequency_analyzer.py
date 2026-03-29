@@ -9,6 +9,8 @@ import math
 from dataclasses import dataclass
 
 from engine.config_loader import PHI
+from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
+
 SAMPLE_RATE = 48000
 
 FREQUENCY_BANDS = {
@@ -42,6 +44,29 @@ class SpectralFeatures:
             "band_energy": {k: round(v, 4) for k, v in self.band_energy.items()},
             "dominant_band": self.dominant_band,
         }
+
+    def to_feature_vector(self) -> list[float]:
+        """Extract a normalized feature vector for TurboQuant indexing.
+
+        Returns a 10-dimensional vector:
+            [centroid, bandwidth, rolloff, flatness,
+             sub, bass, low_mid, mid, high_mid, high]
+        """
+        bands = [
+            self.band_energy.get("sub", 0.0),
+            self.band_energy.get("bass", 0.0),
+            self.band_energy.get("low_mid", 0.0),
+            self.band_energy.get("mid", 0.0),
+            self.band_energy.get("high_mid", 0.0),
+            self.band_energy.get("high", 0.0),
+        ]
+        vec = [
+            self.centroid / 20000.0,      # normalize to ~[0,1]
+            self.bandwidth / 20000.0,
+            self.rolloff / 20000.0,
+            self.flatness,
+        ] + bands
+        return vec
 
 
 class FrequencyAnalyzer:
@@ -198,6 +223,44 @@ class FrequencyAnalyzer:
             "a": a.to_dict(),
             "b": b.to_dict(),
         }
+
+    def build_spectral_index(
+        self,
+        named_samples: dict[str, list[float]],
+        config: TurboQuantConfig | None = None,
+    ) -> SpectralVectorIndex:
+        """Build a TurboQuant spectral search index from named audio buffers.
+
+        Args:
+            named_samples: Mapping of name → audio samples.
+            config: TurboQuant config (default: 4-bit with QJL).
+
+        Returns:
+            SpectralVectorIndex ready for similarity search.
+        """
+        idx = SpectralVectorIndex(config)
+        for name, samples in named_samples.items():
+            features = self.analyze(samples)
+            vec = features.to_feature_vector()
+            idx.add(name, vec, metadata=features.to_dict())
+        return idx
+
+    def find_similar(self, query_samples: list[float],
+                     index: SpectralVectorIndex,
+                     top_k: int = 5) -> list[tuple[str, float, dict]]:
+        """Find sounds most similar to query using a spectral index.
+
+        Args:
+            query_samples: Audio samples to match against.
+            index: Pre-built SpectralVectorIndex.
+            top_k: Number of results.
+
+        Returns:
+            List of (name, similarity, metadata) tuples.
+        """
+        features = self.analyze(query_samples)
+        vec = features.to_feature_vector()
+        return index.search(vec, top_k=top_k)
 
     def phi_bands(self, spectrum: list[float],
                   base_freq: float = 40.0,

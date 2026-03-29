@@ -24,6 +24,11 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+)
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -54,6 +59,7 @@ class BatchResult:
     wav_path: str
     duration_s: float
     peak_db: float
+    compressed: CompressedAudioBuffer | None = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -99,8 +105,15 @@ def _peak_db(signal: np.ndarray) -> float:
 
 
 def render_batch(preset: BatchPreset,
-                 output_dir: str = "output") -> list[BatchResult]:
-    """Render a batch of test signals for a preset configuration."""
+                 output_dir: str = "output",
+                 compress: bool = True) -> list[BatchResult]:
+    """Render a batch of test signals for a preset configuration.
+
+    Args:
+        preset: Batch preset config.
+        output_dir: Output directory.
+        compress: If True, also compress each render via TurboQuant.
+    """
     out = Path(output_dir) / "wavetables" / "batch" / preset.mode
     out.mkdir(parents=True, exist_ok=True)
     results: list[BatchResult] = []
@@ -112,6 +125,8 @@ def render_batch(preset: BatchPreset,
         preset.base_freq * 2,
         preset.base_freq / PHI,
     ]
+
+    tq_cfg = TurboQuantConfig(bit_width=3, chunk_size=256) if compress else None
 
     for i, freq in enumerate(freqs):
         p = BatchPreset(
@@ -125,12 +140,24 @@ def render_batch(preset: BatchPreset,
         audio = _generate_source(p)
         fname = f"batch_{p.name}.wav"
         _write_wav(out / fname, audio)
+
+        cab = None
+        if compress and tq_cfg is not None:
+            cab = compress_audio_buffer(
+                audio.tolist(),
+                buffer_id=p.name,
+                config=tq_cfg,
+                sample_rate=p.sample_rate,
+                label=p.name,
+            )
+
         results.append(BatchResult(
             preset_name=p.name,
             module="batch_renderer",
             wav_path=str(out / fname),
             duration_s=preset.duration_s,
             peak_db=_peak_db(audio),
+            compressed=cab,
         ))
 
     return results

@@ -20,6 +20,13 @@ from pathlib import Path
 import numpy as np
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    decompress_audio_buffer,
+)
+
 SAMPLE_RATE = 48000
 
 
@@ -35,6 +42,7 @@ class AudioPreview:
     rms_db: float
     elapsed_ms: float
     metadata: dict = field(default_factory=dict)
+    compressed: CompressedAudioBuffer | None = None
 
 
 def _signal_to_wav_bytes(signal: np.ndarray, sr: int = SAMPLE_RATE) -> bytes:
@@ -220,6 +228,47 @@ def render_preview(module_name: str,
         rms_db=rms_db,
         elapsed_ms=elapsed,
         metadata={"freq": freq},
+    )
+
+
+def render_preview_compressed(module_name: str,
+                              duration: float = 1.0,
+                              freq: float = 55.0,
+                              config: TurboQuantConfig | None = None) -> AudioPreview:
+    """Render a preview with TurboQuant-compressed payload.
+
+    The base64 WAV is still generated for playback, but the compressed
+    version is attached for efficient storage/caching.
+    """
+    t0 = time.time()
+    cfg = config or TurboQuantConfig(bit_width=3, chunk_size=256)
+
+    signal = generate_preview_signal(module_name, duration, freq)
+    wav_bytes = _signal_to_wav_bytes(signal)
+    wav_b64 = base64.b64encode(wav_bytes).decode("ascii")
+    peak_db, rms_db = _analyze_signal(signal)
+
+    cab = compress_audio_buffer(
+        signal.tolist(),
+        buffer_id=f"preview_{module_name}",
+        config=cfg,
+        sample_rate=SAMPLE_RATE,
+        label=module_name,
+    )
+
+    elapsed = round((time.time() - t0) * 1000, 1)
+
+    return AudioPreview(
+        module_name=module_name,
+        duration_s=duration,
+        sample_rate=SAMPLE_RATE,
+        samples=len(signal),
+        wav_base64=wav_b64,
+        peak_db=peak_db,
+        rms_db=rms_db,
+        elapsed_ms=elapsed,
+        metadata={"freq": freq, "compression_ratio": cab.compression_ratio},
+        compressed=cab,
     )
 
 

@@ -12,6 +12,9 @@ import wave
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI
+from engine.frequency_analyzer import FrequencyAnalyzer, SpectralFeatures
+from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
+
 SAMPLE_RATE = 48000
 
 
@@ -29,6 +32,7 @@ class WavFile:
     tags: list[str] = field(default_factory=list)
     rms_db: float = -60.0
     peak_db: float = -60.0
+    spectral_features: SpectralFeatures | None = None
 
     def __post_init__(self):
         if not self.name:
@@ -214,6 +218,73 @@ class WavPool:
             "total_duration_s": round(total_duration, 1),
             "categories": {k: len(v) for k, v in cats.items()},
         }
+
+    def build_timbre_index(self,
+                           config: TurboQuantConfig | None = None) -> SpectralVectorIndex:
+        """Build a TurboQuant spectral index from all WAV files with features.
+
+        Only includes files that have spectral_features computed.
+
+        Returns:
+            SpectralVectorIndex ready for timbre-based search.
+        """
+        idx = SpectralVectorIndex(config)
+        for wav in self.files.values():
+            if wav.spectral_features is not None:
+                vec = wav.spectral_features.to_feature_vector()
+                idx.add(wav.name, vec, metadata={
+                    "path": wav.path,
+                    "category": wav.category,
+                    "tags": wav.tags,
+                })
+        return idx
+
+    def analyze_all(self) -> int:
+        """Compute spectral features for all WAV files in the pool.
+
+        Returns the number of files analyzed.
+        """
+        analyzer = FrequencyAnalyzer()
+        count = 0
+        for wav in self.files.values():
+            if wav.spectral_features is not None:
+                continue
+            try:
+                with wave.open(wav.path, "r") as wf:
+                    sw = wf.getsampwidth()
+                    n_frames = min(wf.getnframes(), wf.getframerate())
+                    raw = wf.readframes(n_frames)
+                samples: list[float] = []
+                if sw == 2:
+                    for i in range(0, len(raw) - 1, 2):
+                        val = struct.unpack_from("<h", raw, i)[0] / 32768.0
+                        samples.append(val)
+                if samples:
+                    wav.spectral_features = analyzer.analyze(samples)
+                    count += 1
+            except Exception:
+                pass
+        return count
+
+    def search_by_timbre(self, query_samples: list[float],
+                         top_k: int = 5,
+                         config: TurboQuantConfig | None = None) -> list[tuple[str, float, dict]]:
+        """Find WAV files most similar in timbre to the query audio.
+
+        Args:
+            query_samples: Audio samples to match against.
+            top_k: Number of results.
+            config: TurboQuant config for the search index.
+
+        Returns:
+            List of (name, similarity, metadata) tuples.
+        """
+        analyzer = FrequencyAnalyzer()
+        features = analyzer.analyze(query_samples)
+        vec = features.to_feature_vector()
+
+        idx = self.build_timbre_index(config)
+        return idx.search(vec, top_k=top_k)
 
 
 def main() -> None:
