@@ -22,6 +22,12 @@ from pathlib import Path
 
 from engine.config_loader import PHI
 from engine.log import get_logger
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
 
 _log = get_logger("dubforge.als_generator")
 
@@ -122,6 +128,17 @@ class ALSAutomation:
     """Automation envelope for a track parameter."""
     parameter_name: str
     points: list[ALSAutomationPoint] = field(default_factory=list)
+
+    def to_compressed(self) -> CompressedAudioBuffer:
+        """TQ-compress automation point values."""
+        values = [p.value for p in self.points]
+        if not values:
+            values = [0.0]
+        tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(values)))
+        return compress_audio_buffer(
+            values, f"als_auto_{self.parameter_name}", tq_cfg,
+            sample_rate=1, label=self.parameter_name,
+        )
 
 
 @dataclass

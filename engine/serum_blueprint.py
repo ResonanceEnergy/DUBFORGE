@@ -30,6 +30,7 @@ from typing import Optional
 
 from engine.config_loader import FIBONACCI, PHI, get_config_value
 from engine.log import get_logger
+from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
 
 _log = get_logger("dubforge.serum_blueprint")
 
@@ -188,6 +189,23 @@ class SerumBlueprint:
     # Notes
     notes: str = ""
     dojo_tips: list[str] = field(default_factory=list)
+
+    def to_feature_vector(self) -> list[float]:
+        """Flatten blueprint parameters into a feature vector for TQ indexing."""
+        vec: list[float] = []
+        for osc in (self.osc_a, self.osc_b):
+            vec.extend([
+                osc.wt_pos, float(osc.octave), float(osc.semi),
+                osc.fine, float(osc.unison_voices), osc.unison_detune,
+                osc.warp.warp_1_amount, osc.warp.warp_2_amount,
+            ])
+        if self.chaos:
+            vec.extend([self.chaos.confidence, float(self.chaos.lfo_slot)])
+        for lfo in self.lfos:
+            vec.append(float(lfo.slot))
+        for fx in self.fx_chain:
+            vec.append(fx.mix)
+        return vec
 
     def to_dict(self) -> dict:
         return {

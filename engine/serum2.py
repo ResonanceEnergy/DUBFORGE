@@ -33,6 +33,7 @@ from typing import Optional
 # CONSTANTS — DUBFORGE DOCTRINE
 # ═══════════════════════════════════════════════════════════════════════════
 from engine.config_loader import A4_432, FIBONACCI, PHI, get_config_value
+from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
 
 # Serum wavetable specs
 SERUM_FRAME_SIZE = 2048          # samples per frame (internal resolution)
@@ -901,6 +902,42 @@ class Serum2Patch:
     master_tune: float = A4_432        # DUBFORGE default: 432 Hz
     quality: str = "2x"                # Draft (1x), High (2x), Ultra (4x)
     s1_compatibility: bool = False     # Serum 1 compat mode
+
+    def to_parameter_vector(self) -> list[float]:
+        """Flatten all float parameters into a vector for TQ indexing."""
+        vec: list[float] = []
+        for osc in (self.osc_a, self.osc_b, self.osc_c):
+            vec.extend([
+                osc.wt_position, osc.level, osc.pan, float(osc.octave),
+                float(osc.semi), osc.fine, osc.coarse,
+                float(osc.unison_voices), osc.unison_detune, osc.unison_blend,
+                osc.unison_width, osc.warp_1_amount, osc.warp_2_amount,
+                osc.phase, osc.bus_1_send, osc.bus_2_send,
+            ])
+        vec.extend([self.sub.level, self.sub.pan, self.sub.phase])
+        vec.extend([self.noise.level, self.noise.pan])
+        for flt in (self.filter_1, self.filter_2):
+            vec.extend([
+                flt.cutoff, flt.resonance, flt.drive, flt.var,
+                flt.pan, flt.mix, flt.key_tracking,
+                flt.bus_1_send, flt.bus_2_send,
+            ])
+        for env in (self.env_1, self.env_2, self.env_3, self.env_4):
+            vec.extend([
+                env.attack_ms, env.hold_ms, env.decay_ms,
+                env.sustain, env.release_ms,
+                env.attack_curve, env.decay_curve, env.release_curve,
+            ])
+        for lfo in (self.lfo_1, self.lfo_2, self.lfo_3, self.lfo_4,
+                     self.lfo_5, self.lfo_6, self.lfo_7, self.lfo_8,
+                     self.lfo_9, self.lfo_10):
+            vec.extend([lfo.rate_hz, lfo.phase, lfo.rise_ms,
+                        lfo.delay_ms, lfo.smooth, lfo.swing])
+        for macro in (self.macro_1, self.macro_2, self.macro_3, self.macro_4,
+                       self.macro_5, self.macro_6, self.macro_7, self.macro_8):
+            vec.append(macro.value)
+        vec.append(self.master_volume)
+        return vec
 
 
 # ═══════════════════════════════════════════════════════════════════════════

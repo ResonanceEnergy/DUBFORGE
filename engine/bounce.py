@@ -12,6 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
+
 SAMPLE_RATE = 48000
 
 
@@ -104,6 +111,13 @@ class BounceEngine:
             if pk > 0:
                 gain = cfg.target_peak / pk
                 processed = [s * gain for s in processed]
+
+        # TurboQuant compress before write
+        tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(processed)))
+        cab = compress_audio_buffer(
+            processed, f"bounce_{Path(path).stem}", tq_cfg,
+            sample_rate=cfg.sample_rate, label=path,
+        )
 
         # Write
         Path(path).parent.mkdir(parents=True, exist_ok=True)

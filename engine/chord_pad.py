@@ -23,8 +23,27 @@ import numpy as np
 from engine.config_loader import PHI
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
+from engine.turboquant import (
+    compress_audio_buffer,
+    CompressedAudioBuffer,
+    phi_optimal_bits,
+    TurboQuantConfig,
+)
 
 logger = get_logger(__name__)
+
+
+def tq_compress_chord_pad(
+    signal: np.ndarray,
+    label: str = "chord_pad",
+    config: TurboQuantConfig | None = None,
+    sample_rate: int = SAMPLE_RATE,
+) -> CompressedAudioBuffer:
+    """TQ-compress chord pad synthesis output."""
+    samples = signal.tolist()
+    bits = phi_optimal_bits(len(samples))
+    cfg = config or TurboQuantConfig(bit_width=bits)
+    return compress_audio_buffer(samples, label, cfg, sample_rate=sample_rate)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

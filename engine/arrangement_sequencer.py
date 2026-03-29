@@ -17,6 +17,13 @@ with bar counts and which elements are active per section.
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
+
 FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55]
 
 
@@ -188,6 +195,18 @@ def arrangement_energy_curve(template: ArrangementTemplate) -> list[dict]:
         })
         bar_pos += section.bars
     return curve
+
+
+def arrangement_energy_compressed(template: ArrangementTemplate) -> CompressedAudioBuffer:
+    """TQ-compress the energy/intensity vector of an arrangement."""
+    intensities = [s.intensity for s in template.sections]
+    if not intensities:
+        intensities = [0.0]
+    tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(intensities)))
+    return compress_audio_buffer(
+        intensities, f"energy_{template.name}", tq_cfg,
+        sample_rate=1, label=template.name,
+    )
 
 
 def golden_section_check(template: ArrangementTemplate) -> dict:

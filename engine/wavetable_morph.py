@@ -24,6 +24,12 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedWavetable,
+    TurboQuantConfig,
+    compress_wavetable,
+    decompress_wavetable,
+)
 FRAME_SIZE = 2048
 
 
@@ -238,6 +244,30 @@ def morph_wavetable(frames: list[np.ndarray],
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# TURBOQUANT COMPRESSION
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def tq_compress_morph(
+    frames: list[np.ndarray],
+    name: str,
+    config: TurboQuantConfig | None = None,
+) -> CompressedWavetable:
+    """TQ-compress morphed wavetable frames."""
+    float_frames = [f.tolist() for f in frames]
+    return compress_wavetable(float_frames, config or TurboQuantConfig(), name=name)
+
+
+def tq_decompress_morph(
+    compressed: CompressedWavetable,
+    config: TurboQuantConfig | None = None,
+) -> list[np.ndarray]:
+    """Decompress TQ-compressed wavetable back to frames."""
+    float_frames = decompress_wavetable(compressed, config or TurboQuantConfig())
+    return [np.array(f) for f in float_frames]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # WAV EXPORT
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -270,6 +300,11 @@ def export_morph_wavetables(output_dir: str = "output") -> list[str]:
             fname = f"morph_{preset.name}.wav"
             _write_wav(out / fname, audio)
             paths.append(str(out / fname))
+            # TQ sidecar
+            cw = tq_compress_morph(morphed, preset.name)
+            tq_path = out / f"morph_{preset.name}.tq"
+            import pickle
+            tq_path.write_bytes(pickle.dumps(cw))
     return paths
 
 

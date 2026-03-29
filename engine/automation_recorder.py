@@ -10,6 +10,13 @@ import math
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
+
 SAMPLE_RATE = 48000
 
 
@@ -227,6 +234,16 @@ class AutomationRecorder:
             t = i / self.sample_rate
             buffer.append(self.get_value_at(lane_name, t))
         return buffer
+
+    def render_lane_compressed(self, lane_name: str,
+                               duration: float) -> CompressedAudioBuffer:
+        """Render automation lane and TQ-compress."""
+        buf = self.render_lane(lane_name, duration)
+        tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(buf)))
+        return compress_audio_buffer(
+            buf, f"auto_{lane_name}", tq_cfg,
+            sample_rate=self.sample_rate, label=lane_name,
+        )
 
     # --- Generation ---
 

@@ -13,6 +13,8 @@ import wave
 from dataclasses import dataclass
 
 from engine.config_loader import PHI
+from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
+
 SAMPLE_RATE = 48000
 
 
@@ -53,6 +55,14 @@ class SpectralProfile:
     high_energy: float = 0.0     # 6000-20000 Hz
     dominant_freq: float = 0.0
     spectral_centroid: float = 0.0
+
+    def to_vector(self) -> list[float]:
+        """Return spectral profile as a float vector for TQ indexing."""
+        return [
+            self.sub_energy, self.bass_energy, self.low_mid_energy,
+            self.mid_energy, self.high_mid_energy, self.high_energy,
+            self.dominant_freq, self.spectral_centroid,
+        ]
 
     def to_dict(self) -> dict:
         return {

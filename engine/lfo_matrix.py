@@ -21,6 +21,12 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
 # --- Data Models ----------------------------------------------------------
 
 @dataclass
@@ -151,6 +157,18 @@ def generate_lfo(preset: LFOPreset, duration_s: float,
     if gen is None:
         raise ValueError(f"Unknown LFO type: {preset.lfo_type}")
     return gen(preset, duration_s, sample_rate)
+
+
+def generate_lfo_compressed(preset: LFOPreset, duration_s: float,
+                            sample_rate: int = SAMPLE_RATE) -> CompressedAudioBuffer:
+    """Generate LFO signal and TQ-compress it."""
+    signal = generate_lfo(preset, duration_s, sample_rate)
+    samples = signal.tolist()
+    tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(samples)))
+    return compress_audio_buffer(
+        samples, f"lfo_{preset.name}_{preset.lfo_type}", tq_cfg,
+        sample_rate=sample_rate, label=preset.name,
+    )
 
 
 def apply_lfo(signal: np.ndarray, preset: LFOPreset,

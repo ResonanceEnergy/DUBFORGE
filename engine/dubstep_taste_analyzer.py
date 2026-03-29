@@ -44,6 +44,13 @@ from typing import Optional
 
 from engine.config_loader import FIBONACCI, PHI, get_config_value
 from engine.log import get_logger
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    SpectralVectorIndex,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
 
 _log = get_logger("dubforge.taste_analyzer")
 
@@ -163,6 +170,15 @@ class StemFeatures:
         """Scalar features + perceptual embedding (if available)."""
         return self.scalar_vector + self.embedding
 
+    def to_compressed(self) -> CompressedAudioBuffer:
+        """TQ-compress the hybrid feature vector."""
+        vec = self.hybrid_vector
+        tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(vec)))
+        return compress_audio_buffer(
+            vec, f"taste_{self.stem_type}", tq_cfg,
+            sample_rate=1, label=self.stem_type,
+        )
+
     def to_dict(self) -> dict:
         d = asdict(self)
         d["scalar_vector"] = self.scalar_vector
@@ -200,6 +216,15 @@ class TastePrototype:
     mean_vector: list[float] = field(default_factory=list)
     std_vector: list[float] = field(default_factory=list)
     sample_count: int = 0
+
+    def to_compressed(self) -> CompressedAudioBuffer:
+        """TQ-compress the mean taste vector."""
+        vec = self.mean_vector or [0.0]
+        tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(vec)))
+        return compress_audio_buffer(
+            vec, f"proto_{self.stem_type}", tq_cfg,
+            sample_rate=1, label=self.stem_type,
+        )
 
     def to_dict(self) -> dict:
         return {

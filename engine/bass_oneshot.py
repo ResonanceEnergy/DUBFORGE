@@ -35,8 +35,27 @@ import numpy as np
 from engine.config_loader import PHI, A4_432, A4_440
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
+from engine.turboquant import (
+    compress_audio_buffer,
+    CompressedAudioBuffer,
+    phi_optimal_bits,
+    TurboQuantConfig,
+)
 
 _log = get_logger("dubforge.bass_oneshot")
+
+
+def tq_compress_bass_oneshot(
+    signal: np.ndarray,
+    label: str = "bass_oneshot",
+    config: TurboQuantConfig | None = None,
+    sample_rate: int = SAMPLE_RATE,
+) -> CompressedAudioBuffer:
+    """TQ-compress bass oneshot synthesis output."""
+    samples = signal.tolist()
+    bits = phi_optimal_bits(len(samples))
+    cfg = config or TurboQuantConfig(bit_width=bits)
+    return compress_audio_buffer(samples, label, cfg, sample_rate=sample_rate)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

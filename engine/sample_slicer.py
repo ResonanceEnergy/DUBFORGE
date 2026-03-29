@@ -20,8 +20,29 @@ import numpy as np
 
 from engine.config_loader import FIBONACCI
 from engine.log import get_logger
+from engine.turboquant import (
+    compress_audio_buffer,
+    CompressedAudioBuffer,
+    SpectralVectorIndex,
+    phi_optimal_bits,
+    TurboQuantConfig,
+)
 
 _log = get_logger("dubforge.sample_slicer")
+
+
+def tq_compress_slice(
+    signal: np.ndarray,
+    label: str = "slice",
+    config: TurboQuantConfig | None = None,
+    sample_rate: int = 44100,
+) -> CompressedAudioBuffer:
+    """TQ-compress a sliced audio segment."""
+    samples = signal.tolist()
+    bits = phi_optimal_bits(len(samples))
+    cfg = config or TurboQuantConfig(bit_width=bits)
+    return compress_audio_buffer(samples, label, cfg, sample_rate=sample_rate)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSTANTS

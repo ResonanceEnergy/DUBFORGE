@@ -21,6 +21,27 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    compress_audio_buffer,
+    CompressedAudioBuffer,
+    phi_optimal_bits,
+    TurboQuantConfig,
+)
+
+
+def tq_compress_reverb(
+    signal: np.ndarray,
+    label: str = "reverb",
+    config: TurboQuantConfig | None = None,
+    sample_rate: int = SAMPLE_RATE,
+) -> CompressedAudioBuffer:
+    """TQ-compress reverb/delay output."""
+    samples = signal.tolist()
+    bits = phi_optimal_bits(len(samples))
+    cfg = config or TurboQuantConfig(bit_width=bits)
+    return compress_audio_buffer(samples, label, cfg, sample_rate=sample_rate)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════

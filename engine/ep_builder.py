@@ -14,6 +14,13 @@ import wave
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI, A4_432
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
+
 SAMPLE_RATE = 48000
 @dataclass
 class Track:
@@ -227,10 +234,24 @@ class EPBuilder:
             # Master
             audio = self._master_track(audio)
 
+            # TurboQuant compress track audio
+            tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(audio)))
+            cab = compress_audio_buffer(
+                audio, f"ep_track_{track.number:02d}", tq_cfg,
+                sample_rate=SAMPLE_RATE, label=track.title,
+            )
+
             # Export
             filename = f"{track.number:02d}_{track.title.replace(' ', '_')}.wav"
             path = os.path.join(ep_dir, filename)
             _write_wav(path, audio)
+
+            # Write TQ sidecar
+            tq_path = path.replace('.wav', '.tq')
+            with open(tq_path, 'wb') as _f:
+                import pickle
+                pickle.dump(cab, _f)
+
             track.wav_path = path
             track.samples = []  # don't keep in memory
 

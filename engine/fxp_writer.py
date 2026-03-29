@@ -21,6 +21,7 @@ from pathlib import Path
 
 from engine.config_loader import PHI
 from engine.log import get_logger
+from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
 
 _log = get_logger("dubforge.fxp_writer")
 
@@ -62,6 +63,10 @@ class FXPPreset:
     @property
     def is_opaque(self) -> bool:
         return len(self.chunk_data) > 0
+
+    def to_parameter_vector(self) -> list[float]:
+        """Extract parameter values as a float vector for TQ indexing."""
+        return [p.value for p in self.params]
 
 
 @dataclass

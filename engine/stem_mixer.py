@@ -24,6 +24,12 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -345,6 +351,20 @@ def export_mix_demos(output_dir: str = "output") -> list[str]:
         for preset in bank.presets:
             mixed = mix_stems(stems, preset)
             fname = f"mix_{preset.name}.wav"
+
+            # TurboQuant compress stereo channels
+            left = mixed[:, 0].tolist()
+            right = mixed[:, 1].tolist()
+            tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(left)))
+            compress_audio_buffer(
+                left, f"mix_{preset.name}_L", tq_cfg,
+                sample_rate=SAMPLE_RATE, label=f"{preset.name} left",
+            )
+            compress_audio_buffer(
+                right, f"mix_{preset.name}_R", tq_cfg,
+                sample_rate=SAMPLE_RATE, label=f"{preset.name} right",
+            )
+
             _write_wav_stereo(out / fname, mixed)
             paths.append(str(out / fname))
     return paths

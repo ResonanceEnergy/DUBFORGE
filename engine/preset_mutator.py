@@ -14,6 +14,8 @@ from pathlib import Path
 import numpy as np
 
 from engine.config_loader import PHI
+from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
+
 PHI_INV = 1.0 / PHI
 
 
@@ -50,6 +52,10 @@ class Patch:
             genes=[PatchGene(g.name, g.value, g.min_val, g.max_val) for g in self.genes],
             fitness=self.fitness,
         )
+
+    def to_vector(self) -> list[float]:
+        """Extract gene values as a float vector for TQ indexing."""
+        return [g.value for g in self.genes]
 
 
 @dataclass

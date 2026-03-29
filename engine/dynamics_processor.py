@@ -9,7 +9,25 @@ import math
 from dataclasses import dataclass
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    compress_audio_buffer,
+    CompressedAudioBuffer,
+    phi_optimal_bits,
+    TurboQuantConfig,
+)
 SAMPLE_RATE = 48000
+
+
+def tq_compress_dynamics_proc(
+    signal: list[float],
+    label: str = "dynamics_proc",
+    config: TurboQuantConfig | None = None,
+    sample_rate: int = SAMPLE_RATE,
+) -> CompressedAudioBuffer:
+    """TQ-compress dynamics processor output."""
+    bits = phi_optimal_bits(len(signal))
+    cfg = config or TurboQuantConfig(bit_width=bits)
+    return compress_audio_buffer(signal, label, cfg, sample_rate=sample_rate)
 
 
 @dataclass

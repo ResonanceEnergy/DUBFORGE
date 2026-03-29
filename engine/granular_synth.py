@@ -23,6 +23,12 @@ import numpy as np
 from engine.config_loader import PHI
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
 
 logger = get_logger(__name__)
 
@@ -383,6 +389,17 @@ def synthesize_granular(preset: GranularPreset,
         raise ValueError(f"Unknown grain_type: {preset.grain_type!r}")
     return fn(preset, sample_rate)
 
+def tq_compress_granular(
+    signal: np.ndarray,
+    name: str,
+    config: TurboQuantConfig | None = None,
+    sample_rate: int = SAMPLE_RATE,
+) -> CompressedAudioBuffer:
+    """TQ-compress a granular synthesis render."""
+    samples = signal.tolist()
+    bits = phi_optimal_bits(len(samples))
+    cfg = config or TurboQuantConfig(bit_width=bits)
+    return compress_audio_buffer(samples, name, cfg, sample_rate=sample_rate)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PRESET BANKS — 5 types × 4 presets = 20
@@ -588,6 +605,11 @@ def write_granular_manifest(output_dir: str = "output") -> dict:
             audio = synthesize_granular(preset)
             wav_path = base / "wavetables" / f"granular_{preset.name}.wav"
             _write_wav(wav_path, audio)
+            # TQ sidecar
+            cab = tq_compress_granular(audio, preset.name)
+            tq_path = base / "wavetables" / f"granular_{preset.name}.tq"
+            import pickle
+            tq_path.write_bytes(pickle.dumps(cab))
             bank_info.append({
                 "name": preset.name,
                 "grain_type": preset.grain_type,

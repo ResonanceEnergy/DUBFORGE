@@ -23,6 +23,11 @@ import numpy as np
 # Import shared constants and wavetable writer
 from engine.config_loader import PHI, get_config_value
 from engine.phi_core import WAVETABLE_SIZE, write_wav
+from engine.turboquant import (
+    CompressedWavetable,
+    TurboQuantConfig,
+    compress_wavetable,
+)
 
 # --- Processing Steps -----------------------------------------------------
 
@@ -344,6 +349,16 @@ def dojo_audio_rate_fm(frame: np.ndarray, mod_freq: float = 55.0,
     return output
 
 
+def tq_compress_growl(
+    frames: list[np.ndarray],
+    name: str,
+    config: TurboQuantConfig | None = None,
+) -> CompressedWavetable:
+    """TQ-compress growl resampler output frames."""
+    float_frames = [f.tolist() for f in frames]
+    return compress_wavetable(float_frames, config or TurboQuantConfig(), name=name)
+
+
 # --- Source Generators (if no input provided) -----------------------------
 
 def generate_saw_source(size: int = WAVETABLE_SIZE) -> np.ndarray:
@@ -392,6 +407,7 @@ def main() -> None:
     saw_frames = growl_resample_pipeline(saw_source, n_output_frames=n_frames)
     saw_path = str(out_dir / 'DUBFORGE_GROWL_SAW.wav')
     write_wav(saw_path, saw_frames)
+    tq_compress_growl(saw_frames, "GROWL_SAW").compressed_bytes  # warm cache
     print(f"  -> {saw_path}")
 
     # Generate from FM source
@@ -400,6 +416,7 @@ def main() -> None:
     fm_frames = growl_resample_pipeline(fm_source, n_output_frames=n_frames)
     fm_path = str(out_dir / 'DUBFORGE_GROWL_FM.wav')
     write_wav(fm_path, fm_frames)
+    tq_compress_growl(fm_frames, "GROWL_FM").compressed_bytes  # warm cache
     print(f"  -> {fm_path}")
 
     print("Growl Resampler complete.")

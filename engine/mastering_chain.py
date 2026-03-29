@@ -22,6 +22,12 @@ import numpy as np
 
 from engine.config_loader import PHI
 from engine.log import get_logger
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
 
 _log = get_logger("dubforge.mastering_chain")
 
@@ -408,6 +414,15 @@ def master(audio: np.ndarray, sr: int = SAMPLE_RATE,
 
     _log.info("Mastered: %.1f LUFS → %.1f LUFS (gain: %.1f dB)",
               report.input_lufs, report.output_lufs, report.gain_applied_db)
+
+    # TurboQuant compress mastered output
+    flat = out.flatten().tolist()
+    tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(flat)))
+    compress_audio_buffer(
+        flat, "mastered_output", tq_cfg,
+        sample_rate=sr, label="master",
+    )
+
     return out, report
 
 

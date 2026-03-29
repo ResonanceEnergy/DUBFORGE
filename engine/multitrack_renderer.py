@@ -12,6 +12,13 @@ import wave
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
+
 SAMPLE_RATE = 48000
 
 
@@ -241,6 +248,13 @@ class MultiTrackRenderer:
         if peak > 1.0:
             mix = [s / peak for s in mix]
 
+        # TurboQuant compress mono mixdown
+        tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(mix)))
+        compress_audio_buffer(
+            mix, "mono_mixdown", tq_cfg,
+            sample_rate=self.sample_rate, label=filename,
+        )
+
         path = os.path.join(self.output_dir, filename)
         return _write_wav(path, mix, self.sample_rate)
 
@@ -260,6 +274,13 @@ class MultiTrackRenderer:
         peak = max(abs(s) for s in stereo) if stereo else 1.0
         if peak > 1.0:
             stereo = [s / peak for s in stereo]
+
+        # TurboQuant compress stereo mixdown
+        tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(stereo)))
+        compress_audio_buffer(
+            stereo, "stereo_mixdown", tq_cfg,
+            sample_rate=self.sample_rate, label=filename,
+        )
 
         path = os.path.join(self.output_dir, filename)
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)

@@ -12,6 +12,12 @@ import wave
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI, A4_432
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
 SAMPLE_RATE = 48000
 
 
@@ -223,13 +229,27 @@ ADDITIVE_PRESETS: dict[str, AdditivePatch] = {
 }
 
 
+def tq_compress_additive(
+    signal: list[float],
+    name: str,
+    config: TurboQuantConfig | None = None,
+    sample_rate: int = SAMPLE_RATE,
+) -> CompressedAudioBuffer:
+    """TQ-compress an additive synthesis render."""
+    bits = phi_optimal_bits(len(signal))
+    cfg = config or TurboQuantConfig(bit_width=bits)
+    return compress_audio_buffer(signal, name, cfg, sample_rate=sample_rate)
+
+
 def render_preset(name: str, freq: float = A4_432,
                    duration: float = 2.0,
                    output_dir: str = "output/wavetables") -> str:
     patch = ADDITIVE_PRESETS.get(name, ADDITIVE_PRESETS["organ"])
     signal = render_additive(patch, freq, duration)
     path = os.path.join(output_dir, f"additive_{name}.wav")
-    return _write_wav(path, signal)
+    _write_wav(path, signal)
+    tq_compress_additive(signal, f"additive_{name}")
+    return path
 
 
 def main() -> None:

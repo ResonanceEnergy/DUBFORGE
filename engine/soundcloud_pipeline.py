@@ -44,6 +44,12 @@ from typing import Optional
 
 from engine.config_loader import get_config_value
 from engine.log import get_logger
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
 
 _log = get_logger("dubforge.soundcloud_pipeline")
 

@@ -13,6 +13,25 @@ import numpy as np
 PHI = 1.6180339887
 SAMPLE_RATE = 44100
 
+from engine.turboquant import (  # noqa: E402
+    compress_audio_buffer,
+    CompressedAudioBuffer,
+    phi_optimal_bits,
+    TurboQuantConfig,
+)
+
+
+def tq_compress_dynamics(
+    signal: list[float],
+    label: str = "dynamics",
+    config: TurboQuantConfig | None = None,
+    sample_rate: int = SAMPLE_RATE,
+) -> CompressedAudioBuffer:
+    """TQ-compress dynamics-processed audio."""
+    bits = phi_optimal_bits(len(signal))
+    cfg = config or TurboQuantConfig(bit_width=bits)
+    return compress_audio_buffer(signal, label, cfg, sample_rate=sample_rate)
+
 
 @dataclass
 class CompressorSettings:

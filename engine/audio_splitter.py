@@ -12,6 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
+
 SAMPLE_RATE = 48000
 
 
@@ -317,6 +324,14 @@ class AudioSplitter:
         for seg in segments:
             fname = f"{prefix}_{seg.index:03d}_{seg.label}.wav"
             fpath = str(out / fname)
+
+            # TurboQuant compress segment
+            tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(seg.samples)))
+            compress_audio_buffer(
+                seg.samples, f"seg_{seg.index:03d}_{seg.label}", tq_cfg,
+                sample_rate=self.sample_rate, label=seg.label,
+            )
+
             self._write_wav(fpath, seg.samples, self.sample_rate)
             paths.append(fpath)
 

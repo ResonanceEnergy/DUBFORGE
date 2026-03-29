@@ -12,6 +12,12 @@ import wave
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI, A4_432
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
 SAMPLE_RATE = 48000
 
 
@@ -224,6 +230,18 @@ FM_PRESETS: dict[str, FMPatch] = {
 }
 
 
+def tq_compress_fm(
+    signal: list[float],
+    name: str,
+    config: TurboQuantConfig | None = None,
+    sample_rate: int = SAMPLE_RATE,
+) -> CompressedAudioBuffer:
+    """TQ-compress an FM synthesis render."""
+    bits = phi_optimal_bits(len(signal))
+    cfg = config or TurboQuantConfig(bit_width=bits)
+    return compress_audio_buffer(signal, name, cfg, sample_rate=sample_rate)
+
+
 def render_preset(preset_name: str, freq: float = A4_432,
                    duration: float = 2.0,
                    output_dir: str = "output/wavetables") -> str:
@@ -233,7 +251,9 @@ def render_preset(preset_name: str, freq: float = A4_432,
         patch = FM_PRESETS["phi_bell"]
     signal = render_fm(patch, freq, duration)
     path = os.path.join(output_dir, f"fm_{preset_name}.wav")
-    return _write_wav(path, signal)
+    _write_wav(path, signal)
+    tq_compress_fm(signal, f"fm_{preset_name}")
+    return path
 
 
 def main() -> None:

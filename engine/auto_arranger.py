@@ -8,6 +8,13 @@ with structure templates, transitions, and PHI proportions.
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI
+from engine.turboquant import (
+    CompressedAudioBuffer,
+    TurboQuantConfig,
+    compress_audio_buffer,
+    phi_optimal_bits,
+)
+
 SAMPLE_RATE = 48000
 
 
@@ -79,6 +86,21 @@ class Arrangement:
             "sections": [s.to_dict() for s in self.sections],
             "transitions": [t.to_dict() for t in self.transitions],
         }
+
+    def energy_vector(self) -> list[float]:
+        """Extract energy values as a float vector for TQ compression."""
+        return [s.energy for s in self.sections]
+
+    def energy_compressed(self) -> CompressedAudioBuffer:
+        """TQ-compress the energy vector of this arrangement."""
+        vec = self.energy_vector()
+        if not vec:
+            vec = [0.0]
+        tq_cfg = TurboQuantConfig(bit_width=phi_optimal_bits(len(vec)))
+        return compress_audio_buffer(
+            vec, f"energy_{self.name}", tq_cfg,
+            sample_rate=1, label=self.name,
+        )
 
 
 # Standard dubstep arrangement templates

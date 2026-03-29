@@ -11,6 +11,7 @@ import os
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI
+from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
 @dataclass
 class Preset:
     """A single preset entry."""
@@ -249,6 +250,24 @@ class PresetBrowser:
             f"Tags: {', '.join(self.tags()[:20])}",
         ]
         return "\n".join(lines)
+
+    def search_similar(self, query_params: dict,
+                       top_k: int = 5) -> list[tuple[str, float, dict]]:
+        """Search presets by parameter similarity using TQ SpectralVectorIndex."""
+        tq_cfg = TurboQuantConfig(bit_width=3)
+        index = SpectralVectorIndex(tq_cfg)
+        # Build index from all presets with numeric params
+        for p in self._presets:
+            vec = [float(v) for v in p.params.values()
+                   if isinstance(v, (int, float))]
+            if vec:
+                index.add(p.uid, vec, {"name": p.name, "module": p.module})
+        # Build query vector
+        query_vec = [float(v) for v in query_params.values()
+                     if isinstance(v, (int, float))]
+        if not query_vec:
+            return []
+        return index.search(query_vec, top_k=top_k)
 
 
 # Module-level singleton

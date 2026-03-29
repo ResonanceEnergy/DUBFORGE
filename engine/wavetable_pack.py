@@ -40,6 +40,11 @@ from engine.phi_core import (
     phi_harmonic_series,
     write_wav as write_serum_wav,
 )
+from engine.turboquant import (
+    CompressedWavetable,
+    TurboQuantConfig,
+    compress_wavetable,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -190,6 +195,12 @@ def export_wavetable_pack(pack_name: str,
         path = out / f"{name}.wav"
         write_serum_wav(str(path), frames)
         paths.append(str(path))
+        # TQ sidecar
+        float_frames = [f.tolist() for f in frames]
+        cw = compress_wavetable(float_frames, TurboQuantConfig(), name=name)
+        tq_path = out / f"{name}.tq"
+        import pickle
+        tq_path.write_bytes(pickle.dumps(cw))
 
     # Manifest
     manifest = {
