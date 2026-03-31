@@ -27,7 +27,7 @@ from engine.turboquant import (
 
 # --- Constants -----------------------------------------------------------
 
-SAMPLE_RATE = 48000
+SAMPLE_RATE = 44100
 WAVETABLE_SIZE = 2048      # Serum standard single-cycle length
 DEFAULT_FRAMES = 256       # Serum max wavetable frames
 

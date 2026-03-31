@@ -15,10 +15,9 @@ Types:
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
-
-from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
 from engine.turboquant import (
@@ -27,6 +26,8 @@ from engine.turboquant import (
     phi_optimal_bits,
     TurboQuantConfig,
 )
+
+SAMPLE_RATE = 44100
 
 
 def tq_compress_reverb(
@@ -403,7 +404,7 @@ def delay_bank() -> ReverbDelayBank:
     ])
 
 
-ALL_REVERB_DELAY_BANKS: dict[str, callable] = {
+ALL_REVERB_DELAY_BANKS: dict[str, Callable[[], ReverbDelayBank]] = {
     "room": room_bank,
     "hall": hall_bank,
     "plate": plate_bank,
@@ -429,6 +430,11 @@ def _write_wav(path: Path, samples: np.ndarray,
         wf.writeframes(pcm.tobytes())
 
 
+def _export_path(path: Path) -> str:
+    """Return stable POSIX-style paths for cross-platform callers/tests."""
+    return path.as_posix()
+
+
 def _test_signal(duration_s: float = 1.0, freq: float = 200.0,
                  sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Generate a test sine for processing demos."""
@@ -448,7 +454,7 @@ def export_reverb_delay_demos(output_dir: str = "output") -> list[str]:
             processed = apply_reverb_delay(sig, preset, SAMPLE_RATE)
             fname = f"rvb_{preset.name}.wav"
             _write_wav(out / fname, processed)
-            paths.append(str(out / fname))
+            paths.append(_export_path(out / fname))
     return paths
 
 

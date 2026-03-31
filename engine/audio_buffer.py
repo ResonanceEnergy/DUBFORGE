@@ -11,6 +11,8 @@ import struct
 import wave
 from dataclasses import dataclass
 
+import numpy as np
+
 from engine.config_loader import PHI
 from engine.turboquant import (
     CompressedAudioBuffer,
@@ -45,13 +47,16 @@ class AudioBuffer:
 
     @property
     def peak(self) -> float:
-        return max(abs(s) for s in self.samples) if self.samples else 0.0
+        if not self.samples:
+            return 0.0
+        return float(np.max(np.abs(np.asarray(self.samples))))
 
     @property
     def rms(self) -> float:
         if not self.samples:
             return 0.0
-        return math.sqrt(sum(s * s for s in self.samples) / len(self.samples))
+        arr = np.asarray(self.samples)
+        return float(np.sqrt(np.mean(arr * arr)))
 
     def to_dict(self) -> dict:
         return {
@@ -92,8 +97,7 @@ class AudioBufferPool:
                 buf.in_use = True
                 buf.label = label
                 # Reset samples
-                for i in range(len(buf.samples)):
-                    buf.samples[i] = fill
+                buf.samples = [fill] * len(buf.samples)
                 return buf
 
         # Allocate new
@@ -179,16 +183,13 @@ class AudioBufferPool:
         if not buf:
             return ""
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        arr = np.asarray(buf.samples)
+        clipped = np.clip(arr * 32767, -32768, 32767).astype(np.int16)
         with wave.open(path, "w") as wf:
             wf.setnchannels(buf.channels)
             wf.setsampwidth(2)
             wf.setframerate(buf.sample_rate)
-            data = struct.pack(
-                f"<{len(buf.samples)}h",
-                *[max(-32768, min(32767, int(s * 32767)))
-                  for s in buf.samples]
-            )
-            wf.writeframes(data)
+            wf.writeframes(clipped.tobytes())
         return path
 
     # --- Buffer Operations ---
@@ -215,13 +216,13 @@ class AudioBufferPool:
             gains = [1.0 / len(bufs)] * len(bufs)
 
         max_len = max(len(b.samples) for b in bufs)
-        mixed = [0.0] * max_len
+        mixed = np.zeros(max_len)
 
         for buf, gain in zip(bufs, gains):
-            for i in range(len(buf.samples)):
-                mixed[i] += buf.samples[i] * gain
+            arr = np.asarray(buf.samples)
+            mixed[:len(arr)] += arr * gain
 
-        return self.from_samples(mixed, "mix")
+        return self.from_samples(mixed.tolist(), "mix")
 
     def concatenate(self, buffer_ids: list[str]) -> AudioBuffer:
         """Concatenate buffers end to end."""
@@ -248,8 +249,8 @@ class AudioBufferPool:
         if not buf:
             return False
         gain = 10.0 ** (gain_db / 20.0)
-        buf.samples = [min(1.0, max(-1.0, s * gain))
-                       for s in buf.samples]
+        arr = np.clip(np.asarray(buf.samples) * gain, -1.0, 1.0)
+        buf.samples = arr.tolist()
         return True
 
     def normalize(self, buffer_id: str,
@@ -258,12 +259,12 @@ class AudioBufferPool:
         buf = self.buffers.get(buffer_id)
         if not buf or not buf.samples:
             return False
-        peak = max(abs(s) for s in buf.samples)
+        arr = np.asarray(buf.samples)
+        peak = float(np.max(np.abs(arr)))
         if peak == 0:
             return True
         target = 10.0 ** (target_db / 20.0)
-        gain = target / peak
-        buf.samples = [s * gain for s in buf.samples]
+        buf.samples = (arr * (target / peak)).tolist()
         return True
 
     def reverse(self, buffer_id: str) -> bool:
@@ -281,15 +282,17 @@ class AudioBufferPool:
         if not buf:
             return False
 
+        arr = np.asarray(buf.samples)
+        n = len(arr)
         fi = int(buf.sample_rate * fade_in_ms / 1000)
         fo = int(buf.sample_rate * fade_out_ms / 1000)
 
-        for i in range(min(fi, len(buf.samples))):
-            buf.samples[i] *= i / fi
-        for i in range(min(fo, len(buf.samples))):
-            idx = len(buf.samples) - 1 - i
-            buf.samples[idx] *= i / fo
+        if fi > 0 and fi <= n:
+            arr[:fi] *= np.arange(fi, dtype=np.float64) / fi
+        if fo > 0 and fo <= n:
+            arr[-fo:] *= np.arange(fo, 0, -1, dtype=np.float64) / fo
 
+        buf.samples = arr.tolist()
         return True
 
     # --- Stats ---

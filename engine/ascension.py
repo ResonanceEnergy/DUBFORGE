@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 
 from engine.config_loader import PHI, A4_432
 FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
-SAMPLE_RATE = 48000
+SAMPLE_RATE = 44100
 
 # ═══════════════════════════════════════════════════════════
 # Module manifest — every DUBFORGE engine module

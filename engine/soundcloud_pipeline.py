@@ -96,6 +96,62 @@ def _normalize_sc_url(url: str) -> str:
     return url
 
 
+def _resolve_likes_url(url: str, cookies_file: Optional[str] = None) -> str:
+    """Resolve ``/you/likes`` to the real username likes URL.
+
+    SoundCloud's ``/you/likes`` is a browser-side route — yt-dlp can't handle
+    it because the SoundCloud resolve API returns 404 for the virtual ``you``
+    user.  This helper queries ``api-v2.soundcloud.com/me`` with the oauth
+    token extracted from the cookies to get the real permalink, then rewrites
+    the URL.
+
+    Returns the original URL unchanged if it doesn't match ``/you/``.
+    """
+    from urllib.parse import urlparse
+    parsed = urlparse(url.strip())
+    path_parts = [p for p in parsed.path.strip("/").split("/") if p]
+    if not path_parts or path_parts[0].lower() != "you":
+        return url
+
+    # Need oauth_token from cookies
+    token = None
+    if cookies_file:
+        try:
+            import http.cookiejar
+            cj = http.cookiejar.MozillaCookieJar(cookies_file)
+            cj.load(ignore_discard=True, ignore_expires=True)
+            for c in cj:
+                if c.name == "oauth_token":
+                    token = c.value
+                    break
+        except Exception as e:
+            _log.warning(f"Could not read cookies file for /you/ resolution: {e}")
+
+    if not token:
+        _log.warning("Cannot resolve /you/ URL without oauth_token in cookies")
+        return url
+
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            f"https://api-v2.soundcloud.com/me?oauth_token={token}",
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read())
+        permalink = data.get("permalink", "")
+        if permalink:
+            # Rebuild: /you/likes → /permalink/likes
+            new_parts = [permalink] + path_parts[1:]
+            new_url = f"https://soundcloud.com/{'/'.join(new_parts)}"
+            _log.info(f"Resolved /you/ URL: {url} → {new_url}")
+            return new_url
+    except Exception as e:
+        _log.warning(f"Failed to resolve /you/ URL via API: {e}")
+
+    return url
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODELS
 # ═══════════════════════════════════════════════════════════════════════════
@@ -155,19 +211,22 @@ def _check_ytdlp() -> bool:
 def download_soundcloud_likes(likes_url: str,
                                output_dir: Optional[Path] = None,
                                max_tracks: int = 50,
-                               cookies_from_browser: Optional[str] = None) -> list[DownloadedTrack]:
+                               cookies_from_browser: Optional[str] = None,
+                               cookies_file: Optional[str] = None) -> list[DownloadedTrack]:
     """
     Download tracks from a SoundCloud URL.
 
     Args:
         likes_url: SoundCloud URL — likes page, artist profile, or playlist.
-            /you/likes requires ``cookies_from_browser`` for auth.
+            /you/likes requires ``cookies_from_browser`` or ``cookies_file`` for auth.
             Bare artist URLs (soundcloud.com/artist) are auto-normalised to /tracks.
         output_dir: Directory to save audio files.
         max_tracks: Maximum number of tracks to download.
         cookies_from_browser: Browser name to extract cookies from for auth
             ("chrome", "firefox", "edge", "safari", "brave", "chromium").
             Required for private likes pages (soundcloud.com/you/likes).
+        cookies_file: Path to a Netscape-format cookies.txt file.
+            Alternative to cookies_from_browser when browser DB is locked.
 
     Returns:
         List of DownloadedTrack with file paths.
@@ -184,24 +243,38 @@ def download_soundcloud_likes(likes_url: str,
     if url != likes_url:
         _log.info(f"Normalised URL: {likes_url} → {url}")
 
+    # Resolve /you/likes → /username/likes (yt-dlp can't handle /you/)
+    resolved = _resolve_likes_url(url, cookies_file=cookies_file)
+    if resolved != url:
+        url = resolved
+
     if cookies_from_browser and cookies_from_browser.lower() not in SUPPORTED_BROWSERS:
         raise ValueError(
             f"Unsupported browser '{cookies_from_browser}'. "
             f"Choose from: {', '.join(SUPPORTED_BROWSERS)}"
         )
 
-    _log.info(f"Downloading: {url} (max={max_tracks}" +
-              (f", cookies from {cookies_from_browser})" if cookies_from_browser else ")"))
+    auth_msg = ""
+    if cookies_file:
+        auth_msg = f", cookies file {cookies_file}"
+    elif cookies_from_browser:
+        auth_msg = f", cookies from {cookies_from_browser}"
+
+    _log.info(f"Downloading: {url} (max={max_tracks}{auth_msg})")
 
     # First: get metadata (no download)
-    tracks = _get_track_list(url, max_tracks, cookies_from_browser=cookies_from_browser)
+    tracks = _get_track_list(url, max_tracks,
+                             cookies_from_browser=cookies_from_browser,
+                             cookies_file=cookies_file)
 
     # Then: download audio
     for track in tracks:
         if track.error:
             continue
         try:
-            _download_single(track, out_dir, cookies_from_browser=cookies_from_browser)
+            _download_single(track, out_dir,
+                             cookies_from_browser=cookies_from_browser,
+                             cookies_file=cookies_file)
         except Exception as e:
             track.error = str(e)
             _log.warning(f"Download failed: {track.title} — {e}")
@@ -213,8 +286,16 @@ def download_soundcloud_likes(likes_url: str,
 
 
 def _get_track_list(likes_url: str, max_tracks: int,
-                    cookies_from_browser: Optional[str] = None) -> list[DownloadedTrack]:
-    """Get list of tracks from SoundCloud URL via yt-dlp metadata."""
+                    cookies_from_browser: Optional[str] = None,
+                    cookies_file: Optional[str] = None) -> list[DownloadedTrack]:
+    """Get list of tracks from SoundCloud URL via yt-dlp metadata.
+
+    Raises
+    ------
+    RuntimeError
+        If yt-dlp exits with a non-zero code (e.g. cookie DB locked,
+        network error, auth failure).
+    """
     cmd = [
         "yt-dlp",
         "--flat-playlist",
@@ -222,13 +303,22 @@ def _get_track_list(likes_url: str, max_tracks: int,
         "--playlist-items", f"1:{max_tracks}",
         "--no-warnings",
     ]
-    if cookies_from_browser:
+    if cookies_file:
+        cmd += ["--cookies", cookies_file]
+    elif cookies_from_browser:
         cmd += ["--cookies-from-browser", cookies_from_browser]
     cmd.append(likes_url)
 
     result = subprocess.run(
         cmd, capture_output=True, text=True, timeout=120,
     )
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        _log.error(f"yt-dlp failed (exit {result.returncode}): {stderr}")
+        raise RuntimeError(
+            f"yt-dlp failed (exit {result.returncode}): {stderr}"
+        )
 
     tracks = []
     for line in result.stdout.strip().split("\n"):
@@ -250,7 +340,8 @@ def _get_track_list(likes_url: str, max_tracks: int,
 
 
 def _download_single(track: DownloadedTrack, output_dir: Path,
-                     cookies_from_browser: Optional[str] = None) -> None:
+                     cookies_from_browser: Optional[str] = None,
+                     cookies_file: Optional[str] = None) -> None:
     """Download a single track's audio."""
     safe_title = "".join(c if c.isalnum() or c in "-_ " else "_" for c in track.title)[:80]
     output_template = str(output_dir / f"{safe_title}.%(ext)s")
@@ -266,7 +357,9 @@ def _download_single(track: DownloadedTrack, output_dir: Path,
         "--no-playlist",
         "--no-warnings",
     ]
-    if cookies_from_browser:
+    if cookies_file:
+        cmd += ["--cookies", cookies_file]
+    elif cookies_from_browser:
         cmd += ["--cookies-from-browser", cookies_from_browser]
     cmd.append(track.url)
 

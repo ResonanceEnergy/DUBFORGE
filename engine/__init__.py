@@ -16,6 +16,8 @@ from engine.ableton_live import (
 )
 from engine.als_generator import (
     ALL_ALS_TEMPLATES,
+    ALSMidiClip,
+    ALSMidiNote,
     ALSProject,
     ALSScene,
     ALSTrack,
@@ -1331,6 +1333,8 @@ __all__ = [
     "dubstep_master_settings",
     "streaming_master_settings",
     # als_generator
+    "ALSMidiClip",
+    "ALSMidiNote",
     "ALSTrack",
     "ALSScene",
     "ALSProject",

@@ -99,8 +99,8 @@ def _svf_process(signal: np.ndarray, cutoff_hz: float | np.ndarray,
         lp = g * bp + ic2eq
         notch = hp + lp
         
-        # Safety: reset on NaN/inf
-        if not math.isfinite(lp) or not math.isfinite(bp):
+        # Safety: reset on NaN/inf OR runaway magnitude
+        if not math.isfinite(lp) or not math.isfinite(bp) or abs(bp) > 1e6 or abs(lp) > 1e6:
             ic1eq = 0.0
             ic2eq = 0.0
             out[i] = 0.0

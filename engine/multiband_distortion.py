@@ -17,10 +17,9 @@ Banks: 5 types × 4 presets = 20 presets
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
-
-from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
 from engine.turboquant import (
@@ -29,6 +28,8 @@ from engine.turboquant import (
     phi_optimal_bits,
     TurboQuantConfig,
 )
+
+SAMPLE_RATE = 44100
 
 
 def tq_compress_distortion(
@@ -277,7 +278,7 @@ def tape_distortion_bank() -> MultibandDistBank:
 
 # --- Registry -------------------------------------------------------------
 
-ALL_MULTIBAND_DIST_BANKS: dict[str, callable] = {
+ALL_MULTIBAND_DIST_BANKS: dict[str, Callable[[], MultibandDistBank]] = {
     "warm": warm_distortion_bank,
     "aggressive": aggressive_distortion_bank,
     "digital": digital_distortion_bank,
@@ -301,6 +302,11 @@ def _write_wav(path: Path, samples: np.ndarray,
         wf.writeframes(pcm.tobytes())
 
 
+def _export_path(path: Path) -> str:
+    """Return stable POSIX-style paths for cross-platform callers/tests."""
+    return path.as_posix()
+
+
 def _test_signal(duration_s: float = 1.0, freq: float = 200.0,
                  sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Generate a test sine for processing demos."""
@@ -320,7 +326,7 @@ def export_distortion_demos(output_dir: str = "output") -> list[str]:
             processed = apply_multiband_distortion(sig, preset, SAMPLE_RATE)
             fname = f"dist_{preset.name}.wav"
             _write_wav(out / fname, processed)
-            paths.append(str(out / fname))
+            paths.append(_export_path(out / fname))
     return paths
 
 

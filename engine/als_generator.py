@@ -16,7 +16,9 @@ from __future__ import annotations
 import gzip
 import json
 import math as _math
+import os
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -83,6 +85,7 @@ class ALSTrack:
     send_levels: list[float] = field(default_factory=list)
     arrangement_clips: list = field(default_factory=list)   # list[ALSClipInfo]
     automations: list = field(default_factory=list)         # list[ALSAutomation]
+    midi_clips: list = field(default_factory=list)          # list[ALSMidiClip]
 
 
 @dataclass
@@ -146,6 +149,24 @@ class ALSCuePoint:
     """Arrangement view cue point / locator."""
     name: str
     time: float
+
+
+@dataclass
+class ALSMidiNote:
+    """A single MIDI note event."""
+    pitch: int              # MIDI pitch 0-127
+    time: float             # Start time in beats (relative to clip start)
+    duration: float         # Duration in beats
+    velocity: int = 100     # 0-127
+
+
+@dataclass
+class ALSMidiClip:
+    """A MIDI clip for arrangement view."""
+    name: str
+    start_beat: float           # Position in arrangement (beats)
+    length_beats: float         # Clip length in beats
+    notes: list[ALSMidiNote] = field(default_factory=list)
 
 
 @dataclass
@@ -614,6 +635,94 @@ def _build_sequencer(dc: ET.Element, tag: str, track: ALSTrack,
     return events_elem
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# VST3 PLUGIN DEVICE BUILDER
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Known VST3 plugins — CID (hex), vendor, category, device type
+# device_type: 1 = instrument, 2 = effect
+_VST3_REGISTRY: dict[str, dict] = {
+    "Serum 2": {
+        "cid": "56534558667350736572756D20320000",
+        "vendor": "Xfer Records",
+        "category": "Instrument|Synth",
+        "device_type": 1,
+    },
+    "Serum 2 FX": {
+        "cid": "56534558667351736572756D20322066",
+        "vendor": "Xfer Records",
+        "category": "Fx",
+        "device_type": 2,
+    },
+}
+
+
+def _cid_to_fields(cid_hex: str) -> tuple[int, int, int, int]:
+    """Convert 32-char hex CID to 4 big-endian signed int32 values."""
+    import struct
+    return struct.unpack(">iiii", bytes.fromhex(cid_hex))
+
+
+def _build_vst3_plugin_device(
+    devices_elem: ET.Element,
+    device_name: str,
+    ids: _IdCounter,
+    device_id: int = 0,
+) -> None:
+    """Build a VST3 PluginDevice element inside <Devices>.
+
+    Creates a minimal PluginDevice that Ableton will recognise and
+    instantiate when the .als is opened — provided the VST3 is installed
+    and has been scanned.
+    """
+    info = _VST3_REGISTRY.get(device_name)
+    if info is None:
+        _log.warning("No VST3 registry entry for %r — skipping", device_name)
+        return
+
+    pd = ET.SubElement(devices_elem, "PluginDevice", Id=str(device_id))
+
+    # PluginDevice header (differs from sequencer/mixer headers)
+    _v(pd, "LomId", "0")
+    _v(pd, "LomIdView", "0")
+    _v(pd, "IsExpanded", "true")
+    _on_switch(pd, ids)
+    ET.SubElement(pd, "ParametersListWrapper", LomId="0")
+    lpr = ET.SubElement(pd, "LastPresetRef")
+    ET.SubElement(lpr, "Value")
+    ET.SubElement(pd, "LockedScripts")
+    _v(pd, "IsFolded", "false")
+    _v(pd, "ShouldShowPresetName", "true")
+    _v(pd, "UserName", "")
+    _v(pd, "Annotation", "")
+    sc = ET.SubElement(pd, "SourceContext")
+    ET.SubElement(sc, "Value")
+
+    # PluginDesc — Vst3PluginInfo (Id required — Ableton list container)
+    desc = ET.SubElement(pd, "PluginDesc")
+    vst3 = ET.SubElement(desc, "Vst3PluginInfo", Id="0")
+    _v(vst3, "WinPosX", "0")
+    _v(vst3, "WinPosY", "0")
+    _v(vst3, "TransportFlags", "7")
+
+    uid = ET.SubElement(vst3, "Uid")
+    fields = ET.SubElement(uid, "Fields")
+    f1, f2, f3, f4 = _cid_to_fields(info["cid"])
+    _v(fields, "Field1", str(f1))
+    _v(fields, "Field2", str(f2))
+    _v(fields, "Field3", str(f3))
+    _v(fields, "Field4", str(f4))
+
+    _v(vst3, "DeviceType", str(info["device_type"]))
+    _v(vst3, "Name", device_name)
+    _v(vst3, "Vendor", info["vendor"])
+    _v(vst3, "Category", info["category"])
+
+    # Plugin display name + empty parameter list (Ableton fills on load)
+    _v(pd, "Name", device_name)
+    ET.SubElement(pd, "ParameterList")
+
+
 def _build_device_chain(dc: ET.Element, track: ALSTrack, ids: _IdCounter,
                         num_returns: int, num_scenes: int,
                         is_midi: bool = False,
@@ -658,12 +767,22 @@ def _build_device_chain(dc: ET.Element, track: ALSTrack, ids: _IdCounter,
                                        is_main=True)
 
     # FreezeSequencer (present on audio, midi, and return tracks)
+    # Return tracks have an empty FreezeSequencer ClipSlotList in the template
+    freeze_scenes = 0 if track_role == "return" else num_scenes
     _build_sequencer(dc, "FreezeSequencer", track, ids,
-                     num_scenes, is_midi=False, is_main=False)
+                     freeze_scenes, is_midi=False, is_main=False)
 
     # Inner DeviceChain (Devices + SignalModulations)
     inner_dc = ET.SubElement(dc, "DeviceChain")
-    ET.SubElement(inner_dc, "Devices")
+    devices_elem = ET.SubElement(inner_dc, "Devices")
+
+    # NOTE: VST3 PluginDevice auto-loading is disabled.
+    # Ableton crashes with "invalid uuid string" during VST3 state restore
+    # because no valid preset buffer can be generated without a running
+    # plugin instance.  The MIDI tracks load correctly — just drag the
+    # VST3 instrument onto each track inside Ableton.
+    # track.device_names is preserved for documentation / future use.
+
     ET.SubElement(inner_dc, "SignalModulations")
 
     return events_elem
@@ -712,10 +831,7 @@ def _inject_audio_clips(events_elem: ET.Element, track: ALSTrack,
         file_name = Path(cs["path"]).name
         rel_path = abs_path
         if als_dir:
-            try:
-                rel_path = str(Path(abs_path).relative_to(Path(als_dir)))
-            except ValueError:
-                rel_path = abs_path
+            rel_path = os.path.relpath(abs_path, als_dir).replace("\\", "/")
 
         end_beats = cs["start_beat"] + cs["length_beats"]
         clip = ET.SubElement(events_elem, "AudioClip",
@@ -889,6 +1005,159 @@ def _inject_audio_clips(events_elem: ET.Element, track: ALSTrack,
         _v(clip, "IsSongTempoLeader", "false")
 
 
+def _inject_midi_clips(events_elem: ET.Element, track: ALSTrack) -> None:
+    """Inject MidiClip elements into a MainSequencer's ArrangerAutomation Events.
+
+    Creates the full MidiClip XML structure matching Ableton Live 12's schema,
+    including KeyTrack-based note storage.
+    """
+    if not track.midi_clips:
+        return
+
+    for clip_id, mc in enumerate(track.midi_clips):
+        end_beat = mc.start_beat + mc.length_beats
+        clip = ET.SubElement(events_elem, "MidiClip",
+                             Id=str(clip_id),
+                             Time=str(round(mc.start_beat, 4)))
+
+        _v(clip, "LomId", "0")
+        _v(clip, "LomIdView", "0")
+        _v(clip, "CurrentStart", str(round(mc.start_beat, 4)))
+        _v(clip, "CurrentEnd", str(round(end_beat, 4)))
+
+        # Loop
+        loop_elem = ET.SubElement(clip, "Loop")
+        _v(loop_elem, "LoopStart", str(round(mc.start_beat, 4)))
+        _v(loop_elem, "LoopEnd", str(round(end_beat, 4)))
+        _v(loop_elem, "StartRelative", "0")
+        _v(loop_elem, "LoopOn", "false")
+        _v(loop_elem, "OutMarker", str(round(end_beat, 4)))
+        _v(loop_elem, "HiddenLoopStart", "0")
+        _v(loop_elem, "HiddenLoopEnd", str(round(end_beat, 4)))
+
+        _v(clip, "Name", mc.name)
+        _v(clip, "Annotation", "")
+        _v(clip, "Color", "-1")
+        _v(clip, "LaunchMode", "0")
+        _v(clip, "LaunchQuantisation", "0")
+
+        # TimeSignature
+        time_sig = ET.SubElement(clip, "TimeSignature")
+        ts_changes = ET.SubElement(time_sig, "TimeSignatures")
+        rts = ET.SubElement(ts_changes, "RemoteableTimeSignature", Id="0")
+        _v(rts, "Numerator", "4")
+        _v(rts, "Denominator", "4")
+        _v(rts, "Time", "0")
+
+        # Envelopes (empty)
+        envs_outer = ET.SubElement(clip, "Envelopes")
+        ET.SubElement(envs_outer, "Envelopes")
+
+        # ScrollerTimePreserver
+        stp = ET.SubElement(clip, "ScrollerTimePreserver")
+        _v(stp, "LeftTime", "0")
+        _v(stp, "RightTime", "8")
+
+        # TimeSelection
+        tsel = ET.SubElement(clip, "TimeSelection")
+        _v(tsel, "AnchorTime", "0")
+        _v(tsel, "OtherTime", "0")
+
+        _v(clip, "Legato", "false")
+        _v(clip, "Ram", "false")
+
+        # GrooveSettings
+        gs = ET.SubElement(clip, "GrooveSettings")
+        _v(gs, "GrooveId", "-1")
+
+        _v(clip, "Disabled", "false")
+        _v(clip, "VelocityAmount", "0")
+
+        # FollowAction
+        fa = ET.SubElement(clip, "FollowAction")
+        _v(fa, "FollowTime", "4")
+        _v(fa, "IsLinked", "true")
+        _v(fa, "LoopIterations", "1")
+        _v(fa, "FollowActionA", "4")
+        _v(fa, "FollowActionB", "0")
+        _v(fa, "FollowChanceA", "100")
+        _v(fa, "FollowChanceB", "0")
+        _v(fa, "JumpIndexA", "1")
+        _v(fa, "JumpIndexB", "1")
+        _v(fa, "FollowActionEnabled", "false")
+
+        # Grid
+        grid = ET.SubElement(clip, "Grid")
+        _v(grid, "FixedNumerator", "1")
+        _v(grid, "FixedDenominator", "16")
+        _v(grid, "GridIntervalPixel", "20")
+        _v(grid, "Ntoles", "2")
+        _v(grid, "SnapToGrid", "true")
+        _v(grid, "Fixed", "false")
+
+        _v(clip, "FreezeStart", "0")
+        _v(clip, "FreezeEnd", "0")
+        _v(clip, "IsWarped", "true")
+        _v(clip, "TakeId", "-1")
+
+        # Notes — group notes by pitch into KeyTracks
+        notes_elem = ET.SubElement(clip, "Notes")
+        key_tracks = ET.SubElement(notes_elem, "KeyTracks")
+
+        if mc.notes:
+            # Group notes by pitch
+            by_pitch: dict[int, list[ALSMidiNote]] = {}
+            for n in mc.notes:
+                by_pitch.setdefault(n.pitch, []).append(n)
+
+            kt_id = 0
+            global_note_id = 0  # Must be unique across ALL KeyTracks
+            for pitch in sorted(by_pitch.keys()):
+                kt = ET.SubElement(key_tracks, "KeyTrack", Id=str(kt_id))
+                _v(kt, "MidiKey", str(pitch))
+                notes_container = ET.SubElement(kt, "Notes")
+                for note in sorted(by_pitch[pitch],
+                                   key=lambda n: n.time):
+                    # Note time is relative to clip start
+                    note_time = note.time - mc.start_beat
+                    ET.SubElement(
+                        notes_container, "MidiNoteEvent",
+                        Time=str(round(note_time, 4)),
+                        Duration=str(round(note.duration, 4)),
+                        Velocity=str(note.velocity),
+                        VelocityDeviation="0",
+                        OffVelocity="64",
+                        Probability="1",
+                        IsEnabled="true",
+                        NoteId=str(global_note_id),
+                    )
+                    global_note_id += 1
+                kt_id += 1
+
+        # PerNoteEventStore (empty)
+        pnes = ET.SubElement(notes_elem, "PerNoteEventStore")
+        ET.SubElement(pnes, "EventLists")
+
+        _v(clip, "BankSelectCoarse", "-1")
+        _v(clip, "BankSelectFine", "-1")
+        _v(clip, "ProgramChange", "-1")
+        _v(clip, "NoteEditorFoldInZoom", "-1")
+        _v(clip, "NoteEditorFoldInScroll", "0")
+        _v(clip, "NoteEditorFoldOutZoom", "-1")
+        _v(clip, "NoteEditorFoldOutScroll", "1024")
+        _v(clip, "NoteSpellingPreference", "3")
+        _v(clip, "PreferFlatRootNote", "false")
+
+        # ExpressionGrid
+        egrid = ET.SubElement(clip, "ExpressionGrid")
+        _v(egrid, "FixedNumerator", "1")
+        _v(egrid, "FixedDenominator", "16")
+        _v(egrid, "GridIntervalPixel", "20")
+        _v(egrid, "Ntoles", "2")
+        _v(egrid, "SnapToGrid", "false")
+        _v(egrid, "Fixed", "false")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # TRACK BUILDERS
 # ═══════════════════════════════════════════════════════════════════════════
@@ -897,22 +1166,36 @@ def _build_midi_track(parent: ET.Element, track: ALSTrack, track_id: int,
                       ids: _IdCounter, num_returns: int,
                       num_scenes: int) -> ET.Element:
     """Build a complete MidiTrack matching Ableton's schema."""
-    t = ET.SubElement(parent, "MidiTrack", Id=str(track_id))
+    t = ET.SubElement(parent, "MidiTrack", Id=str(track_id),
+                      SelectedToolPanel="7",
+                      SelectedTransformationName="",
+                      SelectedGeneratorName="")
     _track_preamble(t, track)
     envs = _build_automation_envelopes(t, track.automations)
     _track_postamble(t, track_type="midi")
 
     dc = ET.SubElement(t, "DeviceChain")
-    _build_device_chain(dc, track, ids, num_returns, num_scenes,
-                        track_role="midi")
+    events_elem = _build_device_chain(dc, track, ids, num_returns, num_scenes,
+                                      track_role="midi")
     _populate_automation_envelopes(envs, track.automations, dc.find('Mixer'))
+
+    # Inject MIDI clips into MainSequencer's ArrangerAutomation
+    if events_elem is not None:
+        _inject_midi_clips(events_elem, track)
 
     # MIDI-specific elements (after DeviceChain)
     _v(t, "ReWireDeviceMidiTargetId", "0")
     _v(t, "PitchbendRange", "96")
     _v(t, "IsTuned", "false")
     _v(t, "ControllerLayoutRemoteable", "0")
-    ET.SubElement(t, "ControllerLayoutCustomization")
+    clc = ET.SubElement(t, "ControllerLayoutCustomization")
+    _v(clc, "PitchClassSource", "0")
+    _v(clc, "OctaveSource", "2")
+    _v(clc, "KeyNoteTarget", "60")
+    _v(clc, "StepSize", "1")
+    _v(clc, "OctaveEvery", "12")
+    _v(clc, "AllowedKeys", "0")
+    _v(clc, "FillerKeysMapTo", "0")
 
     return t
 
@@ -922,7 +1205,10 @@ def _build_audio_track(parent: ET.Element, track: ALSTrack, track_id: int,
                        total_beats: float = 0.0, als_dir: str = "",
                        project_bpm: float = DEFAULT_BPM) -> ET.Element:
     """Build a complete AudioTrack with arrangement clips."""
-    t = ET.SubElement(parent, "AudioTrack", Id=str(track_id))
+    t = ET.SubElement(parent, "AudioTrack", Id=str(track_id),
+                      SelectedToolPanel="7",
+                      SelectedTransformationName="",
+                      SelectedGeneratorName="")
     _track_preamble(t, track)
     envs = _build_automation_envelopes(t, track.automations)
     _track_postamble(t, track_type="audio")
@@ -942,7 +1228,10 @@ def _build_return_track(parent: ET.Element, track: ALSTrack, track_id: int,
                         ids: _IdCounter, num_returns: int,
                         num_scenes: int) -> ET.Element:
     """Build a complete ReturnTrack matching Ableton's schema."""
-    t = ET.SubElement(parent, "ReturnTrack", Id=str(track_id))
+    t = ET.SubElement(parent, "ReturnTrack", Id=str(track_id),
+                      SelectedToolPanel="7",
+                      SelectedTransformationName="",
+                      SelectedGeneratorName="")
     _track_preamble(t, track)
     envs = _build_automation_envelopes(t, track.automations)
     _track_postamble(t, track_type="return")
@@ -1261,19 +1550,17 @@ def build_als_xml(project: ALSProject,
                                 num_returns, num_scenes)
         track_id += 1
 
-    # -- MainTrack (master volume + sends) --------------------------------
+    # -- MainTrack (master volume + sends + tempo) -----------------------
     main_track = live_set.find("MainTrack")
     if main_track is not None:
         vol_manual = main_track.find("DeviceChain/Mixer/Volume/Manual")
         if vol_manual is not None:
             vol_linear = _db_to_linear(project.master_volume_db)
             vol_manual.set("Value", str(round(vol_linear, 10)))
-        _update_track_sends(main_track, num_returns, ids)
-
-    # -- PreHearTrack sends -----------------------------------------------
-    pre_hear = live_set.find("PreHearTrack")
-    if pre_hear is not None:
-        _update_track_sends(pre_hear, num_returns, ids)
+        tempo_manual = main_track.find("DeviceChain/Mixer/Tempo/Manual")
+        if tempo_manual is not None:
+            tempo_manual.set("Value", str(project.bpm))
+        # MainTrack Sends is empty in Ableton's template — do NOT populate it
 
     # -- SendsPre (one bool per return track) -----------------------------
     sends_pre = live_set.find("SendsPre")
@@ -1348,8 +1635,7 @@ def build_als_xml(project: ALSProject,
         loc = ET.SubElement(inner, "Locator", Id=str(i))
         _v(loc, "LomId", "0")
         _v(loc, "Time", str(round(cp.time, 4)))
-        name_el = ET.SubElement(loc, "Name")
-        _v(name_el, "Value", cp.name)
+        _v(loc, "Name", cp.name)
         _v(loc, "Annotation", "")
         _v(loc, "IsSongStart", "false")
 
@@ -1503,7 +1789,7 @@ def emotive_melodic_session() -> ALSProject:
     )
 
 
-ALL_ALS_TEMPLATES: dict[str, callable] = {}  # populated after function definitions
+ALL_ALS_TEMPLATES: dict[str, Callable[[], ALSProject]] = {}
 
 
 def hybrid_fractal_session() -> ALSProject:
@@ -1564,11 +1850,92 @@ def hybrid_fractal_session() -> ALSProject:
     )
 
 
+def phase3_mixing_session() -> ALSProject:
+    """Audio-only Phase 3 mix session for importing arrangement stems."""
+    tracks = [
+        ALSTrack(name="DRUMS", track_type="audio", color=COLOR_WHITE,
+                 volume_db=-2.0, pan=0.0),
+        ALSTrack(name="SUB", track_type="audio", color=COLOR_RED,
+                 volume_db=-4.0, pan=0.0),
+        ALSTrack(name="BASS", track_type="audio", color=COLOR_ORANGE,
+                 volume_db=-3.0, pan=0.0),
+        ALSTrack(name="MUSIC", track_type="audio", color=COLOR_CYAN,
+                 volume_db=-5.0, pan=0.0),
+        ALSTrack(name="LEADS", track_type="audio", color=COLOR_GREEN,
+                 volume_db=-5.5, pan=0.12),
+        ALSTrack(name="VOCALS", track_type="audio", color=COLOR_PINK,
+                 volume_db=-6.0, pan=-0.12),
+        ALSTrack(name="FX", track_type="audio", color=COLOR_YELLOW,
+                 volume_db=-7.0, pan=0.0),
+        ALSTrack(name="PARALLEL_DRUMS", track_type="audio", color=COLOR_PURPLE,
+                 volume_db=-10.0, pan=0.0),
+        ALSTrack(name="REVERB", track_type="return", color=COLOR_BLUE,
+                 volume_db=-10.0),
+        ALSTrack(name="DELAY", track_type="return", color=COLOR_GREEN,
+                 volume_db=-12.0),
+        ALSTrack(name="PARALLEL_COMP", track_type="return", color=COLOR_ORANGE,
+                 volume_db=-9.0),
+    ]
+    return ALSProject(
+        name="DUBFORGE_PHASE3_MIXING",
+        bpm=150.0,
+        tracks=tracks,
+        scenes=[
+            ALSScene(name="IMPORT"),
+            ALSScene(name="ANALYZE"),
+            ALSScene(name="BALANCE"),
+            ALSScene(name="GLUE"),
+            ALSScene(name="PRINT"),
+        ],
+        notes=(
+            "Generated by DUBFORGE -- Phase 3 mixing session with audio-only "
+            "stem tracks, ready for gain staging, EQ, dynamics, and spatial work"
+        ),
+    )
+
+
+def phase4_mastering_session() -> ALSProject:
+    """Audio-focused Phase 4 mastering session for premaster import."""
+    tracks = [
+        ALSTrack(name="PREMASTER", track_type="audio", color=COLOR_WHITE,
+                 volume_db=-6.0, pan=0.0),
+        ALSTrack(name="REFERENCE_A", track_type="audio", color=COLOR_CYAN,
+                 volume_db=-8.0, pan=-0.1),
+        ALSTrack(name="REFERENCE_B", track_type="audio", color=COLOR_GREEN,
+                 volume_db=-8.0, pan=0.1),
+        ALSTrack(name="MASTER_PRINT", track_type="audio", color=COLOR_YELLOW,
+                 volume_db=-3.0, pan=0.0),
+        ALSTrack(name="MASTER_FX", track_type="return", color=COLOR_PURPLE,
+                 volume_db=-12.0),
+    ]
+    return ALSProject(
+        name="DUBFORGE_PHASE4_MASTERING",
+        bpm=150.0,
+        tracks=tracks,
+        scenes=[
+            ALSScene(name="IMPORT"),
+            ALSScene(name="EQ"),
+            ALSScene(name="COMP"),
+            ALSScene(name="LIMIT"),
+            ALSScene(name="PRINT"),
+        ],
+        notes=(
+            "Generated by DUBFORGE -- Phase 4 mastering session for premaster "
+            "import, reference comparison, and final print"
+        ),
+    )
+
+
 # Populate template registry
 ALL_ALS_TEMPLATES = {
     "weapon":         dubstep_weapon_session,
     "emotive":        emotive_melodic_session,
     "hybrid_fractal": hybrid_fractal_session,
+}
+
+ADDITIONAL_ALS_TEMPLATES: dict[str, Callable[[], ALSProject]] = {
+    "phase3_mixing":  phase3_mixing_session,
+    "phase4_mastering": phase4_mastering_session,
 }
 
 
@@ -1622,21 +1989,32 @@ def auto_populate_stems(project: ALSProject, stem_dir: str = "output/wavetables"
     return als_path
 
 
+def _stem_dir_for_template(output_dir: str, template_name: str) -> str:
+    """Choose the phase-appropriate source directory for stem auto-population."""
+    root = Path(output_dir)
+    if template_name == "phase3_mixing":
+        return str(root / "stems" / "phase2")
+    if template_name == "phase4_mastering":
+        return str(root / "stems" / "phase3")
+    return str(root / "wavetables")
+
+
 def export_all_als(output_dir: str = "output") -> list[str]:
     """Generate all ALS templates + stem-populated variants."""
     paths: list[str] = []
     out_dir = Path(output_dir) / "ableton"
     out_dir.mkdir(parents=True, exist_ok=True)
+    templates = {**ALL_ALS_TEMPLATES, **ADDITIONAL_ALS_TEMPLATES}
 
-    for name, gen_fn in ALL_ALS_TEMPLATES.items():
+    for name, gen_fn in templates.items():
         project = gen_fn()
-        als_path = str(out_dir / f"DUBFORGE_{name}.als")
+        als_path = str(out_dir / f"{project.name}.als")
         write_als(project, als_path)
         paths.append(als_path)
-        json_path = str(out_dir / f"DUBFORGE_{name}_structure.json")
+        json_path = str(out_dir / f"{project.name}_structure.json")
         write_als_json(project, json_path)
         stem_path = auto_populate_stems(project,
-                                        str(Path(output_dir) / "wavetables"),
+                                        _stem_dir_for_template(output_dir, name),
                                         str(out_dir))
         paths.append(stem_path)
 
@@ -1646,7 +2024,7 @@ def export_all_als(output_dir: str = "output") -> list[str]:
 def main() -> None:
     paths = export_all_als()
     print(f"ALS Generator complete -- {len(paths)} files "
-          f"({len(ALL_ALS_TEMPLATES)} templates + stems).")
+          f"({len(ALL_ALS_TEMPLATES) + len(ADDITIONAL_ALS_TEMPLATES)} templates + stems).")
 
 
 if __name__ == "__main__":

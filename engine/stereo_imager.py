@@ -17,12 +17,13 @@ Banks: 5 types × 4 presets = 20 presets
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
-from engine.phi_core import SAMPLE_RATE
-
 from engine.config_loader import PHI
+
+SAMPLE_RATE = 44100
 # --- Data Models ----------------------------------------------------------
 
 @dataclass
@@ -280,7 +281,7 @@ def psychoacoustic_stereo_bank() -> StereoBank:
 
 # --- Registry -------------------------------------------------------------
 
-ALL_STEREO_BANKS: dict[str, callable] = {
+ALL_STEREO_BANKS: dict[str, Callable[[], StereoBank]] = {
     "haas": haas_stereo_bank,
     "mid_side": mid_side_stereo_bank,
     "frequency_split": freq_split_stereo_bank,
@@ -304,6 +305,11 @@ def _write_wav_stereo(path: Path, samples: np.ndarray,
         wf.writeframes(pcm.tobytes())
 
 
+def _export_path(path: Path) -> str:
+    """Return stable POSIX-style paths for cross-platform callers/tests."""
+    return path.as_posix()
+
+
 def _test_signal(duration_s: float = 1.0, freq: float = 200.0,
                  sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Generate a test sine for processing demos."""
@@ -323,7 +329,7 @@ def export_stereo_demos(output_dir: str = "output") -> list[str]:
             processed = apply_stereo_imaging(sig, preset, SAMPLE_RATE)
             fname = f"stereo_{preset.name}.wav"
             _write_wav_stereo(out / fname, processed)
-            paths.append(str(out / fname))
+            paths.append(_export_path(out / fname))
     return paths
 
 

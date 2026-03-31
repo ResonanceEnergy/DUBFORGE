@@ -13,7 +13,7 @@ import wave
 from dataclasses import dataclass
 
 from engine.config_loader import PHI, A4_432
-SAMPLE_RATE = 48000
+SAMPLE_RATE = 44100
 
 
 @dataclass

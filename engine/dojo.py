@@ -1928,8 +1928,10 @@ PRODUCERS_PATH: dict = {
 # EXTENDED DOJO TECHNIQUES — Ninja Sounds + Low Pass as formal techniques
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Append new techniques to DOJO_TECHNIQUES
-DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+# Keep legacy DOJO_TECHNIQUES stable for compatibility and expose new material separately.
+EXTENDED_DOJO_TECHNIQUES: list[dict] = []
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
     name="Ninja Sounds (Singer vs Band)",
     year_introduced=2024,
     category=TechniqueType.MIXING.value,
@@ -1959,7 +1961,7 @@ DOJO_TECHNIQUES.append(asdict(DojoTechnique(
                    "Singer:Band ratio = phi:1 in perceived loudness.",
 )))
 
-DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
     name="Low Pass Mastery (5 Killer Techniques)",
     year_introduced=2024,
     category=TechniqueType.SOUND_DESIGN.value,
@@ -1991,7 +1993,7 @@ DOJO_TECHNIQUES.append(asdict(DojoTechnique(
                    "LPG tracking curve: amp^(1/phi).",
 )))
 
-DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
     name="The 14-Minute Hit (Rapid Creation)",
     year_introduced=2024,
     category=TechniqueType.WORKFLOW.value,
@@ -2022,7 +2024,7 @@ DOJO_TECHNIQUES.append(asdict(DojoTechnique(
                    f"Session rating ratio target: phi quality tracks per 5 sessions.",
 )))
 
-DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
     name="Stock Device Mastery",
     year_introduced=2024,
     category=TechniqueType.WORKFLOW.value,

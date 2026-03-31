@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "C:\dev\SuperAgency-Shared\repos\DUBFORGE\make_wild_ones_v9.py", line 94, in <module>
+    from engine.serum2 import (
+    ...<4 lines>...
+    )
+ImportError: cannot import name 'SkinSettings' from 'engine.serum2' (C:\dev\SuperAgency-Shared\repos\DUBFORGE\engine\serum2.py)

@@ -8,6 +8,8 @@ spectral math, PHI-weighted interpolation, sample statistics.
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 from engine.config_loader import PHI
 SAMPLE_RATE = 48000
 
@@ -46,61 +48,51 @@ class AudioMath:
             gain_a: float = 1.0, gain_b: float = 1.0) -> list[float]:
         """Add two signals."""
         n = max(len(a), len(b))
-        result = [0.0] * n
-        for i in range(len(a)):
-            result[i] += a[i] * gain_a
-        for i in range(len(b)):
-            result[i] += b[i] * gain_b
-        return result
+        arr_a = np.zeros(n)
+        arr_b = np.zeros(n)
+        arr_a[:len(a)] = a
+        arr_b[:len(b)] = b
+        return (arr_a * gain_a + arr_b * gain_b).tolist()
 
     @staticmethod
     def subtract(a: list[float], b: list[float]) -> list[float]:
         """Subtract b from a."""
         n = max(len(a), len(b))
-        result = [0.0] * n
-        for i in range(len(a)):
-            result[i] += a[i]
-        for i in range(len(b)):
-            result[i] -= b[i]
-        return result
+        arr_a = np.zeros(n)
+        arr_b = np.zeros(n)
+        arr_a[:len(a)] = a
+        arr_b[:len(b)] = b
+        return (arr_a - arr_b).tolist()
 
     @staticmethod
     def multiply(a: list[float], b: list[float]) -> list[float]:
         """Multiply (ring modulate) two signals."""
         n = min(len(a), len(b))
-        return [a[i] * b[i] for i in range(n)]
+        return (np.asarray(a[:n]) * np.asarray(b[:n])).tolist()
 
     @staticmethod
     def scale(samples: list[float], gain: float) -> list[float]:
         """Scale by constant."""
-        return [s * gain for s in samples]
+        return (np.asarray(samples) * gain).tolist()
 
     @staticmethod
     def invert(samples: list[float]) -> list[float]:
         """Phase invert."""
-        return [-s for s in samples]
+        return (-np.asarray(samples)).tolist()
 
     @staticmethod
     def abs_signal(samples: list[float]) -> list[float]:
         """Full-wave rectification."""
-        return [abs(s) for s in samples]
+        return np.abs(np.asarray(samples)).tolist()
 
     @staticmethod
     def half_rectify(samples: list[float]) -> list[float]:
         """Half-wave rectification."""
-        return [max(0.0, s) for s in samples]
+        return np.maximum(0.0, np.asarray(samples)).tolist()
 
     def convolve(self, a: list[float], b: list[float]) -> list[float]:
         """Linear convolution."""
-        na, nb = len(a), len(b)
-        n = na + nb - 1
-        result = [0.0] * n
-
-        for i in range(na):
-            for j in range(nb):
-                result[i + j] += a[i] * b[j]
-
-        return result
+        return np.convolve(a, b).tolist()
 
     def correlate(self, a: list[float], b: list[float]) -> list[float]:
         """Cross-correlation."""
@@ -115,14 +107,18 @@ class AudioMath:
                            t: float) -> list[float]:
         """Linear interpolation between two signals."""
         n = min(len(a), len(b))
-        return [a[i] * (1 - t) + b[i] * t for i in range(n)]
+        aa = np.asarray(a[:n])
+        bb = np.asarray(b[:n])
+        return (aa * (1 - t) + bb * t).tolist()
 
     @staticmethod
     def interpolate_phi(a: list[float], b: list[float]) -> list[float]:
         """PHI-weighted interpolation."""
         t = 1.0 / PHI  # ~0.618
         n = min(len(a), len(b))
-        return [a[i] * (1 - t) + b[i] * t for i in range(n)]
+        aa = np.asarray(a[:n])
+        bb = np.asarray(b[:n])
+        return (aa * (1 - t) + bb * t).tolist()
 
     @staticmethod
     def interpolate_cosine(a: list[float], b: list[float],
@@ -130,44 +126,46 @@ class AudioMath:
         """Cosine interpolation (smoother)."""
         t2 = (1 - math.cos(t * math.pi)) / 2
         n = min(len(a), len(b))
-        return [a[i] * (1 - t2) + b[i] * t2 for i in range(n)]
+        aa = np.asarray(a[:n])
+        bb = np.asarray(b[:n])
+        return (aa * (1 - t2) + bb * t2).tolist()
 
     @staticmethod
     def normalize(samples: list[float],
                   target: float = 0.95) -> list[float]:
         """Normalize to target peak."""
-        pk = max(abs(s) for s in samples) if samples else 1.0
+        arr = np.asarray(samples)
+        pk = float(np.max(np.abs(arr))) if len(arr) > 0 else 1.0
         if pk <= 0:
             return list(samples)
-        gain = target / pk
-        return [s * gain for s in samples]
+        return (arr * (target / pk)).tolist()
 
     @staticmethod
     def rms(samples: list[float]) -> float:
         """Compute RMS."""
         if not samples:
             return 0.0
-        return math.sqrt(sum(s * s for s in samples) / len(samples))
+        arr = np.asarray(samples)
+        return float(np.sqrt(np.mean(arr * arr)))
 
     def stats(self, samples: list[float]) -> AudioStats:
         """Compute statistical properties."""
         if not samples:
             return AudioStats(0, 0, 0, 0, 0, 0, 0)
 
-        peak = max(abs(s) for s in samples)
-        r = self.rms(samples)
-        dc = sum(samples) / len(samples)
+        arr = np.asarray(samples)
+        abs_arr = np.abs(arr)
+        peak = float(np.max(abs_arr))
+        r = float(np.sqrt(np.mean(arr * arr)))
+        dc = float(np.mean(arr))
 
         # Zero crossings
-        zc = sum(
-            1 for i in range(1, len(samples))
-            if (samples[i] >= 0) != (samples[i - 1] >= 0)
-        )
+        signs = arr >= 0
+        zc = int(np.sum(signs[1:] != signs[:-1]))
 
         # Dynamic range
-        # Find minimum non-zero level
-        sorted_abs = sorted(abs(s) for s in samples if abs(s) > 0.0001)
-        min_level = sorted_abs[0] if sorted_abs else 0.0001
+        nonzero = abs_arr[abs_arr > 0.0001]
+        min_level = float(np.min(nonzero)) if len(nonzero) > 0 else 0.0001
         dr = 20 * math.log10(peak / min_level) if min_level > 0 else 0
 
         crest = peak / r if r > 0 else 0
@@ -185,30 +183,24 @@ class AudioMath:
     @staticmethod
     def window_hanning(n: int) -> list[float]:
         """Generate Hanning window."""
-        return [0.5 * (1 - math.cos(2 * math.pi * i / (n - 1)))
-                for i in range(n)]
+        return np.hanning(n).tolist()
 
     @staticmethod
     def window_hamming(n: int) -> list[float]:
         """Generate Hamming window."""
-        return [0.54 - 0.46 * math.cos(2 * math.pi * i / (n - 1))
-                for i in range(n)]
+        return np.hamming(n).tolist()
 
     @staticmethod
     def window_blackman(n: int) -> list[float]:
         """Generate Blackman window."""
-        return [
-            0.42 - 0.5 * math.cos(2 * math.pi * i / (n - 1)) +
-            0.08 * math.cos(4 * math.pi * i / (n - 1))
-            for i in range(n)
-        ]
+        return np.blackman(n).tolist()
 
     @staticmethod
     def apply_window(samples: list[float],
                      window: list[float]) -> list[float]:
         """Apply window function."""
         n = min(len(samples), len(window))
-        return [samples[i] * window[i] for i in range(n)]
+        return (np.asarray(samples[:n]) * np.asarray(window[:n])).tolist()
 
 
 def main() -> None:

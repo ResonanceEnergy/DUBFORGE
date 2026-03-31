@@ -12,6 +12,8 @@ import struct
 import wave
 from dataclasses import dataclass
 
+import numpy as np
+
 from engine.config_loader import PHI
 from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
 
@@ -135,11 +137,11 @@ class AudioAnalyzer:
             sw = wf.getsampwidth()
             raw = wf.readframes(wf.getnframes())
         if sw == 2:
-            vals = struct.unpack(f"<{len(raw) // 2}h", raw)
-            return [v / 32768.0 for v in vals]
+            arr = np.frombuffer(raw, dtype=np.int16)
+            return (arr / 32768.0).tolist()
         elif sw == 1:
-            vals = struct.unpack(f"<{len(raw)}B", raw)
-            return [(v - 128) / 128.0 for v in vals]
+            arr = np.frombuffer(raw, dtype=np.uint8)
+            return ((arr.astype(np.float64) - 128) / 128.0).tolist()
         return []
 
     def analyze_waveform(self, samples: list[float]) -> WaveformStats:
@@ -147,18 +149,20 @@ class AudioAnalyzer:
         if not samples:
             return WaveformStats()
 
-        n = len(samples)
-        peak = max(abs(s) for s in samples)
+        arr = np.asarray(samples)
+        n = len(arr)
+        abs_arr = np.abs(arr)
+        peak = float(np.max(abs_arr))
         peak_db = 20 * math.log10(peak) if peak > 0 else -96.0
 
-        rms = math.sqrt(sum(s * s for s in samples) / n)
+        rms = float(np.sqrt(np.mean(arr * arr)))
         rms_db = 20 * math.log10(rms) if rms > 0 else -96.0
 
         crest = peak / rms if rms > 0 else 0.0
-        dc = sum(samples) / n
+        dc = float(np.mean(arr))
 
-        zc = sum(1 for i in range(1, n)
-                 if samples[i - 1] * samples[i] < 0)
+        signs = arr[:-1] * arr[1:]
+        zc = int(np.sum(signs < 0))
 
         return WaveformStats(
             peak=peak, peak_db=peak_db,
@@ -172,27 +176,22 @@ class AudioAnalyzer:
 
     def analyze_spectrum(self, samples: list[float],
                          fft_size: int = 2048) -> SpectralProfile:
-        """Analyze frequency distribution via DFT."""
-        if len(samples) < fft_size:
-            padded = samples + [0.0] * (fft_size - len(samples))
+        """Analyze frequency distribution via FFT."""
+        arr = np.asarray(samples, dtype=np.float64)
+        if len(arr) < fft_size:
+            arr = np.pad(arr, (0, fft_size - len(arr)))
         else:
-            padded = samples[:fft_size]
+            arr = arr[:fft_size]
 
         # Hann window
-        windowed = [
-            padded[i] * 0.5 * (1 - math.cos(2 * math.pi * i / fft_size))
-            for i in range(fft_size)
-        ]
+        window = np.hanning(fft_size)
+        windowed = arr * window
 
-        # DFT (real magnitudes only)
+        # FFT
+        spectrum = np.fft.rfft(windowed)
+        magnitudes = np.abs(spectrum) / fft_size
         half = fft_size // 2
-        magnitudes: list[float] = []
-        for k in range(half):
-            re = sum(windowed[n] * math.cos(2 * math.pi * k * n / fft_size)
-                     for n in range(fft_size))
-            im = sum(windowed[n] * math.sin(2 * math.pi * k * n / fft_size)
-                     for n in range(fft_size))
-            magnitudes.append(math.sqrt(re * re + im * im) / fft_size)
+        mags = magnitudes[:half]
 
         freq_per_bin = self.sample_rate / fft_size
 
@@ -210,19 +209,22 @@ class AudioAnalyzer:
         for band_name, (lo, hi) in bands.items():
             lo_bin = int(lo / freq_per_bin)
             hi_bin = min(int(hi / freq_per_bin), half - 1)
-            energy = sum(m * m for m in magnitudes[lo_bin:hi_bin + 1])
+            band_mags = mags[lo_bin:hi_bin + 1]
+            energy = float(np.sum(band_mags * band_mags))
             energies[band_name] = math.sqrt(energy) if energy > 0 else 0.0
 
         # Dominant frequency
-        max_mag = max(magnitudes[1:]) if len(magnitudes) > 1 else 0
-        dom_bin = magnitudes.index(max_mag) if max_mag > 0 else 0
-        dom_freq = dom_bin * freq_per_bin
+        if len(mags) > 1:
+            dom_bin = int(np.argmax(mags[1:])) + 1
+            dom_freq = dom_bin * freq_per_bin
+        else:
+            dom_freq = 0.0
 
         # Spectral centroid
-        total_mag = sum(magnitudes)
+        total_mag = float(np.sum(mags))
         if total_mag > 0:
-            centroid = sum(i * freq_per_bin * magnitudes[i]
-                           for i in range(half)) / total_mag
+            bins = np.arange(half, dtype=np.float64) * freq_per_bin
+            centroid = float(np.sum(bins * mags) / total_mag)
         else:
             centroid = 0.0
 
@@ -242,19 +244,20 @@ class AudioAnalyzer:
         if not samples:
             return LoudnessMetering()
 
-        n = len(samples)
+        arr = np.asarray(samples)
+        n = len(arr)
 
-        # Integrated (full signal RMS → dB)
-        rms = math.sqrt(sum(s * s for s in samples) / n)
+        # Integrated (full signal RMS -> dB)
+        rms = float(np.sqrt(np.mean(arr * arr)))
         integrated = 20 * math.log10(rms) if rms > 0 else -96.0
 
         # Short-term (3 second windows)
         window = int(3 * self.sample_rate)
         short_term_vals: list[float] = []
         for i in range(0, n, window):
-            chunk = samples[i:i + window]
-            if chunk:
-                r = math.sqrt(sum(s * s for s in chunk) / len(chunk))
+            chunk = arr[i:i + window]
+            if len(chunk) > 0:
+                r = float(np.sqrt(np.mean(chunk * chunk)))
                 if r > 0:
                     short_term_vals.append(20 * math.log10(r))
 
@@ -264,16 +267,16 @@ class AudioAnalyzer:
         moment_window = int(0.4 * self.sample_rate)
         moment_vals: list[float] = []
         for i in range(0, n, moment_window):
-            chunk = samples[i:i + moment_window]
-            if chunk:
-                r = math.sqrt(sum(s * s for s in chunk) / len(chunk))
+            chunk = arr[i:i + moment_window]
+            if len(chunk) > 0:
+                r = float(np.sqrt(np.mean(chunk * chunk)))
                 if r > 0:
                     moment_vals.append(20 * math.log10(r))
 
         momentary = max(moment_vals) if moment_vals else -96.0
 
         # True peak
-        peak = max(abs(s) for s in samples)
+        peak = float(np.max(np.abs(arr)))
         true_peak = 20 * math.log10(peak) if peak > 0 else -96.0
 
         # Loudness range

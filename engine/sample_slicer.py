@@ -48,7 +48,7 @@ def tq_compress_slice(
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-SAMPLE_RATE = 48000
+SAMPLE_RATE = 44100
 HOP_SIZE = 512
 ONSET_THRESHOLD = 0.3     # spectral flux threshold (0-1)
 MIN_SLICE_MS = 50         # minimum slice length in ms

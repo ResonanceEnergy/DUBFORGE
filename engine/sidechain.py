@@ -17,12 +17,13 @@ Banks: 5 shape types × 4 presets = 20 presets
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
-from engine.phi_core import SAMPLE_RATE
-
 from engine.config_loader import PHI
+
+SAMPLE_RATE = 44100
 # --- Data Models ----------------------------------------------------------
 
 @dataclass
@@ -290,7 +291,7 @@ def phi_curve_sidechain_bank() -> SidechainBank:
 
 # --- Registry -------------------------------------------------------------
 
-ALL_SIDECHAIN_BANKS: dict[str, callable] = {
+ALL_SIDECHAIN_BANKS: dict[str, Callable[[], SidechainBank]] = {
     "pump": pump_sidechain_bank,
     "hard_cut": hard_cut_sidechain_bank,
     "smooth": smooth_sidechain_bank,
@@ -314,6 +315,11 @@ def _write_wav(path: Path, samples: np.ndarray,
         wf.writeframes(pcm.tobytes())
 
 
+def _export_path(path: Path) -> str:
+    """Return stable POSIX-style paths for cross-platform callers/tests."""
+    return path.as_posix()
+
+
 def _test_signal(duration_s: float = 1.0, freq: float = 200.0,
                  sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Generate a test sine for processing demos."""
@@ -333,7 +339,7 @@ def export_sidechain_demos(output_dir: str = "output") -> list[str]:
             processed = apply_sidechain(sig, preset, SAMPLE_RATE)
             fname = f"sc_{preset.name}.wav"
             _write_wav(out / fname, processed)
-            paths.append(str(out / fname))
+            paths.append(_export_path(out / fname))
     return paths
 
 

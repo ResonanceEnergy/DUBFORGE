@@ -15,12 +15,13 @@ Types:
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
-from engine.phi_core import SAMPLE_RATE
-
 from engine.config_loader import PHI
+
+SAMPLE_RATE = 44100
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -420,7 +421,7 @@ def custom_ir_bank() -> ConvolutionBank:
     ])
 
 
-ALL_CONVOLUTION_BANKS: dict[str, callable] = {
+ALL_CONVOLUTION_BANKS: dict[str, Callable[[], ConvolutionBank]] = {
     "room_ir": room_ir_bank,
     "cabinet_ir": cabinet_ir_bank,
     "plate_ir": plate_ir_bank,
@@ -444,6 +445,11 @@ def _write_wav(path: Path, samples: np.ndarray,
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
         wf.writeframes(pcm.tobytes())
+
+
+def _export_path(path: Path) -> str:
+    """Return stable POSIX-style paths for cross-platform callers/tests."""
+    return path.as_posix()
 
 
 def _test_signal(duration_s: float = 1.0, freq: float = 200.0,
@@ -476,7 +482,7 @@ def export_convolution_demos(output_dir: str = "output") -> list[str]:
             processed = apply_convolution(sig, preset, SAMPLE_RATE)
             fname = f"conv_{preset.name}.wav"
             _write_wav(out / fname, processed)
-            paths.append(str(out / fname))
+            paths.append(_export_path(out / fname))
 
             # Also export the IR itself if generator exists
             gen = ir_generators.get(bank_name)
@@ -484,7 +490,7 @@ def export_convolution_demos(output_dir: str = "output") -> list[str]:
                 ir = gen(preset, SAMPLE_RATE)
                 ir_fname = f"ir_{preset.name}.wav"
                 _write_wav(ir_dir / ir_fname, ir)
-                paths.append(str(ir_dir / ir_fname))
+                paths.append(_export_path(ir_dir / ir_fname))
     return paths
 
 

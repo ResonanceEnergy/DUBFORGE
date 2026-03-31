@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from engine.config_loader import PHI
 from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
 
-SAMPLE_RATE = 48000
+SAMPLE_RATE = 44100
 
 FREQUENCY_BANDS = {
     "sub": (20, 60),

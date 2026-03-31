@@ -11,6 +11,8 @@ import struct
 import wave
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from engine.config_loader import PHI, A4_432
 from engine.turboquant import (
     CompressedAudioBuffer,
@@ -58,9 +60,37 @@ class AdditivePatch:
             ]
 
 
+def _adsr_vec(t_arr: np.ndarray, dur: float, a: float, d: float,
+              s: float, r: float) -> np.ndarray:
+    """Vectorized ADSR envelope."""
+    env = np.zeros_like(t_arr)
+    rel_start = dur - r
+
+    # Attack
+    mask = t_arr < a
+    if a > 0:
+        env[mask] = t_arr[mask] / a
+    else:
+        env[mask] = 1.0
+
+    # Decay
+    mask = (t_arr >= a) & (t_arr < a + d)
+    env[mask] = 1.0 - (1.0 - s) * ((t_arr[mask] - a) / d)
+
+    # Sustain
+    mask = (t_arr >= a + d) & (t_arr < rel_start)
+    env[mask] = s
+
+    # Release
+    mask = (t_arr >= rel_start) & (t_arr < dur)
+    env[mask] = s * (1.0 - (t_arr[mask] - rel_start) / r)
+
+    return env
+
+
 def _adsr(t: float, dur: float, a: float, d: float,
           s: float, r: float) -> float:
-    """ADSR envelope."""
+    """ADSR envelope (scalar fallback)."""
     rel_start = dur - r
     if t < a:
         return t / a if a > 0 else 1.0
@@ -78,34 +108,28 @@ def render_additive(patch: AdditivePatch, freq: float = 440.0,
                      sample_rate: int = SAMPLE_RATE) -> list[float]:
     """Render additive synthesis."""
     n = int(duration * sample_rate)
-    signal = [0.0] * n
-    dt = 1.0 / sample_rate
+    signal = np.zeros(n)
+    t_arr = np.arange(n, dtype=np.float64) / sample_rate
     nyquist = sample_rate / 2.0
 
     for partial in patch.partials:
-        # Detune in cents
         detune_ratio = 2.0 ** (partial.detune_cents / 1200.0)
         p_freq = freq * partial.harmonic * detune_ratio
 
-        # Skip if above Nyquist
         if p_freq >= nyquist:
             continue
 
         omega = 2.0 * math.pi * p_freq
-        for i in range(n):
-            t = i * dt
-            env = _adsr(t, duration, partial.attack, partial.decay,
+        env = _adsr_vec(t_arr, duration, partial.attack, partial.decay,
                         partial.sustain, partial.release)
-            signal[i] += (partial.amplitude * env *
-                          math.sin(omega * t + partial.phase))
+        signal += partial.amplitude * env * np.sin(omega * t_arr + partial.phase)
 
     # Normalize
-    peak = max(abs(s) for s in signal) if signal else 1.0
+    peak = float(np.max(np.abs(signal))) if n > 0 else 1.0
     if peak > 0:
-        scale = patch.master_gain / peak
-        signal = [s * scale for s in signal]
+        signal *= patch.master_gain / peak
 
-    return signal
+    return signal.tolist()
 
 
 def phi_partials(n_partials: int = 8,
@@ -182,17 +206,15 @@ def morph_patches(patch_a: AdditivePatch, patch_b: AdditivePatch,
 def _write_wav(path: str, signal: list[float],
                sample_rate: int = SAMPLE_RATE) -> str:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    peak = max(abs(s) for s in signal) if signal else 1.0
+    arr = np.asarray(signal)
+    peak = float(np.max(np.abs(arr))) if len(arr) > 0 else 1.0
     scale = 32767.0 / max(peak, 1e-10) * 0.9
+    clipped = np.clip(arr * scale, -32768, 32767).astype(np.int16)
     with wave.open(path, "w") as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
-        frames = b"".join(
-            struct.pack("<h", max(-32768, min(32767, int(s * scale))))
-            for s in signal
-        )
-        wf.writeframes(frames)
+        wf.writeframes(clipped.tobytes())
     return path
 
 
