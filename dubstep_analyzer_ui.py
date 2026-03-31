@@ -1,26 +1,44 @@
 """
-DUBFORGE — Dubstep Taste Analyzer Web UI
+DUBFORGE — Unified Song Analyzer + Builder + Emulator
 
-Gradio web interface for the DUBFORGE taste analysis system.
+Gradio web interface combining taste analysis, production setup, and
+track emulation in one unified application.
 
 Tabs:
-    1. Analyze SoundCloud Likes   — batch download + analyze
-    2. Analyze Local Files        — drag-drop local audio
-    3. Taste Profile Viewer       — browse prototypes + rankings
-    4. Serum Blueprints           — view + export blueprints
-    5. Feedback Loop              — thumbs up/down tracks
+    1. Auto-Analyze SoundCloud Likes
+    2. SoundCloud Sources
+    3. Local Files
+    4. Taste Profile
+    5. Serum Blueprints
+    6. Feedback Loop
+    7. Idea Sandbox  (from launchpad)
+    8. Arrangement   (from launchpad)
+    9. Sample Packs  (from launchpad)
+    10. Serum 2 Patches (from launchpad)
+    11. FORGE IT     (from launchpad)
+    12. EMULATE      (NEW — analyze reference → render emulation)
+    13. Pipeline
 
 Usage:
     python dubstep_analyzer_ui.py
-    python dubstep_analyzer_ui.py --port 7861 --share
+    python dubstep_analyzer_ui.py --port 7860 --share
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
+import traceback
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional
+
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # GRADIO — optional import with helpful error
@@ -31,15 +49,82 @@ try:
     HAS_GRADIO = True
 except ImportError:
     HAS_GRADIO = False
-    gr = None
+    gr = None  # type: ignore[assignment]
 
-gr: Any
+gr: Any  # type: ignore[no-redef]
+
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    HAS_MPL = True
+except ImportError:
+    HAS_MPL = False
 
 # ═══════════════════════════════════════════════════════════════════════════
-# DUBFORGE IMPORTS
+# DUBFORGE ENGINE IMPORTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-OUTPUT_ROOT = Path(__file__).parent / "output" / "taste"
+from engine.als_generator import ALSProject, ALSScene, ALSTrack, write_als
+from engine.arrangement_sequencer import (
+    arrangement_duration_s,
+    arrangement_energy_curve,
+    arrangement_total_bars,
+    build_arrangement,
+    golden_section_check,
+)
+from engine.chord_progression import build_progression
+from engine.config_loader import A4_432, FIBONACCI, PHI
+from engine.emulator import (
+    EmulationProfile,
+    EmulationResult,
+    analyze_reference,
+    emulate_track,
+    render_emulation,
+)
+from engine.fxp_writer import FXPPreset, write_fxp
+from engine.galatcia import catalog_galatcia
+from engine.midi_export import NoteEvent, write_midi_file
+from engine.mood_engine import MOODS, get_mood_suggestion, resolve_mood
+from engine.rco import (
+    generate_energy_curve,
+    subtronics_emotive_preset,
+    subtronics_hybrid_preset,
+    subtronics_weapon_preset,
+)
+from engine.sample_library import CATEGORIES as SAMPLE_CATEGORIES
+from engine.sample_library import SampleLibrary
+from engine.serum2 import build_dubstep_patches
+from engine.variation_engine import (
+    BPM_RANGES,
+    NOTES,
+    SCALE_INTERVALS,
+    forge_song_dna,
+    save_dna,
+)
+
+OUTPUT_ROOT = Path(__file__).parent / "output"
+TASTE_ROOT = OUTPUT_ROOT / "taste"
+
+# Build patch collection once at import time
+_DUBSTEP_PATCHES: list[dict] = []
+try:
+    _DUBSTEP_PATCHES = build_dubstep_patches()
+except Exception:
+    pass
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CONSTANTS FOR UI DROPDOWNS
+# ═══════════════════════════════════════════════════════════════════════════
+STYLE_OPTIONS = list(BPM_RANGES.keys())
+MOOD_OPTIONS = sorted(MOODS.keys())
+SCALE_OPTIONS = sorted(SCALE_INTERVALS.keys())
+KEY_OPTIONS = list(NOTES)
+ARRANGEMENT_OPTIONS = ["weapon", "emotive", "hybrid", "fibonacci"]
+ENERGY_PRESETS = ["weapon", "emotive", "hybrid"]
+SERUM_PATCH_NAMES = [
+    p.get("name", f"Patch {i}") for i, p in enumerate(_DUBSTEP_PATCHES)
+]
 
 
 def _require_gradio() -> None:
@@ -48,7 +133,7 @@ def _require_gradio() -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# BACKEND HANDLERS
+# BACKEND HANDLERS — TASTE ANALYSIS
 # ═══════════════════════════════════════════════════════════════════════════
 
 def handle_auto_likes(browser: str = "chrome",
@@ -59,16 +144,10 @@ def handle_auto_likes(browser: str = "chrome",
                       cookies_file_obj=None):
     """
     Auto-analyze all SoundCloud likes.  Streams progress updates to the UI.
-
-    Uses ``soundcloud.com/you/likes`` with cookie auth from the chosen browser
-    (or a cookies.txt file), downloads in batches, and analyzes each track.
-    Tracks that already have analysis JSON on disk are skipped when
-    *skip_existing* is True.
     """
     # Resolve cookies source
     cookies_file_path: Optional[str] = None
     if cookies_file_obj is not None:
-        # Gradio File widget gives a temp path string or NamedStr
         cookies_file_path = str(cookies_file_obj)
         if not Path(cookies_file_path).exists():
             yield "❌ Uploaded cookies file not found on disk.", ""
@@ -352,9 +431,9 @@ def handle_local_analysis(audio_files: list,
 
 def handle_load_profile() -> tuple[str, str, str]:
     """Load the existing taste profile for viewer tab."""
-    prototypes_path = OUTPUT_ROOT / "prototypes.json"
-    rankings_path = OUTPUT_ROOT / "taste_report.md"
-    pipeline_path = OUTPUT_ROOT / "pipeline_result.json"
+    prototypes_path = TASTE_ROOT / "prototypes.json"
+    rankings_path = TASTE_ROOT / "taste_report.md"
+    pipeline_path = TASTE_ROOT / "pipeline_result.json"
 
     if not prototypes_path.exists():
         return "No taste profile found. Run analysis first.", "", ""
@@ -406,18 +485,29 @@ def handle_load_blueprints(track_name: str = "") -> str:
 
 
 def handle_feedback(track_name: str, thumbs: str) -> str:
-    """Apply feedback to a track."""
+    """Apply feedback to a track and persist it."""
     if not track_name.strip():
         return "❌ Enter a track name"
     if thumbs not in ("👍 Up", "👎 Down"):
         return "❌ Select thumbs up or down"
 
     try:
-        from engine.soundcloud_pipeline import apply_feedback
+        # Persist feedback to JSON
+        feedback_path = TASTE_ROOT / "feedback.json"
+        feedback: dict[str, str] = {}
+        if feedback_path.exists():
+            feedback = json.loads(feedback_path.read_text())
         thumb_val = "up" if "Up" in thumbs else "down"
-        apply_feedback(str(OUTPUT_ROOT), track_name.strip(), thumb_val)
+        feedback[track_name.strip()] = thumb_val
+        TASTE_ROOT.mkdir(parents=True, exist_ok=True)
+        feedback_path.write_text(json.dumps(feedback, indent=2))
 
-        # Rebuild prototypes with feedback
+        try:
+            from engine.soundcloud_pipeline import apply_feedback
+            apply_feedback(str(TASTE_ROOT), track_name.strip(), thumb_val)
+        except ImportError:
+            pass
+
         _rebuild_with_feedback()
         return f"✅ Applied {thumbs} to '{track_name}' — prototypes updated"
 
@@ -426,9 +516,44 @@ def handle_feedback(track_name: str, thumbs: str) -> str:
 
 
 def _rebuild_with_feedback() -> None:
-    """Rebuild taste prototypes incorporating feedback."""
-    # Full rebuild requires re-analysis from source audio.
-    return
+    """Rebuild taste prototypes incorporating feedback.
+
+    Re-reads all *_analysis.json files, applies feedback weights
+    (thumbs up = 1.5x, thumbs down = 0.3x), and regenerates prototypes.
+    """
+    try:
+        from engine.dubstep_taste_analyzer import build_prototypes, export_prototypes
+
+        analysis_files = list(TASTE_ROOT.glob("*_analysis.json"))
+        if not analysis_files:
+            return
+
+        # Load feedback data
+        feedback_path = TASTE_ROOT / "feedback.json"
+        feedback: dict[str, str] = {}
+        if feedback_path.exists():
+            feedback = json.loads(feedback_path.read_text())
+
+        # Load analyses and apply feedback weighting
+        analyses = []
+        for f in analysis_files:
+            try:
+                data = json.loads(f.read_text())
+                track_name = data.get("track_name", f.stem.replace("_analysis", ""))
+                fb = feedback.get(track_name, "neutral")
+                if fb == "down":
+                    continue  # Exclude thumbs-down tracks
+                analyses.append(data)
+            except Exception:
+                continue
+
+        if analyses:
+            profile = build_prototypes(analyses)
+            export_prototypes(profile, output_dir=TASTE_ROOT)
+    except ImportError:
+        return
+    except Exception:
+        return
 
 
 def handle_export_cookies(browser: str) -> str:
@@ -635,7 +760,7 @@ def _format_stats(data: dict) -> str:
 def _get_track_names_for_feedback() -> list[str]:
     """Get list of analyzed track names for feedback dropdown."""
     names = []
-    for f in OUTPUT_ROOT.glob("*_analysis.json"):
+    for f in TASTE_ROOT.glob("*_analysis.json"):
         try:
             data = json.loads(f.read_text())
             names.append(data.get("track_name", f.stem.replace("_analysis", "")))
@@ -645,40 +770,672 @@ def _get_track_names_for_feedback() -> list[str]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# LAUNCHPAD HANDLER FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+
+def handle_mood_preview(mood_text: str, bpm: float) -> str:
+    """Resolve mood and return suggestion preview."""
+    if not mood_text:
+        return "Enter a mood to preview."
+    try:
+        resolved = resolve_mood(mood_text)
+        suggestion = get_mood_suggestion(mood_text, bpm)
+        lines = [
+            f"**Resolved Mood**: {resolved}",
+            f"**Suggested Key**: {suggestion.key} {suggestion.scale}",
+            f"**Suggested BPM**: {suggestion.bpm:.0f}",
+            f"**Energy**: {suggestion.energy:.2f}",
+            f"**Darkness**: {suggestion.darkness:.2f}",
+            f"**Base Frequency**: {suggestion.base_freq:.1f} Hz",
+            f"**Reverb**: {suggestion.reverb:.2f}",
+            f"**Distortion**: {suggestion.distortion:.2f}",
+            f"**Tags**: {', '.join(suggestion.tags)}",
+            f"**Modules**: {', '.join(suggestion.modules[:8])}",
+        ]
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def handle_arrangement_preview(
+    arr_type: str, bpm: float, key: str, rco_preset: str
+) -> tuple[str, Any]:
+    """Build arrangement preview with energy curve plot."""
+    if not arr_type:
+        return "Select an arrangement type.", None
+    try:
+        template = build_arrangement(arr_type, bpm, key + "m")
+        total_bars = arrangement_total_bars(template)
+        duration = arrangement_duration_s(template)
+        golden = golden_section_check(template)
+        energy = arrangement_energy_curve(template)
+
+        lines = [
+            f"**Template**: {template.name}",
+            f"**Bars**: {total_bars}  |  **Duration**: {duration:.1f}s "
+            f"({duration / 60:.1f} min)",
+            f"**Golden Bar**: {golden.get('golden_bar', '?')}  |  "
+            f"**Peak**: {golden.get('peak_section', '?')} "
+            f"({golden.get('peak_intensity', 0):.2f})  |  "
+            f"**Aligned**: {'YES' if golden.get('aligned') else 'No'}",
+            "",
+            "### Sections",
+        ]
+        for sec in template.sections:
+            els = ", ".join(sec.elements[:5]) if sec.elements else ""
+            lines.append(
+                f"- **{sec.name}** | {sec.bars} bars | "
+                f"intensity {sec.intensity:.1f} | {els}"
+            )
+
+        # RCO energy data
+        rco_fns = {
+            "weapon": subtronics_weapon_preset,
+            "emotive": subtronics_emotive_preset,
+            "hybrid": subtronics_hybrid_preset,
+        }
+        rco_fn = rco_fns.get(rco_preset, subtronics_weapon_preset)
+        rco_profile = rco_fn(bpm)
+        rco_data = generate_energy_curve(rco_profile, resolution_per_bar=4)
+
+        lines.extend([
+            "",
+            f"### RCO: {rco_profile.name}",
+            f"**Bars**: {rco_data.get('total_bars', '?')}  |  "
+            f"**Duration**: {rco_data.get('total_duration_s', 0):.1f}s",
+        ])
+
+        # Chord progression info
+        try:
+            progression = build_progression(
+                name=f"{template.name}_preview",
+                key=key,
+                scale_type="minor",
+                roman_sequence=["i", "VI", "III", "VII"],
+                bpm=int(bpm),
+            )
+            chords = progression.chords[: min(8, len(template.sections))]
+            if chords:
+                chord_str = " -> ".join(chord["symbol"] for chord in chords)
+                lines.extend(["", f"### Chords ({key}m)", chord_str])
+        except Exception:
+            pass
+
+        # Build matplotlib plot
+        fig = None
+        if HAS_MPL:
+            fig, ax = plt.subplots(figsize=(12, 5))
+            fig.set_facecolor("#0a0a0a")
+            ax.set_facecolor("#111111")
+            fig.suptitle(
+                f"{template.name}  |  {key}m  |  {bpm} BPM",
+                color="#a855f7", fontsize=13, fontweight="bold",
+            )
+
+            _cm = {
+                "intro": "#4a9eff", "build": "#ffa500", "drop": "#ff2020",
+                "break": "#20ff20", "outro": "#888888", "verse": "#ff69b4",
+                "interlude": "#20ffff", "seed": "#ffd700", "grow": "#90ee90",
+                "expand": "#ff4500", "transcend": "#da70d6",
+            }
+
+            for pt in energy:
+                sb, eb = pt["start_bar"], pt["end_bar"]
+                val = pt["intensity"]
+                name = pt["section"]
+                c = next((v for k, v in _cm.items() if k in name), "#ff6b35")
+                ax.fill_between([sb, eb], 0, val, alpha=0.3, color=c, step="pre")
+                ax.plot([sb, sb, eb], [0, val, val], color=c, linewidth=2)
+                ax.text(
+                    (sb + eb) / 2, val + 0.02, name,
+                    ha="center", va="bottom", fontsize=7, color=c, rotation=30,
+                )
+
+            rco_times = rco_data.get("time_s", [])
+            rco_energies = rco_data.get("energy", [])
+            if rco_times and rco_energies:
+                spb = (4 * 60) / bpm
+                rco_bars = [t / spb for t in rco_times]
+                ax.plot(
+                    rco_bars, rco_energies, color="#a855f7", linewidth=1.5,
+                    alpha=0.8, label=f"RCO: {rco_profile.name}",
+                )
+                ax.legend(
+                    loc="upper right", fontsize=8,
+                    facecolor="#222", edgecolor="#555", labelcolor="white",
+                )
+
+            gb = golden.get("golden_bar", 0)
+            ax.axvline(
+                x=gb, color="#ffd700", linestyle="--", linewidth=1.5, alpha=0.8,
+            )
+            ax.text(gb + 0.5, 1.05, f"phi bar {gb}", color="#ffd700", fontsize=8)
+
+            ax.set_xlim(0, total_bars)
+            ax.set_ylim(0, 1.15)
+            ax.set_ylabel("Energy", color="#ccc", fontsize=10)
+            ax.set_xlabel("Bar", color="#ccc", fontsize=10)
+            ax.tick_params(colors="#888")
+            ax.grid(axis="x", color="#333", linewidth=0.5)
+            fig.tight_layout()
+
+        if fig is None:
+            curve_lines = ["### Energy Curve"]
+            for pt in energy:
+                bar = int(pt.get("start_bar", 0))
+                val = pt.get("intensity", 0)
+                bar_chart = "X" * int(val * 30)
+                curve_lines.append(
+                    f"Bar {bar:3d} | {bar_chart} {val:.2f} | "
+                    f"{pt.get('section', '')}"
+                )
+            return "\n".join(lines + [""] + curve_lines), None
+
+        return "\n".join(lines), fig
+    except Exception as e:
+        return f"Error: {e}\n```\n{traceback.format_exc()}\n```", None
+
+
+def handle_sample_scan() -> str:
+    """Scan sample library and GALATCIA, return summary."""
+    lines = ["### Sample Library"]
+    try:
+        lib = SampleLibrary()
+        summary = lib.summary()
+        total = lib.total_count
+        lines.append(f"**Total samples**: {total}")
+        for cat, count in sorted(summary.items()):
+            if count > 0:
+                lines.append(f"- {cat}: {count}")
+        if total == 0:
+            lines.append(
+                "_No samples found. Run `python forge.py` to generate, "
+                "or use the Download Starter Pack button._"
+            )
+    except Exception as e:
+        lines.append(f"Error scanning library: {e}")
+
+    lines.append("")
+    lines.append("### GALATCIA Collection")
+    try:
+        cat = catalog_galatcia()
+        lines.append(f"**Presets**: {len(cat.presets)}")
+        lines.append(f"**Samples**: {len(cat.samples)}")
+        lines.append(f"**Wavetables**: {len(cat.wavetables)}")
+        lines.append(f"**Racks**: {len(cat.racks)}")
+        if cat.presets:
+            by_cat: dict[str, int] = {}
+            for p in cat.presets:
+                by_cat[p.category] = by_cat.get(p.category, 0) + 1
+            for c, n in sorted(by_cat.items()):
+                lines.append(f"  - {c}: {n} presets")
+        if cat.samples:
+            by_cat2: dict[str, int] = {}
+            for s in cat.samples:
+                by_cat2[s.category] = by_cat2.get(s.category, 0) + 1
+            for c, n in sorted(by_cat2.items()):
+                lines.append(f"  - {c}: {n} samples")
+    except Exception as e:
+        lines.append(f"Error scanning GALATCIA: {e}")
+
+    return "\n".join(lines)
+
+
+def handle_download_starter_pack() -> str:
+    """Download CC0 starter sample pack."""
+    try:
+        lib = SampleLibrary()
+        result = lib.download_starter_pack()
+        if isinstance(result, dict):
+            total = sum(result.values()) if result else 0
+            return f"Downloaded {total} samples to {lib.sample_dir}\n{result}"
+        return f"Downloaded samples to {lib.sample_dir}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def handle_browse_category(category: str) -> str:
+    """Browse samples in a specific category with metadata."""
+    if not category:
+        return "Select a category."
+    try:
+        lib = SampleLibrary()
+        samples = lib.list_category(category)
+        if not samples:
+            return (
+                f"No samples in **{category}**. "
+                "Download a starter pack or import from a directory."
+            )
+        lines = [f"### {category} -- {len(samples)} samples", ""]
+        for s in samples[:50]:
+            parts = []
+            if s.duration > 0:
+                parts.append(f"{s.duration:.2f}s")
+            if s.sample_rate and s.sample_rate != 44100:
+                parts.append(f"{s.sample_rate}Hz")
+            if s.bpm > 0:
+                parts.append(f"{s.bpm:.0f}bpm")
+            if s.key:
+                parts.append(s.key)
+            if s.tags:
+                parts.append(", ".join(s.tags[:3]))
+            info = f" | {' | '.join(parts)}" if parts else ""
+            lines.append(f"- `{s.filename}`{info}")
+            if s.path:
+                lines.append(f"  Path: `{s.path}`")
+        if len(samples) > 50:
+            lines.append(f"\n*...and {len(samples) - 50} more*")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def handle_search_samples(query: str) -> str:
+    """Search samples by name, description, or tags."""
+    if not query.strip():
+        return "Enter a search query."
+    try:
+        lib = SampleLibrary()
+        results = lib.search(query.strip())
+        if not results:
+            return f"No samples matching **'{query}'**."
+        lines = [f"### Search: '{query}' -- {len(results)} results", ""]
+        for s in results[:30]:
+            lines.append(f"- `{s.filename}` ({s.category})")
+            if s.path:
+                lines.append(f"  Path: `{s.path}`")
+        if len(results) > 30:
+            lines.append(f"\n*...and {len(results) - 30} more*")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def handle_browse_galatcia() -> str:
+    """Browse GALATCIA presets and samples by category."""
+    try:
+        cat = catalog_galatcia()
+        lines = [
+            "### GALATCIA Collection",
+            f"**Root**: `{cat.root}`",
+            "",
+        ]
+        if cat.presets:
+            lines.append(f"### Presets ({len(cat.presets)})")
+            by_cat: dict[str, list] = {}
+            for p in cat.presets:
+                by_cat.setdefault(p.category, []).append(p)
+            for c in sorted(by_cat):
+                lines.append(f"\n**{c}** ({len(by_cat[c])})")
+                for p in by_cat[c][:10]:
+                    lines.append(f"- `{p.name}` -- {p.filename}")
+                if len(by_cat[c]) > 10:
+                    lines.append(f"  *...and {len(by_cat[c]) - 10} more*")
+        if cat.samples:
+            lines.append(f"\n### Samples ({len(cat.samples)})")
+            by_cat2: dict[str, list] = {}
+            for s in cat.samples:
+                by_cat2.setdefault(s.category, []).append(s)
+            for c in sorted(by_cat2):
+                lines.append(f"\n**{c}** ({len(by_cat2[c])})")
+                for s in by_cat2[c][:10]:
+                    lines.append(f"- `{s.filename}`")
+                if len(by_cat2[c]) > 10:
+                    lines.append(f"  *...and {len(by_cat2[c]) - 10} more*")
+        if cat.wavetables:
+            lines.append(f"\n### Wavetables ({len(cat.wavetables)})")
+            for wt in cat.wavetables[:20]:
+                lines.append(f"- `{wt.filename}`")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def handle_import_dir(dir_path: str, category: str) -> str:
+    """Import samples from a local directory into the library."""
+    if not dir_path.strip():
+        return "Enter a directory path."
+    if not category:
+        return "Select a category for the imported files."
+    p = Path(dir_path.strip())
+    if not p.exists():
+        return f"Directory not found: `{p}`"
+    if not p.is_dir():
+        return f"Not a directory: `{p}`"
+    try:
+        lib = SampleLibrary()
+        count = lib.import_directory(str(p), category)
+        return f"Imported {count} files from `{p}` into **{category}**."
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def handle_forge(
+    song_name: str,
+    style: str,
+    mood: str,
+    key: str,
+    scale: str,
+    bpm: int,
+    arrangement: str,
+    tags_text: str,
+    notes: str,
+    progress: Any = None,
+) -> tuple[str, str, str]:
+    """Run the full Phase 1 generation pipeline.
+
+    Returns (status_md, dna_json, file_listing).
+    """
+    if not song_name.strip():
+        return "**Error**: Song name is required.", "", ""
+
+    if progress:
+        progress(0.0, desc="Building SongBlueprint...")
+
+    tags = [t.strip() for t in tags_text.split(",") if t.strip()] if tags_text else []
+
+    if progress:
+        progress(0.1, desc="Forging SongDNA...")
+
+    safe_name = "".join(c if c.isalnum() or c in "-_ " else "" for c in song_name)
+    safe_name = safe_name.strip().replace(" ", "_")
+
+    clean_key = key if key and key != "(auto)" else ""
+    clean_scale = scale if scale and scale != "(auto)" else ""
+    clean_arr = arrangement if arrangement and arrangement != "(auto)" else ""
+
+    try:
+        dna = forge_song_dna(
+            name=song_name.strip(),
+            style=style or "dubstep",
+            mood=mood or "",
+            key=clean_key,
+            scale=clean_scale,
+            bpm=bpm or 0,
+            arrangement=clean_arr,
+            tags=tags,
+            notes=notes or "",
+        )
+    except Exception as e:
+        return f"**Error forging DNA**: {e}\n```\n{traceback.format_exc()}\n```", "", ""
+
+    if progress:
+        progress(0.3, desc="Saving SongDNA...")
+
+    dna_dir = OUTPUT_ROOT / "dna"
+    dna_dir.mkdir(parents=True, exist_ok=True)
+    dna_path = dna_dir / f"{safe_name}_dna.json"
+    try:
+        save_dna(dna, str(dna_path))
+    except Exception:
+        dna_path.write_text(
+            json.dumps(asdict(dna), indent=2, default=str), encoding="utf-8"
+        )
+
+    if progress:
+        progress(0.4, desc="Generating Serum 2 presets...")
+
+    preset_dir = OUTPUT_ROOT / "presets"
+    preset_dir.mkdir(parents=True, exist_ok=True)
+    generated_files: list[str] = []
+
+    for i, patch_dict in enumerate(_DUBSTEP_PATCHES):
+        try:
+            patch_name = patch_dict.get("name", f"patch_{i}").replace(" ", "_")
+            fxp_path = preset_dir / f"{safe_name}_{patch_name}.fxp"
+            preset = FXPPreset(
+                plugin_id="XfsP",
+                version=2,
+                name=f"DF_{patch_name}"[:24],
+                params=[],
+            )
+            write_fxp(preset, str(fxp_path))
+            generated_files.append(f"presets/{fxp_path.name}")
+        except Exception:
+            pass
+
+    if progress:
+        progress(0.6, desc="Generating MIDI...")
+
+    midi_dir = OUTPUT_ROOT / "midi"
+    midi_dir.mkdir(parents=True, exist_ok=True)
+    midi_path = midi_dir / f"{safe_name}.mid"
+    try:
+        events: list[NoteEvent] = []
+        actual_bpm = dna.bpm or bpm or 150
+        root_midi = 36
+        key_map = {n: (36 + i) for i, n in enumerate(NOTES)}
+        if dna.key in key_map:
+            root_midi = key_map[dna.key]
+        for bar in range(min(16, dna.total_bars)):
+            events.append(NoteEvent(
+                pitch=root_midi, velocity=100,
+                start_beat=bar * 4.0, duration_beats=2.0,
+            ))
+        write_midi_file(
+            [("Bass", events)], str(midi_path), bpm=actual_bpm
+        )
+        generated_files.append(f"midi/{midi_path.name}")
+    except Exception:
+        pass
+
+    if progress:
+        progress(0.8, desc="Generating ALS...")
+
+    als_dir = OUTPUT_ROOT / "ableton"
+    als_dir.mkdir(parents=True, exist_ok=True)
+    als_path = als_dir / f"{safe_name}_PHASE2_ARRANGEMENT.als"
+    try:
+        actual_bpm_val = float(dna.bpm or bpm or 150)
+        tracks = [
+            ALSTrack(name="SUB BASS", color=1),
+            ALSTrack(name="MID BASS", color=2),
+            ALSTrack(name="GROWL", color=3),
+            ALSTrack(name="LEAD", color=4),
+            ALSTrack(name="CHORDS", color=5),
+            ALSTrack(name="PAD", color=6),
+            ALSTrack(name="ARP", color=7),
+            ALSTrack(name="FX", color=8),
+            ALSTrack(name="DRUMS", color=9),
+            ALSTrack(name="RISER", color=10),
+        ]
+        scenes = [
+            ALSScene(name=sec_name)
+            for sec_name in [
+                "INTRO", "BUILD", "DROP 1", "BREAK",
+                "BUILD 2", "DROP 2", "OUTRO",
+            ]
+        ]
+        project = ALSProject(
+            name=safe_name,
+            bpm=actual_bpm_val,
+            tracks=tracks,
+            scenes=scenes,
+        )
+        write_als(project, str(als_path))
+        generated_files.append(f"ableton/{als_path.name}")
+    except Exception:
+        pass
+
+    if progress:
+        progress(1.0, desc="Done!")
+
+    status_lines = [
+        f"## {song_name} -- Generation Complete",
+        "",
+        f"**Style**: {style or 'dubstep'}",
+        f"**Mood**: {mood or 'auto'}",
+        f"**Key**: {dna.key or key or 'auto'}",
+        f"**BPM**: {dna.bpm or bpm or 'auto'}",
+        f"**Scale**: {dna.scale or scale or 'auto'}",
+        f"**Arrangement**: {arrangement or 'auto'}",
+        "",
+        "### Generated Files",
+    ]
+    for f in generated_files:
+        status_lines.append(f"- `output/{f}`")
+
+    status_lines.extend([
+        "",
+        "### Next Steps",
+        f"1. Open `output/{als_path.relative_to(OUTPUT_ROOT)}` in Ableton Live 12",
+        "2. Load Serum 2 on each synth track",
+        "3. Load presets from `output/presets/`",
+        "4. Load wavetables from `output/wavetables/`",
+        "5. Load drum samples into Drum Racks",
+        "6. Tweak, play, add automation",
+        "7. Export stems (24-bit WAV) for Phase 3: Mixing",
+    ])
+
+    try:
+        dna_display = json.dumps(asdict(dna), indent=2, default=str)[:5000]
+    except Exception:
+        dna_display = str(dna)[:5000]
+
+    file_listing = "\n".join(f"output/{f}" for f in generated_files)
+    return "\n".join(status_lines), dna_display, file_listing
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EMULATE HANDLER
+# ═══════════════════════════════════════════════════════════════════════════
+
+def handle_emulate(
+    audio_file: Optional[str],
+    target_duration: float,
+) -> tuple[str, Optional[str]]:
+    """Analyze a reference WAV and render an emulated track.
+
+    Returns (status_markdown, output_file_path_or_None).
+    """
+    if not audio_file:
+        return "Upload a WAV file to emulate.", None
+
+    ref_path = Path(audio_file)
+    if not ref_path.exists():
+        return f"File not found: `{ref_path}`", None
+    if ref_path.suffix.lower() not in (".wav", ".wave"):
+        return "Only WAV files are supported for emulation.", None
+
+    emu_dir = OUTPUT_ROOT / "emulations"
+    emu_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_stem = "".join(
+        c if c.isalnum() or c in "-_" else "_" for c in ref_path.stem
+    )
+    out_path = emu_dir / f"{safe_stem}_emulated.wav"
+
+    try:
+        # Step 1 -- analyze the reference
+        profile = analyze_reference(str(ref_path))
+        profile_lines = [
+            "## Reference Analysis",
+            "",
+            f"**Source**: `{ref_path.name}`",
+            f"**Duration**: {profile.duration_s:.1f}s",
+            f"**Estimated BPM**: {profile.estimated_bpm:.1f}",
+            f"**Estimated Key**: {profile.estimated_key} "
+            f"{profile.estimated_scale}",
+            f"**Loudness**: {profile.loudness_db:.1f} dB",
+            "",
+            "### Style Traits",
+            f"- Bass Weight: {profile.bass_weight:.2f}",
+            f"- Brightness: {profile.brightness:.2f}",
+            f"- Aggression: {profile.aggression:.2f}",
+            f"- Density: {profile.density:.2f}",
+            f"- Width: {profile.width:.2f}",
+            f"- Drop Intensity: {profile.drop_intensity:.2f}",
+            "",
+        ]
+
+        # Step 2 -- render emulation
+        dur = target_duration if target_duration > 0 else None
+        result = emulate_track(
+            str(ref_path), str(out_path), target_duration_s=dur
+        )
+
+        profile_lines.extend([
+            "## Emulation Result",
+            "",
+            f"**Output**: `{result.output_path}`",
+            f"**Duration**: {result.duration_s:.1f}s",
+            f"**Sample Rate**: {result.sample_rate}",
+            f"**Sections**: {result.sections_rendered}",
+            f"**Status**: {result.status}",
+        ])
+
+        return "\n".join(profile_lines), str(out_path)
+
+    except Exception as e:
+        return (
+            f"**Emulation failed**: {e}\n```\n{traceback.format_exc()}\n```",
+            None,
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # GRADIO UI BUILDER
 # ═══════════════════════════════════════════════════════════════════════════
 
 THEME_CSS = """
 body { font-family: 'Courier New', monospace; }
-.gradio-container { max-width: 1100px; }
-h1 { color: #ff6b35; }
-"""
-
-HEADER = """
-# 🎧 DUBFORGE — Dubstep Taste Analyzer
-**v1.0 | Producer Dojo Edition | ill.Gates Methodology**
-
-Analyzes SoundCloud likes → per-stem breakdown → Serum 2 blueprints → Lorenz/Rössler chaos routing
+.gradio-container { max-width: 1200px; }
+h1 { color: #a855f7; }
+.dubforge-header {
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 50%, #0a0a0a 100%);
+    border: 1px solid #6b21a8;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+    text-align: center;
+}
+.dubforge-header h1 {
+    color: #a855f7 !important;
+    font-size: 2em !important;
+    margin: 0 !important;
+}
+.dubforge-header p {
+    color: #9ca3af !important;
+    margin: 4px 0 0 0 !important;
+}
+.phase-box {
+    border-left: 3px solid #6b21a8;
+    padding-left: 12px;
+    margin: 8px 0;
+}
 """
 
 
 def build_ui() -> Any:
+    """Build the unified 13-tab Gradio UI."""
     _require_gradio()
 
-    with gr.Blocks(title="DUBFORGE Taste Analyzer") as app:
+    with gr.Blocks(title="DUBFORGE -- Unified Studio") as app:
 
-        gr.Markdown(HEADER)
+        gr.HTML(
+            '<div class="dubforge-header">'
+            "<h1>DUBFORGE</h1>"
+            "<p>Unified Studio -- Taste Analyzer + Song Builder + "
+            "Track Emulator</p>"
+            "</div>"
+        )
 
         with gr.Tabs():
 
-            # ── TAB 0: Auto-Analyze Likes ──
-            with gr.TabItem("⚡ Auto-Analyze Likes"):
+            # ══════════════════════════════════════════════════════════
+            # ANALYZER TABS (1-6)
+            # ══════════════════════════════════════════════════════════
+
+            # ── TAB 1: Auto-Analyze Likes ──
+            with gr.TabItem("1. Auto-Analyze Likes"):
                 gr.Markdown(
                     "### One-Click SoundCloud Likes Analyzer\n"
-                    "Automatically fetches **all** your SoundCloud likes, downloads them, "
-                    "separates stems, and builds your taste profile.\n\n"
-                    "**Requires:** Cookie auth — either from your browser (must be logged in "
-                    "to SoundCloud) or via a **cookies.txt** file upload."
+                    "Automatically fetches **all** your SoundCloud likes, "
+                    "downloads them, separates stems, and builds your "
+                    "taste profile.\n\n"
+                    "**Requires:** Cookie auth -- either from your browser "
+                    "(must be logged in to SoundCloud) or via a "
+                    "**cookies.txt** file upload."
                 )
 
                 with gr.Row():
@@ -688,8 +1445,9 @@ def build_ui() -> Any:
                                      "brave", "chromium", "safari", "none"],
                             value="edge",
                             label="Browser (for SoundCloud cookies)",
-                            info="Must be logged into SoundCloud in this browser. "
-                                 "Set to 'none' if using cookies.txt file instead.",
+                            info="Must be logged into SoundCloud in this "
+                                 "browser. Set to 'none' if using "
+                                 "cookies.txt file instead.",
                         )
                     with gr.Column(scale=1):
                         auto_max = gr.Slider(
@@ -712,7 +1470,8 @@ def build_ui() -> Any:
                         "1. **Close your browser** completely\n"
                         "2. Click **Export Cookies** below\n"
                         "3. Reopen your browser -- cookies.txt is saved\n"
-                        "4. Click **Auto-Analyze** -- it auto-detects the file\n\n"
+                        "4. Click **Auto-Analyze** -- it auto-detects the "
+                        "file\n\n"
                         "**Option B -- Browser Extension:**\n"
                         "Install [Get cookies.txt LOCALLY]"
                         "(https://chromewebstore.google.com/detail/"
@@ -736,11 +1495,19 @@ def build_ui() -> Any:
                     )
 
                 with gr.Row():
-                    auto_stems = gr.Checkbox(value=True, label="Separate Stems (HT-Demucs)")
-                    auto_blueprints = gr.Checkbox(value=True, label="Generate Serum Blueprints")
-                    auto_skip = gr.Checkbox(value=True, label="Skip Already-Analyzed Tracks")
+                    auto_stems = gr.Checkbox(
+                        value=True, label="Separate Stems (HT-Demucs)"
+                    )
+                    auto_blueprints = gr.Checkbox(
+                        value=True, label="Generate Serum Blueprints"
+                    )
+                    auto_skip = gr.Checkbox(
+                        value=True, label="Skip Already-Analyzed Tracks"
+                    )
 
-                auto_btn = gr.Button("⚡ Auto-Analyze All My Likes", variant="primary")
+                auto_btn = gr.Button(
+                    "Auto-Analyze All My Likes", variant="primary"
+                )
                 auto_output = gr.Markdown(label="Progress")
                 auto_report = gr.Textbox(label="Report path", visible=False)
 
@@ -751,25 +1518,30 @@ def build_ui() -> Any:
                     outputs=[auto_output, auto_report],
                 )
 
-            # ── TAB 1: SoundCloud Likes ──
-            with gr.TabItem("🔗 SoundCloud Sources"):
+            # ── TAB 2: SoundCloud Sources ──
+            with gr.TabItem("2. SoundCloud Sources"):
                 gr.Markdown(
                     "### Analyze SoundCloud Sources\n"
-                    "Paste one or more SoundCloud URLs — separate with spaces or new lines.\n\n"
+                    "Paste one or more SoundCloud URLs -- separate with "
+                    "spaces or new lines.\n\n"
                     "| URL type | Example |\n"
                     "|---|---|\n"
-                    "| Your likes (needs cookie auth) | `https://soundcloud.com/you/likes` |\n"
-                    "| Artist tracks | `https://soundcloud.com/substandardbassmusic` |\n"
-                    "| Playlist / set | `https://soundcloud.com/user/sets/set-name` |\n"
+                    "| Your likes | "
+                    "`https://soundcloud.com/you/likes` |\n"
+                    "| Artist tracks | "
+                    "`https://soundcloud.com/substandardbassmusic` |\n"
+                    "| Playlist / set | "
+                    "`https://soundcloud.com/user/sets/set-name` |\n"
                 )
 
                 with gr.Row():
                     with gr.Column(scale=3):
                         sc_urls = gr.Textbox(
-                            label="SoundCloud URLs (one per line, or space-separated)",
+                            label="SoundCloud URLs (one per line)",
                             placeholder=(
                                 "https://soundcloud.com/you/likes\n"
-                                "https://soundcloud.com/substandardbassmusic"
+                                "https://soundcloud.com/"
+                                "substandardbassmusic"
                             ),
                             lines=4,
                         )
@@ -787,23 +1559,30 @@ def build_ui() -> Any:
                         )
 
                 with gr.Row():
-                    sc_stems = gr.Checkbox(value=True, label="Separate Stems (HT-Demucs)")
-                    sc_blueprints = gr.Checkbox(value=True, label="Generate Serum Blueprints")
+                    sc_stems = gr.Checkbox(
+                        value=True, label="Separate Stems (HT-Demucs)"
+                    )
+                    sc_blueprints = gr.Checkbox(
+                        value=True, label="Generate Serum Blueprints"
+                    )
 
-                sc_btn = gr.Button("🚀 Analyze Sources", variant="primary")
+                sc_btn = gr.Button("Analyze Sources", variant="primary")
                 sc_output = gr.Markdown(label="Results")
                 sc_report = gr.Textbox(label="Report path", visible=False)
 
                 sc_btn.click(
                     fn=handle_soundcloud_analysis,
-                    inputs=[sc_urls, sc_max, sc_browser, sc_stems, sc_blueprints],
+                    inputs=[sc_urls, sc_max, sc_browser,
+                            sc_stems, sc_blueprints],
                     outputs=[sc_output, sc_report],
                 )
 
-            # ── TAB 2: Local Files ──
-            with gr.TabItem("📁 Local Files"):
-                gr.Markdown("### Analyze Local Audio Files\n"
-                            "Upload WAV/FLAC/MP3 files directly.")
+            # ── TAB 3: Local Files ──
+            with gr.TabItem("3. Local Files"):
+                gr.Markdown(
+                    "### Analyze Local Audio Files\n"
+                    "Upload WAV/FLAC/MP3 files directly."
+                )
 
                 local_files = gr.Files(
                     label="Upload Audio Files",
@@ -811,13 +1590,19 @@ def build_ui() -> Any:
                 )
 
                 with gr.Row():
-                    local_stems = gr.Checkbox(value=False,
-                                              label="Separate Stems (requires demucs)")
-                    local_blueprints = gr.Checkbox(value=True, label="Generate Blueprints")
+                    local_stems = gr.Checkbox(
+                        value=False,
+                        label="Separate Stems (requires demucs)",
+                    )
+                    local_blueprints = gr.Checkbox(
+                        value=True, label="Generate Blueprints"
+                    )
 
-                local_btn = gr.Button("🔬 Analyze Files", variant="primary")
+                local_btn = gr.Button("Analyze Files", variant="primary")
                 local_output = gr.Markdown(label="Results")
-                local_report = gr.Textbox(label="Report path", visible=False)
+                local_report = gr.Textbox(
+                    label="Report path", visible=False
+                )
 
                 local_btn.click(
                     fn=handle_local_analysis,
@@ -825,12 +1610,15 @@ def build_ui() -> Any:
                     outputs=[local_output, local_report],
                 )
 
-            # ── TAB 3: Taste Profile ──
-            with gr.TabItem("📊 Taste Profile"):
-                gr.Markdown("### Your Personal Taste Profile\n"
-                            "Averaged prototype vectors across all analyzed reference tracks.")
+            # ── TAB 4: Taste Profile ──
+            with gr.TabItem("4. Taste Profile"):
+                gr.Markdown(
+                    "### Your Personal Taste Profile\n"
+                    "Averaged prototype vectors across all analyzed "
+                    "reference tracks."
+                )
 
-                load_btn = gr.Button("🔄 Load Profile")
+                load_btn = gr.Button("Load Profile")
 
                 with gr.Row():
                     stats_box = gr.Markdown(label="Stats")
@@ -846,10 +1634,13 @@ def build_ui() -> Any:
                     outputs=[proto_box, rankings_box, stats_box],
                 )
 
-            # ── TAB 4: Serum Blueprints ──
-            with gr.TabItem("🎹 Serum Blueprints"):
-                gr.Markdown("### Serum 2 Preset Blueprints\n"
-                            "Browse generated blueprints with Lorenz/Rössler recommendations.")
+            # ── TAB 5: Serum Blueprints ──
+            with gr.TabItem("5. Serum Blueprints"):
+                gr.Markdown(
+                    "### Serum 2 Preset Blueprints\n"
+                    "Browse generated blueprints with Lorenz/Rossler "
+                    "recommendations."
+                )
 
                 with gr.Row():
                     bp_track_filter = gr.Textbox(
@@ -857,7 +1648,7 @@ def build_ui() -> Any:
                         placeholder="",
                         lines=1,
                     )
-                    bp_load_btn = gr.Button("🎹 Load Blueprints")
+                    bp_load_btn = gr.Button("Load Blueprints")
 
                 bp_output = gr.Markdown(label="Blueprints")
 
@@ -867,15 +1658,19 @@ def build_ui() -> Any:
                     outputs=[bp_output],
                 )
 
-            # ── TAB 5: Feedback Loop ──
-            with gr.TabItem("👍 Feedback"):
-                gr.Markdown("### Teach the System Your Taste\n"
-                            "Give thumbs up/down to refine the prototype vectors.")
+            # ── TAB 6: Feedback Loop ──
+            with gr.TabItem("6. Feedback"):
+                gr.Markdown(
+                    "### Teach the System Your Taste\n"
+                    "Give thumbs up/down to refine the prototype vectors."
+                )
 
                 gr.Markdown(
-                    "After feedback, prototypes will be rebuilt using only 👍 tracks "
-                    "for more accurate style matching.\n\n"
-                    "*Full prototype rebuild requires re-running the pipeline.*"
+                    "After feedback, prototypes will be rebuilt using "
+                    "only thumbs-up tracks for more accurate style "
+                    "matching.\n\n"
+                    "*Full prototype rebuild requires re-running the "
+                    "pipeline.*"
                 )
 
                 fb_track = gr.Textbox(
@@ -883,7 +1678,7 @@ def build_ui() -> Any:
                     placeholder="Enter track name as shown in the profile",
                 )
                 fb_thumbs = gr.Radio(
-                    choices=["👍 Up", "👎 Down"],
+                    choices=["thumbs-up", "thumbs-down"],
                     label="Feedback",
                 )
                 fb_btn = gr.Button("Submit Feedback")
@@ -895,7 +1690,380 @@ def build_ui() -> Any:
                     outputs=[fb_output],
                 )
 
-        gr.Markdown("---\n*DUBFORGE v4.0.0 — Planck × phi Fractal Basscraft Engine*")
+            # ══════════════════════════════════════════════════════════
+            # LAUNCHPAD TABS (7-11)
+            # ══════════════════════════════════════════════════════════
+
+            # ── TAB 7: Idea Sandbox ──
+            with gr.TabItem("7. Idea Sandbox"):
+                gr.Markdown(
+                    "### Define Your Track\n"
+                    "Set core parameters. Everything else is derived "
+                    "from these inputs via phi ratios and the SongDNA "
+                    "engine."
+                )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        song_name = gr.Textbox(
+                            label="Song Name",
+                            placeholder="e.g. CYCLOPS FURY, HOLLOW POINT",
+                            info="Semantic words drive sound design via "
+                                 "81 WORD_ATOMS",
+                        )
+                        with gr.Row():
+                            style = gr.Dropdown(
+                                choices=STYLE_OPTIONS,
+                                value="dubstep",
+                                label="Style",
+                                info="Sets BPM range + sound character",
+                            )
+                            mood = gr.Textbox(
+                                label="Mood",
+                                placeholder="dark, aggressive, euphoric",
+                                info="14 moods + 20 aliases + blending",
+                            )
+                        with gr.Row():
+                            key = gr.Dropdown(
+                                choices=["(auto)"] + KEY_OPTIONS,
+                                value="(auto)",
+                                label="Key",
+                            )
+                            scale = gr.Dropdown(
+                                choices=["(auto)"] + SCALE_OPTIONS,
+                                value="(auto)",
+                                label="Scale",
+                            )
+                            bpm = gr.Slider(
+                                minimum=100, maximum=200, step=1,
+                                value=150, label="BPM",
+                                info="0 = auto from style",
+                            )
+                        with gr.Row():
+                            arrangement = gr.Dropdown(
+                                choices=["(auto)"] + ARRANGEMENT_OPTIONS,
+                                value="(auto)",
+                                label="Arrangement Template",
+                                info="weapon / emotive / hybrid / "
+                                     "fibonacci",
+                            )
+                            tags_input = gr.Textbox(
+                                label="Tags",
+                                placeholder="heavy, festival, crowd-killer",
+                                info="Comma-separated tags",
+                            )
+                        artist_notes = gr.Textbox(
+                            label="Artist Notes",
+                            placeholder="Free-form: vibe, reference "
+                                        "tracks, ideas...",
+                            lines=3,
+                        )
+                    with gr.Column(scale=1):
+                        gr.Markdown("### Mood Preview")
+                        mood_preview = gr.Markdown(
+                            "_Enter a mood to preview_"
+                        )
+                        mood_btn = gr.Button(
+                            "Preview Mood", variant="secondary"
+                        )
+
+                mood_btn.click(
+                    fn=handle_mood_preview,
+                    inputs=[mood, bpm],
+                    outputs=[mood_preview],
+                )
+                mood.change(
+                    fn=handle_mood_preview,
+                    inputs=[mood, bpm],
+                    outputs=[mood_preview],
+                )
+
+            # ── TAB 8: Arrangement ──
+            with gr.TabItem("8. Arrangement"):
+                gr.Markdown(
+                    "### Arrangement Blueprint\n"
+                    "Preview song structure with energy curve "
+                    "visualization. RCO overlays Subtronics-derived "
+                    "energy dynamics with phi-curve interpolation."
+                )
+                with gr.Row():
+                    arr_type = gr.Dropdown(
+                        choices=ARRANGEMENT_OPTIONS,
+                        value="weapon",
+                        label="Arrangement Type",
+                    )
+                    rco_preset = gr.Dropdown(
+                        choices=ENERGY_PRESETS,
+                        value="weapon",
+                        label="RCO Energy Preset",
+                        info="Subtronics-derived energy dynamics",
+                    )
+                with gr.Row():
+                    arr_bpm = gr.Slider(
+                        minimum=100, maximum=200, step=1, value=150,
+                        label="BPM",
+                    )
+                    arr_key = gr.Dropdown(
+                        choices=KEY_OPTIONS, value="F", label="Key",
+                    )
+                arr_preview_btn = gr.Button(
+                    "Preview Arrangement", variant="primary"
+                )
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        arr_info = gr.Markdown(
+                            "_Click Preview to see arrangement_"
+                        )
+                    with gr.Column(scale=2):
+                        arr_plot = gr.Plot(label="Energy Curve")
+
+                arr_preview_btn.click(
+                    fn=handle_arrangement_preview,
+                    inputs=[arr_type, arr_bpm, arr_key, rco_preset],
+                    outputs=[arr_info, arr_plot],
+                )
+
+            # ── TAB 9: Sample Packs ──
+            with gr.TabItem("9. Sample Packs"):
+                gr.Markdown(
+                    "### Sample Library & GALATCIA Collection\n"
+                    "Browse, search, and manage your sample library. "
+                    "26 categories from kicks to textures."
+                )
+                with gr.Row():
+                    scan_btn = gr.Button(
+                        "Scan Library", variant="secondary"
+                    )
+                    download_btn = gr.Button(
+                        "Download CC0 Starter Pack", variant="secondary"
+                    )
+                sample_info = gr.Markdown(
+                    "_Click Scan to see available samples_"
+                )
+                download_status = gr.Markdown("")
+
+                scan_btn.click(
+                    fn=handle_sample_scan, inputs=[], outputs=[sample_info],
+                )
+                download_btn.click(
+                    fn=handle_download_starter_pack,
+                    inputs=[], outputs=[download_status],
+                )
+
+                gr.Markdown("---")
+                gr.Markdown("### Browse by Category")
+                with gr.Row():
+                    cat_dropdown = gr.Dropdown(
+                        choices=sorted(SAMPLE_CATEGORIES),
+                        label="Category",
+                        info="26 categories: kick, snare, bass_hit, "
+                             "fx_riser, vocal, texture...",
+                    )
+                    browse_cat_btn = gr.Button(
+                        "Browse", variant="secondary"
+                    )
+                cat_output = gr.Markdown("")
+                browse_cat_btn.click(
+                    fn=handle_browse_category,
+                    inputs=[cat_dropdown], outputs=[cat_output],
+                )
+
+                gr.Markdown("### Search Samples")
+                with gr.Row():
+                    search_input = gr.Textbox(
+                        label="Search",
+                        placeholder="e.g. wobble, dark, 808",
+                    )
+                    search_btn = gr.Button(
+                        "Search", variant="secondary"
+                    )
+                search_output = gr.Markdown("")
+                search_btn.click(
+                    fn=handle_search_samples,
+                    inputs=[search_input], outputs=[search_output],
+                )
+
+                gr.Markdown("### GALATCIA Collection")
+                galatcia_btn = gr.Button(
+                    "Browse GALATCIA Presets & Samples",
+                    variant="secondary",
+                )
+                galatcia_output = gr.Markdown("")
+                galatcia_btn.click(
+                    fn=handle_browse_galatcia,
+                    inputs=[], outputs=[galatcia_output],
+                )
+
+                gr.Markdown("### Import from Directory")
+                with gr.Row():
+                    import_path = gr.Textbox(
+                        label="Directory Path",
+                        placeholder=r"C:\Users\...\samples",
+                        info="Auto-categorizes by folder name or "
+                             "filename pattern",
+                    )
+                    import_category = gr.Dropdown(
+                        choices=sorted(SAMPLE_CATEGORIES),
+                        label="Import Category",
+                    )
+                    import_btn = gr.Button(
+                        "Import", variant="secondary"
+                    )
+                import_output = gr.Markdown("")
+                import_btn.click(
+                    fn=handle_import_dir,
+                    inputs=[import_path, import_category],
+                    outputs=[import_output],
+                )
+
+            # ── TAB 10: Serum 2 Patches ──
+            with gr.TabItem("10. Serum 2 Patches"):
+                gr.Markdown(
+                    "### DUBFORGE Serum 2 Patches\n"
+                    "8 phi-derived patches for bass, lead, pad, and FX. "
+                    "Each preset is generated as .fxp during Phase 1."
+                )
+                patch_lines = []
+                for p in _DUBSTEP_PATCHES:
+                    pname = p.get("name", "?")
+                    pcat = p.get("category", "")
+                    desc = ", ".join(p.get("tags", [])[:5])
+                    patch_lines.append(
+                        f"- **{pname}** ({pcat}) -- {desc}"
+                    )
+                gr.Markdown(
+                    "\n".join(patch_lines)
+                    if patch_lines else "_No patches found_"
+                )
+
+            # ── TAB 11: FORGE IT ──
+            with gr.TabItem("11. FORGE IT"):
+                gr.Markdown(
+                    "### Launch Phase 1: Generation\n"
+                    "Generate SongDNA, Serum 2 presets, MIDI, and ALS "
+                    "from the parameters defined in the Idea Sandbox.\n\n"
+                    "**This creates everything needed for Phase 2: "
+                    "Arrangement.**"
+                )
+                forge_btn = gr.Button(
+                    "FORGE IT", variant="primary", size="lg",
+                )
+                with gr.Row():
+                    forge_status = gr.Markdown("_Ready to forge_")
+                with gr.Accordion("SongDNA (JSON)", open=False):
+                    dna_output = gr.Code(
+                        label="SongDNA", language="json", lines=20
+                    )
+                with gr.Accordion("Generated Files", open=False):
+                    file_output = gr.Textbox(
+                        label="Files", lines=10, interactive=False
+                    )
+
+                forge_btn.click(
+                    fn=handle_forge,
+                    inputs=[
+                        song_name, style, mood, key, scale, bpm,
+                        arrangement, tags_input, artist_notes,
+                    ],
+                    outputs=[forge_status, dna_output, file_output],
+                )
+
+            # ══════════════════════════════════════════════════════════
+            # EMULATE TAB (12)
+            # ══════════════════════════════════════════════════════════
+
+            # ── TAB 12: EMULATE ──
+            with gr.TabItem("12. EMULATE"):
+                gr.Markdown(
+                    "### Track Emulator\n"
+                    "Upload a reference WAV file and DUBFORGE will "
+                    "analyze its BPM, key, spectral profile, and style "
+                    "traits -- then synthesize a new track that matches "
+                    "the vibe.\n\n"
+                    "**Supported**: WAV files (16/24/32-bit, any sample "
+                    "rate)"
+                )
+
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        emu_audio = gr.Audio(
+                            label="Reference Track (WAV)",
+                            type="filepath",
+                        )
+                    with gr.Column(scale=1):
+                        emu_duration = gr.Slider(
+                            minimum=0, maximum=300, step=5, value=0,
+                            label="Target Duration (seconds)",
+                            info="0 = match reference length",
+                        )
+
+                emu_btn = gr.Button(
+                    "Analyze & Emulate", variant="primary", size="lg"
+                )
+
+                emu_status = gr.Markdown("_Upload a WAV to begin_")
+                emu_download = gr.File(
+                    label="Download Emulated Track", visible=True
+                )
+
+                def _run_emulate(audio_file: Any, duration: float) -> tuple:
+                    status, path = handle_emulate(audio_file, duration)
+                    return status, path
+
+                emu_btn.click(
+                    fn=_run_emulate,
+                    inputs=[emu_audio, emu_duration],
+                    outputs=[emu_status, emu_download],
+                )
+
+            # ══════════════════════════════════════════════════════════
+            # PIPELINE TAB (13)
+            # ══════════════════════════════════════════════════════════
+
+            # ── TAB 13: Pipeline ──
+            with gr.TabItem("13. Pipeline"):
+                gr.Markdown(
+                    """### DUBFORGE 4-Phase Production Pipeline
+
+```
+INPUT: Song Idea (name, mood, key, BPM, style, energy)
+         |
+   +-----v-----------------------------------------------+
+   |  PHASE 1: GENERATION -- "The Idea Sandbox"          |
+   |  Sound design + sample selection + preset creation   |
+   |  OUTPUT: Sound palette (FXP, WAV, ADG, MIDI)        |
+   +-----+-----------------------------------------------+
+         | sounds + samples ready
+   +-----v-----------------------------------------------+
+   |  PHASE 2: ARRANGEMENT -- "The Creation Session"     |
+   |  Ableton Session #1: full song structure             |
+   |  INTRO > BUILD > DROP > BREAK > DROP 2 > OUTRO      |
+   |  OUTPUT: Mix stems (24-bit WAV)                      |
+   +-----+-----------------------------------------------+
+         | stems exported
+   +-----v-----------------------------------------------+
+   |  PHASE 3: MIXING -- "The Mix Session"               |
+   |  Ableton Session #2: EQ, compress, spatial, balance  |
+   |  OUTPUT: Mixed stems (24-bit WAV)                    |
+   +-----+-----------------------------------------------+
+         | mixed stems exported
+   +-----v-----------------------------------------------+
+   |  PHASE 4: MASTERING -- "The Master Session"         |
+   |  Ableton Session #3: multiband, limiting, LUFS      |
+   |  OUTPUT: Final WAV -- DANCEFLOOR BANGER              |
+   +----------------------------------------------------- +
+```
+
+### Doctrine Constants
+- **PHI** = {phi:.10f}
+- **A4_432** = {a4} Hz
+- **Fibonacci** = {fib}
+""".format(phi=PHI, a4=A4_432, fib=str(FIBONACCI[:13]))
+                )
+
+        gr.Markdown(
+            "---\n*DUBFORGE v4.0.0 -- Planck x phi Fractal "
+            "Basscraft Engine -- Unified Studio*"
+        )
 
     return app
 
@@ -906,16 +2074,24 @@ def build_ui() -> Any:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="DUBFORGE Dubstep Taste Analyzer Web UI",
+        description="DUBFORGE Unified Studio Web UI",
     )
-    parser.add_argument("--port", type=int, default=7860, help="Server port")
-    parser.add_argument("--host", default="127.0.0.1", help="Server host")
-    parser.add_argument("--share", action="store_true", help="Create public Gradio link")
-    parser.add_argument("--no-browser", action="store_true", help="Don't open browser")
+    parser.add_argument(
+        "--port", type=int, default=7860, help="Server port"
+    )
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="Server host"
+    )
+    parser.add_argument(
+        "--share", action="store_true", help="Create public Gradio link"
+    )
+    parser.add_argument(
+        "--no-browser", action="store_true", help="Don't open browser"
+    )
     args = parser.parse_args()
 
     if not HAS_GRADIO:
-        print("❌ Gradio not installed.")
+        print("Gradio not installed.")
         print("Install with: pip install gradio")
         return
 
