@@ -10,11 +10,15 @@ Usage:
     python3 run_all.py --list       # List available modules
     python3 run_all.py --no-memory  # Skip memory tracking
     python3 run_all.py --quiet      # Suppress per-module output
+    python3 run_all.py --parallel   # Run independent modules in parallel
+    python3 run_all.py --workers 8  # Set parallel worker count
 """
 
 import argparse
+import os
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 # Ensure engine is importable
@@ -22,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from engine.log import get_logger
 from engine.memory import get_memory
+from engine.config_loader import WORKERS_COMPUTE
 
 _log = get_logger("dubforge.build")
 
@@ -246,6 +251,21 @@ def _import_and_run_module(name: str):
     mod.main()
 
 
+def _run_module_standalone(name: str) -> tuple[str, float, str | None]:
+    """Run a single module in a worker process. Returns (name, elapsed_ms, error)."""
+    t0 = time.perf_counter()
+    try:
+        _import_and_run_module(name)
+        return (name, (time.perf_counter() - t0) * 1000, None)
+    except Exception as e:
+        return (name, (time.perf_counter() - t0) * 1000, str(e))
+
+
+def _default_workers() -> int:
+    """Use detected performance core count from config_loader."""
+    return WORKERS_COMPUTE
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="dubforge",
@@ -271,6 +291,17 @@ def _parse_args() -> argparse.Namespace:
         "--quiet", "-q",
         action="store_true",
         help="Suppress build banner (modules still print their own output)",
+    )
+    parser.add_argument(
+        "--parallel", "-p",
+        action="store_true",
+        help="Run independent modules in parallel (uses ProcessPoolExecutor)",
+    )
+    parser.add_argument(
+        "--workers", "-w",
+        type=int,
+        default=None,
+        help="Number of parallel workers (default: P-core count)",
     )
     return parser.parse_args()
 
@@ -328,24 +359,50 @@ def main():
     failures: list[tuple[str, str]] = []
 
     # --- Run modules ---
-    for idx, (mod_name, label) in enumerate(modules_to_run, 1):
-        step_label = f"[{idx}/{total}] {label}"
-
-        def runner(_n=mod_name):
-            return _import_and_run_module(_n)
-
-        if mem:
-            _run_module(mem, step_label, mod_name, runner, failures)
-        else:
-            # No memory — run directly with basic error handling
-            print(f"{step_label}")
-            print("-" * 40)
-            try:
-                runner()
-            except Exception as e:
-                failures.append((mod_name, str(e)))
-                print(f"  ⚠ {mod_name} error: {e}")
+    if args.parallel and not args.module:
+        # Parallel mode — run independent modules across P-cores
+        workers = args.workers or _default_workers()
+        if not args.quiet:
+            print(f"[PARALLEL] Running {total} modules across {workers} workers")
+            print("=" * 60)
             print()
+
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(_run_module_standalone, mod_name): (mod_name, label)
+                for mod_name, label in modules_to_run
+            }
+            completed = 0
+            for future in as_completed(futures):
+                mod_name, label = futures[future]
+                completed += 1
+                name, elapsed_ms, error = future.result()
+                if error:
+                    failures.append((name, error))
+                    print(f"  [{completed}/{total}] ✗ {label} ({elapsed_ms:.0f}ms) — {error}")
+                else:
+                    print(f"  [{completed}/{total}] ✓ {label} ({elapsed_ms:.0f}ms)")
+        print()
+    else:
+        # Sequential mode (original behavior)
+        for idx, (mod_name, label) in enumerate(modules_to_run, 1):
+            step_label = f"[{idx}/{total}] {label}"
+
+            def runner(_n=mod_name):
+                return _import_and_run_module(_n)
+
+            if mem:
+                _run_module(mem, step_label, mod_name, runner, failures)
+            else:
+                # No memory — run directly with basic error handling
+                print(f"{step_label}")
+                print("-" * 40)
+                try:
+                    runner()
+                except Exception as e:
+                    failures.append((mod_name, str(e)))
+                    print(f"  ⚠ {mod_name} error: {e}")
+                print()
 
     # --- Auto-register generated output assets ---
     if mem:

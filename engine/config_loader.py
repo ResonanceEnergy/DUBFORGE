@@ -16,6 +16,8 @@ Usage:
 
 from pathlib import Path
 from typing import Any, Optional
+import os
+import platform
 
 from engine.log import get_logger
 
@@ -29,6 +31,42 @@ PHI = 1.6180339887498948482
 FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
 A4_432 = 432.0
 A4_440 = 440.0
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PLATFORM DETECTION — Apple Silicon optimization
+# ═══════════════════════════════════════════════════════════════════════════
+
+IS_ARM64 = platform.machine() == "arm64"
+IS_MACOS = platform.system() == "Darwin"
+IS_APPLE_SILICON = IS_ARM64 and IS_MACOS
+
+def _detect_cpu_cores() -> dict[str, int]:
+    """Detect CPU core topology. On Apple Silicon, distinguishes P/E cores."""
+    info: dict[str, int] = {"total": os.cpu_count() or 4, "performance": 0, "efficiency": 0}
+    if IS_MACOS:
+        try:
+            import subprocess
+            # Try perflevel keys first (works on all Apple Silicon)
+            for key, sysctl_keys in [
+                ("performance", ["hw.perflevel0.logicalcpu", "hw.performancecores"]),
+                ("efficiency", ["hw.perflevel1.logicalcpu", "hw.efficiencycores"]),
+            ]:
+                for sk in sysctl_keys:
+                    r = subprocess.run(["sysctl", "-n", sk], capture_output=True, text=True, timeout=2)
+                    if r.returncode == 0 and r.stdout.strip().isdigit():
+                        info[key] = int(r.stdout.strip())
+                        break
+        except Exception:
+            pass
+    if info["performance"] == 0:
+        info["performance"] = info["total"]
+    return info
+
+CPU_CORES = _detect_cpu_cores()
+
+# Optimal worker counts for different workloads
+WORKERS_COMPUTE = CPU_CORES["performance"]          # CPU-bound DSP
+WORKERS_IO = CPU_CORES["total"]                     # I/O-bound file ops
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONFIG DIRECTORY
@@ -345,7 +383,12 @@ def validate_all_configs() -> dict[str, list[str]]:
 
 
 def main() -> None:
-    """Print all available configs and their top-level keys."""
+    """Print all available configs and platform info."""
+    print("[CONFIG LOADER] Platform:")
+    print(f"  Apple Silicon: {'YES' if IS_APPLE_SILICON else 'no'}")
+    print(f"  CPU cores:     {CPU_CORES['total']} total ({CPU_CORES['performance']}P + {CPU_CORES['efficiency']}E)")
+    print(f"  Workers:       {WORKERS_COMPUTE} (compute) / {WORKERS_IO} (I/O)")
+    print()
     print("[CONFIG LOADER] Available configs:")
     print("-" * 40)
     for name in sorted(list_configs()):
