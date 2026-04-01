@@ -119,6 +119,10 @@ BEAT = 60.0 / BPM
 BAR = BEAT * 4
 OUTPUT = Path("output")
 
+# CPU parallelism
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from engine.config_loader import WORKERS_COMPUTE
+
 # F minor scale frequencies
 FREQ = {
     "F1": 43.65, "Ab1": 51.91, "Bb1": 58.27, "C2": 65.41,
@@ -365,45 +369,88 @@ def normalize(sig: list[float], target: float = 0.95) -> list[float]:
 #  1. SERUM WAVETABLE GENERATOR
 # ═══════════════════════════════════════════
 
-def generate_wavetables():
+def _render_wavetable_worker(task: tuple[str, str, dict]) -> str:
+    """Worker for parallel wavetable generation (runs in subprocess)."""
+    name, wt_path, kwargs = task
+    style = kwargs.get("style")
+    if name.startswith("GROWL"):
+        source_fn = generate_saw_source if "SAW" in name else generate_fm_source
+        src_kwargs = {"fm_ratio": PHI, "fm_depth": 3.0} if "FM" in name else {}
+        src = source_fn(**src_kwargs)
+        frames = growl_resample_pipeline(src, n_output_frames=256)
+    elif name.startswith("NEURO"):
+        frames = _gen_neuro_wavetable(style=style or "aggressive")
+    elif name == "SCREECH":
+        frames = _gen_screech_wavetable()
+    elif name == "SUB_MORPH":
+        frames = _gen_sub_morph_wavetable()
+    else:
+        return f"SKIP: {name}"
+    write_serum_wav(wt_path, frames)
+    write_compressed_wavetable(wt_path, frames, name=name)
+    return f"OK: {name}"
+
+
+def generate_wavetables(parallel: bool = False):
     """Generate Serum 2-ready wavetable .wav files."""
+    import time as _time
     print("\n═══ STEP 1: Serum 2 Wavetables ═══")
     wt_dir = OUTPUT / "wavetables"
     wt_dir.mkdir(parents=True, exist_ok=True)
+    t0 = _time.perf_counter()
 
-    # Growl wavetables (from growl_resampler pipeline)
-    print("  [1/6] GROWL_SAW — Saw → growl resampling pipeline...")
-    saw = generate_saw_source()
-    saw_frames = growl_resample_pipeline(saw, n_output_frames=256)
-    write_serum_wav(str(wt_dir / "DUBFORGE_GROWL_SAW.wav"), saw_frames)
-    write_compressed_wavetable(str(wt_dir / "DUBFORGE_GROWL_SAW.wav"), saw_frames, name="GROWL_SAW")
+    if parallel:
+        tasks = [
+            ("GROWL_SAW", str(wt_dir / "DUBFORGE_GROWL_SAW.wav"), {}),
+            ("GROWL_FM", str(wt_dir / "DUBFORGE_GROWL_FM.wav"), {}),
+            ("NEURO_A", str(wt_dir / "DUBFORGE_NEURO_A.wav"), {"style": "aggressive"}),
+            ("NEURO_B", str(wt_dir / "DUBFORGE_NEURO_B.wav"), {"style": "phase"}),
+            ("SCREECH", str(wt_dir / "DUBFORGE_SCREECH.wav"), {}),
+            ("SUB_MORPH", str(wt_dir / "DUBFORGE_SUB_MORPH.wav"), {}),
+        ]
+        print(f"  Parallel mode: {min(len(tasks), WORKERS_COMPUTE)} workers")
+        with ProcessPoolExecutor(max_workers=min(len(tasks), WORKERS_COMPUTE)) as pool:
+            futures = {pool.submit(_render_wavetable_worker, t): t[0] for t in tasks}
+            for i, f in enumerate(as_completed(futures), 1):
+                name = futures[f]
+                result = f.result()
+                print(f"  [{i}/6] {result}")
+    else:
+        # Growl wavetables (from growl_resampler pipeline)
+        print("  [1/6] GROWL_SAW — Saw → growl resampling pipeline...")
+        saw = generate_saw_source()
+        saw_frames = growl_resample_pipeline(saw, n_output_frames=256)
+        write_serum_wav(str(wt_dir / "DUBFORGE_GROWL_SAW.wav"), saw_frames)
+        write_compressed_wavetable(str(wt_dir / "DUBFORGE_GROWL_SAW.wav"), saw_frames, name="GROWL_SAW")
 
-    print("  [2/6] GROWL_FM — FM → growl resampling pipeline...")
-    fm = generate_fm_source(fm_ratio=PHI, fm_depth=3.0)
-    fm_frames = growl_resample_pipeline(fm, n_output_frames=256)
-    write_serum_wav(str(wt_dir / "DUBFORGE_GROWL_FM.wav"), fm_frames)
-    write_compressed_wavetable(str(wt_dir / "DUBFORGE_GROWL_FM.wav"), fm_frames, name="GROWL_FM")
+        print("  [2/6] GROWL_FM — FM → growl resampling pipeline...")
+        fm = generate_fm_source(fm_ratio=PHI, fm_depth=3.0)
+        fm_frames = growl_resample_pipeline(fm, n_output_frames=256)
+        write_serum_wav(str(wt_dir / "DUBFORGE_GROWL_FM.wav"), fm_frames)
+        write_compressed_wavetable(str(wt_dir / "DUBFORGE_GROWL_FM.wav"), fm_frames, name="GROWL_FM")
 
-    # Neuro bass wavetables — custom spectral morphs
-    print("  [3/6] NEURO_A — Harmonic stacking with waveshaping...")
-    neuro_a_frames = _gen_neuro_wavetable(style="aggressive")
-    write_serum_wav(str(wt_dir / "DUBFORGE_NEURO_A.wav"), neuro_a_frames)
-    write_compressed_wavetable(str(wt_dir / "DUBFORGE_NEURO_A.wav"), neuro_a_frames, name="NEURO_A")
+        # Neuro bass wavetables — custom spectral morphs
+        print("  [3/6] NEURO_A — Harmonic stacking with waveshaping...")
+        neuro_a_frames = _gen_neuro_wavetable(style="aggressive")
+        write_serum_wav(str(wt_dir / "DUBFORGE_NEURO_A.wav"), neuro_a_frames)
+        write_compressed_wavetable(str(wt_dir / "DUBFORGE_NEURO_A.wav"), neuro_a_frames, name="NEURO_A")
 
-    print("  [4/6] NEURO_B — Phase distortion morph...")
-    neuro_b_frames = _gen_neuro_wavetable(style="phase")
-    write_serum_wav(str(wt_dir / "DUBFORGE_NEURO_B.wav"), neuro_b_frames)
-    write_compressed_wavetable(str(wt_dir / "DUBFORGE_NEURO_B.wav"), neuro_b_frames, name="NEURO_B")
+        print("  [4/6] NEURO_B — Phase distortion morph...")
+        neuro_b_frames = _gen_neuro_wavetable(style="phase")
+        write_serum_wav(str(wt_dir / "DUBFORGE_NEURO_B.wav"), neuro_b_frames)
+        write_compressed_wavetable(str(wt_dir / "DUBFORGE_NEURO_B.wav"), neuro_b_frames, name="NEURO_B")
 
-    print("  [5/6] SCREECH — Metallic screech lead...")
-    screech_frames = _gen_screech_wavetable()
-    write_serum_wav(str(wt_dir / "DUBFORGE_SCREECH.wav"), screech_frames)
-    write_compressed_wavetable(str(wt_dir / "DUBFORGE_SCREECH.wav"), screech_frames, name="SCREECH")
+        print("  [5/6] SCREECH — Metallic screech lead...")
+        screech_frames = _gen_screech_wavetable()
+        write_serum_wav(str(wt_dir / "DUBFORGE_SCREECH.wav"), screech_frames)
+        write_compressed_wavetable(str(wt_dir / "DUBFORGE_SCREECH.wav"), screech_frames, name="SCREECH")
 
-    print("  [6/6] SUB_MORPH — Sub bass morphing sine→saw...")
-    sub_frames = _gen_sub_morph_wavetable()
-    write_serum_wav(str(wt_dir / "DUBFORGE_SUB_MORPH.wav"), sub_frames)
-    write_compressed_wavetable(str(wt_dir / "DUBFORGE_SUB_MORPH.wav"), sub_frames, name="SUB_MORPH")
+        print("  [6/6] SUB_MORPH — Sub bass morphing sine→saw...")
+        sub_frames = _gen_sub_morph_wavetable()
+        write_serum_wav(str(wt_dir / "DUBFORGE_SUB_MORPH.wav"), sub_frames)
+        write_compressed_wavetable(str(wt_dir / "DUBFORGE_SUB_MORPH.wav"), sub_frames, name="SUB_MORPH")
+
+    elapsed = (_time.perf_counter() - t0) * 1000
 
     # Copy wavetables to Serum's user folder if it exists
     serum_tables = Path.home() / "Documents" / "Xfer" / "Serum Presets" / "Tables" / "DUBFORGE"
@@ -418,7 +465,7 @@ def generate_wavetables():
         print(f"    then copy from: {wt_dir.resolve()}")
         print(f"    into: ~/Documents/Xfer/Serum Presets/Tables/")
 
-    print(f"  ✓ 6 wavetables in {wt_dir.resolve()}")
+    print(f"  ✓ 6 wavetables in {wt_dir.resolve()} ({elapsed:.0f}ms)")
     return wt_dir
 
 
@@ -2781,9 +2828,13 @@ def main():
     print("╚══════════════════════════════════════════════╝")
 
     run_all = not args or "--all" in args
+    use_parallel = "--parallel" in args or "-p" in args
+
+    if use_parallel:
+        print(f"  ⚡ Parallel mode: {WORKERS_COMPUTE} P-cores")
 
     if run_all or "--serum" in args:
-        generate_wavetables()
+        generate_wavetables(parallel=use_parallel)
 
     if run_all or "--stems" in args:
         render_stems()
