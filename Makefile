@@ -1,6 +1,6 @@
 # DUBFORGE — Build & Quality Targets (v4.1 — Apple Silicon Optimized)
 # ─────────────────────────────────────
-.PHONY: build test lint fmt check clean help track v3 all verify setup setup-full bench parallel
+.PHONY: build test lint fmt check clean help track v3 all verify setup setup-full bench parallel studio
 
 PYTHON := .venv/bin/python3
 UV := uv
@@ -63,6 +63,9 @@ sysinfo: ## Show system info for debugging
 	@$(PYTHON) -c "import platform; print(f'Arch: {platform.machine()}')"
 	@$(PYTHON) -c "import numpy; print(f'NumPy: {numpy.__version__}'); numpy.show_config()" 2>/dev/null || echo "NumPy not installed"
 	@echo "P-cores: $(JOBS)"
+
+studio: ## Launch DUBFORGE Studio in browser
+	$(PYTHON) dubforge_studio.py
 
 clean: ## Remove generated outputs and caches
 	rm -rf output/ __pycache__ engine/__pycache__ .pytest_cache .ruff_cache

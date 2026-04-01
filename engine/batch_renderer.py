@@ -15,7 +15,9 @@ Banks: 5 modes × 4 presets = 20 presets
 """
 
 import json
+import time
 import wave
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -236,6 +238,62 @@ def export_batch_renders(output_dir: str = "output") -> list[str]:
     return paths
 
 
+def _render_single_preset(args: tuple[str, str, str]) -> list[str]:
+    """Worker function for parallel rendering. Returns list of wav paths."""
+    bank_name, preset_name, output_dir = args
+    bank = ALL_BATCH_BANKS[bank_name]()
+    for preset in bank.presets:
+        if preset.name == preset_name:
+            results = render_batch(preset, output_dir)
+            return [r.wav_path for r in results]
+    return []
+
+
+def export_batch_renders_parallel(
+    output_dir: str = "output",
+    workers: int | None = None,
+    progress_callback=None,
+) -> list[str]:
+    """Render all batch presets in parallel across CPU cores.
+
+    Args:
+        output_dir: Output directory.
+        workers: Number of parallel workers (default: P-core count).
+        progress_callback: Optional callable(completed, total, preset_name).
+
+    Returns list of rendered wav paths.
+    """
+    from engine.config_loader import WORKERS_COMPUTE
+    if workers is None:
+        workers = WORKERS_COMPUTE
+
+    # Collect all (bank_name, preset_name) pairs
+    jobs: list[tuple[str, str, str]] = []
+    for bank_name, bank_fn in ALL_BATCH_BANKS.items():
+        bank = bank_fn()
+        for preset in bank.presets:
+            jobs.append((bank_name, preset.name, output_dir))
+
+    total = len(jobs)
+    all_paths: list[str] = []
+
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_render_single_preset, job): job for job in jobs}
+        completed = 0
+        for future in as_completed(futures):
+            completed += 1
+            _, preset_name, _ = futures[future]
+            try:
+                paths = future.result()
+                all_paths.extend(paths)
+            except Exception:
+                pass
+            if progress_callback:
+                progress_callback(completed, total, preset_name)
+
+    return all_paths
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MANIFEST + MAIN
 # ═══════════════════════════════════════════════════════════════════════════
@@ -263,8 +321,12 @@ def write_batch_manifest(output_dir: str = "output") -> dict:
 def main() -> None:
     manifest = write_batch_manifest()
     total = sum(b["preset_count"] for b in manifest["banks"].values())
-    wavs = export_batch_renders()
-    print(f"Batch Renderer: {len(manifest['banks'])} banks, {total} presets, {len(wavs)} .wav")
+    t0 = time.perf_counter()
+    wavs = export_batch_renders_parallel(
+        progress_callback=lambda done, tot, name: print(f"  [{done}/{tot}] {name}")
+    )
+    elapsed = time.perf_counter() - t0
+    print(f"Batch Renderer: {len(manifest['banks'])} banks, {total} presets, {len(wavs)} .wav ({elapsed:.1f}s)")
 
 
 if __name__ == "__main__":

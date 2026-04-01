@@ -14,7 +14,9 @@ Pipeline stages:
 Banks: 5 pipeline types × 4 presets = 20 presets
 """
 
+import time
 import wave
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -319,6 +321,58 @@ def export_pipeline_stems(output_dir: str = "output") -> list[str]:
     return paths
 
 
+def _render_single_stem(args: tuple[str, str, str]) -> str:
+    """Worker function for parallel stem rendering."""
+    bank_name, preset_name, output_dir = args
+    out = Path(output_dir) / "wavetables" / "pipeline"
+    out.mkdir(parents=True, exist_ok=True)
+    bank = ALL_PIPELINE_BANKS[bank_name]()
+    for preset in bank.presets:
+        if preset.name == preset_name:
+            audio = run_pipeline(preset)
+            fname = f"pipe_{preset.name}.wav"
+            _write_wav(out / fname, audio)
+            return str(out / fname)
+    return ""
+
+
+def export_pipeline_stems_parallel(
+    output_dir: str = "output",
+    workers: int | None = None,
+    progress_callback=None,
+) -> list[str]:
+    """Render all pipeline presets in parallel across CPU cores."""
+    from engine.config_loader import WORKERS_COMPUTE
+    if workers is None:
+        workers = WORKERS_COMPUTE
+
+    jobs: list[tuple[str, str, str]] = []
+    for bank_name, bank_fn in ALL_PIPELINE_BANKS.items():
+        bank = bank_fn()
+        for preset in bank.presets:
+            jobs.append((bank_name, preset.name, output_dir))
+
+    total = len(jobs)
+    paths: list[str] = []
+
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_render_single_stem, job): job for job in jobs}
+        completed = 0
+        for future in as_completed(futures):
+            completed += 1
+            _, preset_name, _ = futures[future]
+            try:
+                path = future.result()
+                if path:
+                    paths.append(path)
+            except Exception:
+                pass
+            if progress_callback:
+                progress_callback(completed, total, preset_name)
+
+    return paths
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MANIFEST + MAIN
 # ═══════════════════════════════════════════════════════════════════════════
@@ -348,8 +402,12 @@ def write_pipeline_manifest(output_dir: str = "output") -> dict:
 def main() -> None:
     manifest = write_pipeline_manifest()
     total = sum(b["preset_count"] for b in manifest["banks"].values())
-    wavs = export_pipeline_stems()
-    print(f"Render Pipeline: {len(manifest['banks'])} banks, {total} presets, {len(wavs)} .wav")
+    t0 = time.perf_counter()
+    wavs = export_pipeline_stems_parallel(
+        progress_callback=lambda done, tot, name: print(f"  [{done}/{tot}] {name}")
+    )
+    elapsed = time.perf_counter() - t0
+    print(f"Render Pipeline: {len(manifest['banks'])} banks, {total} presets, {len(wavs)} .wav ({elapsed:.1f}s)")
 
 
 if __name__ == "__main__":
