@@ -1,6 +1,10 @@
 # Ignore generated output
 output/
 
+# API keys — NEVER commit
+.env
+.env.*
+
 # DUBFORGE memory context (user-local)
 .dubforge_memory
 

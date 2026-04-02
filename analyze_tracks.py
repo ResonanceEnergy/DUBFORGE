@@ -1,10 +1,10 @@
 """Deep analysis of DUBFORGE rendered tracks vs Subtronics reference spec."""
-import wave
-import numpy as np
-from pathlib import Path
-from numpy.fft import rfft, rfftfreq
-import json
 import glob
+import wave
+from pathlib import Path
+
+import numpy as np
+from numpy.fft import rfft, rfftfreq
 
 SAMPLE_RATE = 48000
 
@@ -285,8 +285,8 @@ def main():
         if ec:
             labels = ["0-10%", "10-20%", "20-30%", "30-40%", "40-50%",
                        "50-60%", "60-70%", "70-80%", "80-90%", "90-100%"]
-            print(f"  Energy curve (dB RMS):")
-            bar_max = max(ec)
+            print("  Energy curve (dB RMS):")
+            max(ec)
             for i, (label, val) in enumerate(zip(labels, ec)):
                 bar_len = max(0, int((val + 60) / 2))
                 print(f"    {label}: {val:6.1f} dB {'█' * bar_len}")
@@ -298,7 +298,7 @@ def main():
             for issue in issues:
                 print(f"    ✗ {issue}")
         else:
-            print(f"\n  ✓ Passes all Subtronics reference checks")
+            print("\n  ✓ Passes all Subtronics reference checks")
 
         all_issues.extend([(Path(filepath).name, i) for i in issues])
 
@@ -335,7 +335,7 @@ def analyze_backend():
         import re
 
         # Check if sections are too short
-        bar_patterns = re.findall(r'(\w+).*?(\d+)\s*(?:bars?|bar_count)', forge_code, re.IGNORECASE)
+        re.findall(r'(\w+).*?(\d+)\s*(?:bars?|bar_count)', forge_code, re.IGNORECASE)
 
         # Check if sidechain is properly implemented
         if "sidechain" in forge_code:
@@ -382,7 +382,7 @@ def analyze_backend():
             drop1_idx = forge_code.find("drop1")
             drop2_idx = forge_code.find("drop2")
             if drop1_idx > 0 and drop2_idx > 0:
-                drop1_section = forge_code[drop1_idx:drop1_idx+500]
+                forge_code[drop1_idx:drop1_idx+500]
                 drop2_section = forge_code[drop2_idx:drop2_idx+500]
                 if "bass_idx" not in drop2_section and "bass_variation" not in drop2_section:
                     issues.append("DROP2 IS COPY OF DROP1: No bass variation between drops. "
@@ -399,11 +399,11 @@ def analyze_backend():
         # Check bar count assignments
         bar_matches = re.findall(r'bars?\s*[:=]\s*(\d+)', ve_code)
         if bar_matches:
-            total_bars = sum(int(b) for b in bar_matches[:10])
+            sum(int(b) for b in bar_matches[:10])
 
         # Check if arrangement has enough sections
         if "arrangement" in ve_code.lower():
-            arr_patterns = re.findall(r'arrangement\s*[:=]\s*\[([^\]]+)\]', ve_code)
+            re.findall(r'arrangement\s*[:=]\s*\[([^\]]+)\]', ve_code)
 
     except FileNotFoundError:
         issues.append("Could not read variation_engine.py")
@@ -452,7 +452,6 @@ def analyze_backend():
 
         # Find the arrangement/section handling
         in_arrange = False
-        section_handlers = {}
         for i, line in enumerate(forge_lines):
             if "Arranging" in line or "section" in line.lower():
                 in_arrange = True
