@@ -69,6 +69,24 @@ WORKERS_COMPUTE = CPU_CORES["performance"]          # CPU-bound DSP
 WORKERS_IO = CPU_CORES["total"]                     # I/O-bound file ops
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ACCELERATION DETECTION — GPU (MLX), vDSP (Accelerate framework)
+# ═══════════════════════════════════════════════════════════════════════════
+
+HAS_MLX = False
+HAS_VDSP = False
+
+if IS_APPLE_SILICON:
+    try:
+        import mlx.core  # noqa: F401
+        HAS_MLX = True
+    except ImportError:
+        pass
+
+if IS_MACOS:
+    import ctypes.util as _cu
+    HAS_VDSP = _cu.find_library("Accelerate") is not None
+
+# ═══════════════════════════════════════════════════════════════════════════
 # CONFIG DIRECTORY
 # ═══════════════════════════════════════════════════════════════════════════
 

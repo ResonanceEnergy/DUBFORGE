@@ -27,6 +27,7 @@ from engine.turboquant import (
     phi_optimal_bits,
     TurboQuantConfig,
 )
+from engine.accel import fft, ifft
 
 _log = get_logger("dubforge.sample_slicer")
 
@@ -109,7 +110,7 @@ def _spectral_flux(audio: np.ndarray, hop: int = HOP_SIZE,
     for i in range(n_frames):
         start = i * hop
         frame = audio[start: start + frame_size] * window
-        spectrum = np.abs(np.fft.rfft(frame))
+        spectrum = np.abs(fft(frame))
         # Half-wave rectified difference
         diff = spectrum - prev_spectrum
         flux[i] = np.sum(np.maximum(0, diff))

@@ -18,6 +18,7 @@ from engine.turboquant import (
     compress_audio_buffer,
     decompress_audio_buffer,
 )
+from engine.accel import write_wav
 
 SAMPLE_RATE = 48000
 
@@ -204,16 +205,11 @@ class AudioStitcher:
     @staticmethod
     def _write_wav(path: str, samples: list[float],
                    sample_rate: int = SAMPLE_RATE) -> None:
-        """Write 16-bit mono WAV."""
-        with wave.open(path, "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(sample_rate)
-            data = b""
-            for s in samples:
-                clamped = max(-1.0, min(1.0, s))
-                data += struct.pack("<h", int(clamped * 32767))
-            wf.writeframes(data)
+        """Delegates to engine.audio_mmap.write_wav_fast."""
+        import numpy as np
+        _s = np.asarray(samples, dtype=np.float64) if not isinstance(samples, np.ndarray) else samples
+        write_wav(str(path), _s, sample_rate=sample_rate)
+
 
     def export(self, samples: list[float], path: str) -> str:
         """Export stitched audio to WAV."""

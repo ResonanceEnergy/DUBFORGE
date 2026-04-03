@@ -36,6 +36,7 @@ from engine.turboquant import (
     phi_optimal_bits,
     TurboQuantConfig,
 )
+from engine.accel import convolve, write_wav
 
 _log = get_logger("dubforge.ambient_texture")
 
@@ -83,17 +84,12 @@ class TextureBank:
 
 def _write_wav(signal: np.ndarray, path: str,
                sample_rate: int = SAMPLE_RATE) -> str:
-    """Write signal to 16-bit mono WAV."""
-    out = Path(path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(out), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        data = np.clip(signal * 32767, -32768, 32767).astype(np.int16)
-        wf.writeframes(data.tobytes())
-    _log.info("Wrote texture WAV: %s (%d samples)", out.name, len(signal))
-    return str(out)
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    import numpy as np
+    _s = np.asarray(signal, dtype=np.float64) if not isinstance(signal, np.ndarray) else signal
+    write_wav(str(path), _s, sample_rate=sample_rate)
+    return str(path)
+
 
 
 def _normalize(signal: np.ndarray) -> np.ndarray:
@@ -128,7 +124,7 @@ def synthesize_rain(preset: TexturePreset,
     # Simple lowpass via running average
     kernel_size = max(1, int((1 - preset.brightness) * 20) + 2)
     padded = np.pad(noise, kernel_size, mode="edge")
-    rain = np.convolve(padded, np.ones(kernel_size) / kernel_size, "same")
+    rain = convolve(padded, np.ones(kernel_size) / kernel_size, "same")
     rain = rain[kernel_size:kernel_size + n]
 
     # Random droplets
@@ -164,7 +160,7 @@ def synthesize_wind(preset: TexturePreset,
     # Brightness controls filter width
     kernel = max(2, int((1 - preset.brightness) * 30) + 2)
     padded = np.pad(noise, kernel, mode="edge")
-    filtered = np.convolve(padded, np.ones(kernel) / kernel, "same")
+    filtered = convolve(padded, np.ones(kernel) / kernel, "same")
     filtered = filtered[kernel:kernel + n]
 
     signal = filtered * lfo * preset.depth + filtered * lfo2 * 0.3
@@ -228,7 +224,7 @@ def synthesize_static(preset: TexturePreset,
     if preset.brightness < 0.8:
         kernel = max(2, int((1 - preset.brightness) * 8) + 2)
         padded = np.pad(signal, kernel, mode="edge")
-        signal = np.convolve(padded, np.ones(kernel) / kernel, "same")
+        signal = convolve(padded, np.ones(kernel) / kernel, "same")
         signal = signal[kernel:kernel + n]
 
     signal = _fade_in_out(signal, fade_s=0.5)
@@ -250,7 +246,7 @@ def synthesize_ocean(preset: TexturePreset,
     noise = rng.uniform(-1, 1, n)
     kernel = max(2, int((1 - preset.brightness) * 15) + 3)
     padded = np.pad(noise, kernel, mode="edge")
-    filtered = np.convolve(padded, np.ones(kernel) / kernel, "same")
+    filtered = convolve(padded, np.ones(kernel) / kernel, "same")
     filtered = filtered[kernel:kernel + n]
 
     # Undertow — lower frequency rumble
@@ -272,7 +268,7 @@ def synthesize_forest(preset: TexturePreset,
     noise = rng.uniform(-1, 1, n) * 0.25
     kernel = max(2, int((1 - preset.brightness) * 25) + 3)
     padded = np.pad(noise, kernel, mode="edge")
-    rustle = np.convolve(padded, np.ones(kernel) / kernel, "same")
+    rustle = convolve(padded, np.ones(kernel) / kernel, "same")
     rustle = rustle[kernel:kernel + n]
 
     # Slow wind-like modulation

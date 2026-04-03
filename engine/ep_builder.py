@@ -20,6 +20,7 @@ from engine.turboquant import (
     compress_audio_buffer,
     phi_optimal_bits,
 )
+from engine.accel import write_wav
 
 SAMPLE_RATE = 48000
 @dataclass
@@ -94,18 +95,12 @@ STYLE_PATTERNS = {
 
 def _write_wav(path: str, samples: list[float],
                sr: int = SAMPLE_RATE) -> str:
-    """Write 16-bit mono WAV."""
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with wave.open(path, "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sr)
-        data = struct.pack(
-            f"<{len(samples)}h",
-            *[max(-32768, min(32767, int(s * 32767))) for s in samples]
-        )
-        wf.writeframes(data)
-    return path
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    import numpy as np
+    _s = np.asarray(samples, dtype=np.float64) if not isinstance(samples, np.ndarray) else samples
+    write_wav(str(path), _s, sample_rate=sr)
+    return str(path)
+
 
 
 class EPBuilder:

@@ -20,6 +20,7 @@ from typing import Callable
 import numpy as np
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft, convolve, write_wav
 
 SAMPLE_RATE = 44100
 # ═══════════════════════════════════════════════════════════════════════════
@@ -108,7 +109,7 @@ def generate_room_ir(preset: ConvolutionPreset,
     rng = np.random.default_rng(42)
     diff_kernel = rng.normal(0, 1, diff_len)
     diff_kernel /= np.sqrt(np.sum(diff_kernel ** 2))
-    ir = np.convolve(ir, diff_kernel, mode='same')
+    ir = convolve(ir, diff_kernel, mode='same')
 
     # Normalize
     peak = np.max(np.abs(ir))
@@ -214,14 +215,14 @@ def generate_inverse_ir(original_ir: np.ndarray,
 
     # Zero-pad for better frequency resolution
     fft_size = max(n * 2, 4096)
-    spectrum = np.fft.rfft(original_ir, n=fft_size)
+    spectrum = fft(original_ir, n=fft_size)
 
     # Wiener deconvolution
     power = np.abs(spectrum) ** 2
     reg = preset.regularisation * np.max(power)
     inverse_spectrum = np.conj(spectrum) / (power + reg)
 
-    inverse_ir = np.fft.irfft(inverse_spectrum, n=fft_size)[:n]
+    inverse_ir = ifft(inverse_spectrum, n=fft_size)[:n]
 
     # Normalize
     peak = np.max(np.abs(inverse_ir))
@@ -254,7 +255,7 @@ def generate_custom_ir(preset: ConvolutionPreset,
     smooth_len = max(1, int(0.002 * sample_rate))
     kernel = rng.normal(0, 1, smooth_len)
     kernel /= np.sqrt(np.sum(kernel ** 2))
-    ir = np.convolve(ir, kernel, mode='same')
+    ir = convolve(ir, kernel, mode='same')
 
     # Apply decay envelope
     t = np.arange(ir_len) / sample_rate
@@ -286,9 +287,9 @@ def convolve_signal(signal: np.ndarray, ir: np.ndarray) -> np.ndarray:
     while fft_size < n_sig + n_ir - 1:
         fft_size <<= 1
 
-    sig_fft = np.fft.rfft(signal, n=fft_size)
-    ir_fft = np.fft.rfft(ir, n=fft_size)
-    result = np.fft.irfft(sig_fft * ir_fft, n=fft_size)[:n_sig]
+    sig_fft = fft(signal, n=fft_size)
+    ir_fft = fft(ir, n=fft_size)
+    result = ifft(sig_fft * ir_fft, n=fft_size)[:n_sig]
 
     return result
 
@@ -436,15 +437,8 @@ ALL_CONVOLUTION_BANKS: dict[str, Callable[[], ConvolutionBank]] = {
 
 def _write_wav(path: Path, samples: np.ndarray,
                sample_rate: int = SAMPLE_RATE) -> None:
-    """Write 16-bit mono WAV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pcm = np.clip(samples, -1.0, 1.0)
-    pcm = (pcm * 32767).astype(np.int16)
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm.tobytes())
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    write_wav(str(path), samples, sample_rate=sample_rate)
 
 
 def _export_path(path: Path) -> str:

@@ -29,6 +29,7 @@ import numpy as np
 from engine.config_loader import PHI
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
+from engine.accel import convolve, write_wav
 from engine.turboquant import (
     compress_audio_buffer,
     CompressedAudioBuffer,
@@ -119,7 +120,7 @@ def synthesize_white(preset: NoisePreset,
     if preset.brightness < 0.5:
         k = max(1, int(sample_rate / 4000))
         kernel = np.ones(k) / k
-        smooth = np.convolve(noise, kernel, mode="same")
+        smooth = convolve(noise, kernel, mode="same")
         mix = 1.0 - preset.brightness * 2  # 0→1 (all smooth), 0.5→0 (none)
         noise = noise * (1 - mix) + smooth * mix
 
@@ -213,7 +214,7 @@ def synthesize_tape(preset: NoisePreset,
     raw = rng.standard_normal(n)
     k = max(1, int(sample_rate / 8000))
     kernel = np.ones(k) / k
-    hiss = np.convolve(raw, kernel, mode="same")
+    hiss = convolve(raw, kernel, mode="same")
     hiss /= np.max(np.abs(hiss)) + 1e-10
 
     # Flutter (slow pitch wobble effect via amplitude modulation)
@@ -275,7 +276,7 @@ def synthesize_rain_noise(preset: NoisePreset,
     white = rng.standard_normal(n)
     k_lp = max(1, int((1 - preset.brightness) * 15) + 2)
     kernel_lp = np.ones(k_lp) / k_lp
-    filtered = np.convolve(white, kernel_lp, mode="same")
+    filtered = convolve(white, kernel_lp, mode="same")
     filtered /= np.max(np.abs(filtered)) + 1e-10
 
     # Random droplets
@@ -449,15 +450,8 @@ ALL_NOISE_BANKS: dict[str, callable] = {
 
 def _write_wav(path: Path, samples: np.ndarray,
                sample_rate: int = SAMPLE_RATE) -> None:
-    """Write 16-bit mono WAV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pcm = np.clip(samples, -1, 1)
-    pcm = (pcm * 32767).astype(np.int16)
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm.tobytes())
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    write_wav(str(path), samples, sample_rate=sample_rate)
 
 
 def write_noise_manifest(output_dir: str = "output") -> dict:

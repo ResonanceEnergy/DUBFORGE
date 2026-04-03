@@ -18,6 +18,7 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.accel import write_wav
 PHI_INV = 1.0 / PHI
 
 
@@ -187,12 +188,11 @@ def render_palette_tone(color: PaletteColor, duration: float = 0.5) -> np.ndarra
 
 
 def _write_wav(path: str, signal: np.ndarray) -> None:
-    data = np.clip(signal * 32767, -32768, 32767).astype(np.int16)
-    with wave.open(path, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(data.tobytes())
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    import numpy as np
+    _s = np.asarray(signal, dtype=np.float64) if not isinstance(signal, np.ndarray) else signal
+    write_wav(str(path), _s)
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════

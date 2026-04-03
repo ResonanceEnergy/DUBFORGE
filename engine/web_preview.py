@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import numpy as np
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft
 SAMPLE_RATE = 48000
 
 
@@ -50,7 +51,7 @@ def analyze_wav_bytes(wav_bytes: bytes, filename: str = "upload.wav") -> Preview
 
     # Spectral centroid via FFT
     if len(samples) > 256:
-        spectrum = np.abs(np.fft.rfft(samples[:min(len(samples), 8192)]))
+        spectrum = np.abs(fft(samples[:min(len(samples), 8192)]))
         freqs = np.fft.rfftfreq(min(len(samples), 8192), 1.0 / sr)
         total = np.sum(spectrum) + 1e-12
         centroid = float(np.sum(freqs * spectrum) / total)
@@ -95,7 +96,7 @@ def generate_spectrogram_data(wav_bytes: bytes,
         seg = samples[start:start + n_fft]
         if len(seg) < n_fft:
             seg = np.pad(seg, (0, n_fft - len(seg)))
-        spectrum = np.abs(np.fft.rfft(seg))
+        spectrum = np.abs(fft(seg))
         # Downsample freq bins to 64
         if len(spectrum) > 64:
             indices = np.linspace(0, len(spectrum) - 1, 64, dtype=int)

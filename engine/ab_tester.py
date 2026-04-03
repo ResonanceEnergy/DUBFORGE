@@ -16,6 +16,7 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -67,7 +68,7 @@ def _gen_signal(freq: float, harmonics: int, dur: float) -> np.ndarray:
 def compare_spectral(sig_a: np.ndarray, sig_b: np.ndarray, preset: ABPreset) -> ABResult:
     """Compare spectral richness (number of significant peaks)."""
     def _count_peaks(sig):
-        fft = np.abs(np.fft.rfft(sig[:preset.fft_size] * np.hanning(min(len(sig), preset.fft_size))))
+        fft = np.abs(fft(sig[:preset.fft_size] * np.hanning(min(len(sig), preset.fft_size))))
         threshold = np.max(fft) * 0.05
         peaks = sum(1 for i in range(1, len(fft) - 1)
                     if fft[i] > fft[i - 1] and fft[i] > fft[i + 1] and fft[i] > threshold)
@@ -107,7 +108,7 @@ def compare_temporal(sig_a: np.ndarray, sig_b: np.ndarray, preset: ABPreset) -> 
 def compare_phi_ratio(sig_a: np.ndarray, sig_b: np.ndarray, preset: ABPreset) -> ABResult:
     """Compare phi-ratio coherence between spectral peaks."""
     def _phi_score(sig):
-        fft = np.abs(np.fft.rfft(sig[:preset.fft_size]))
+        fft = np.abs(fft(sig[:preset.fft_size]))
         freqs = np.fft.rfftfreq(preset.fft_size, 1.0 / SAMPLE_RATE)
         threshold = np.max(fft) * 0.05
         peak_freqs = freqs[[i for i in range(1, len(fft) - 1)

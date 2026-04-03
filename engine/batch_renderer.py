@@ -31,6 +31,7 @@ from engine.turboquant import (
     TurboQuantConfig,
     compress_audio_buffer,
 )
+from engine.accel import write_wav
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -70,15 +71,11 @@ class BatchResult:
 
 def _write_wav(path: Path, samples: np.ndarray,
                sample_rate: int = SAMPLE_RATE) -> None:
-    """Write 16-bit mono WAV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pcm = np.clip(samples, -1, 1)
-    pcm = (pcm * 32767).astype(np.int16)
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm.tobytes())
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    import numpy as np
+    _s = np.asarray(samples, dtype=np.float64) if not isinstance(samples, np.ndarray) else samples
+    write_wav(str(path), _s, sample_rate=sample_rate)
+
 
 
 def _generate_source(preset: BatchPreset) -> np.ndarray:

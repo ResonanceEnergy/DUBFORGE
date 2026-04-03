@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from engine.config_loader import PHI
+from engine.accel import convolve
 SAMPLE_RATE = 48000
 
 
@@ -92,7 +93,7 @@ class AudioMath:
 
     def convolve(self, a: list[float], b: list[float]) -> list[float]:
         """Linear convolution."""
-        return np.convolve(a, b).tolist()
+        return convolve(a, b).tolist()
 
     def correlate(self, a: list[float], b: list[float]) -> list[float]:
         """Cross-correlation."""

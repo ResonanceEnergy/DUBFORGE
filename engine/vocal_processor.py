@@ -19,6 +19,7 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI, A4_432, A4_440
+from engine.accel import fft, ifft, convolve
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -169,7 +170,7 @@ def apply_pitch_correct(signal: np.ndarray, preset: VocalPreset,
 
     for start in range(0, n - win_size, hop):
         chunk = signal[start:start + win_size] * window
-        spectrum = np.fft.rfft(chunk)
+        spectrum = fft(chunk)
         freqs = np.fft.rfftfreq(win_size, 1.0 / sample_rate)
         magnitudes = np.abs(spectrum)
         phases = np.angle(spectrum)
@@ -190,7 +191,7 @@ def apply_pitch_correct(signal: np.ndarray, preset: VocalPreset,
                 target_bin = int(i * shift_ratio)
                 if 0 <= target_bin < len(new_spectrum):
                     new_spectrum[target_bin] += mag * np.exp(1j * phase)
-            chunk_out = np.fft.irfft(new_spectrum, n=win_size)
+            chunk_out = ifft(new_spectrum, n=win_size)
         else:
             chunk_out = chunk
 
@@ -238,7 +239,7 @@ def apply_vocoder(signal: np.ndarray, preset: VocalPreset,
         # Smooth envelope
         smooth_samples = max(1, int(0.005 * sample_rate))
         kernel = np.ones(smooth_samples) / smooth_samples
-        envelope = np.convolve(envelope, kernel, mode='same')
+        envelope = convolve(envelope, kernel, mode='same')
         # Synthesize: filter carrier at same band, scale by envelope
         car_band = _simple_biquad_bp(carrier, center, preset.band_q, sample_rate)
         out += car_band * envelope
@@ -270,7 +271,7 @@ def apply_formant_shift(signal: np.ndarray, preset: VocalPreset,
 
     for start in range(0, n - win_size, hop):
         chunk = signal[start:start + win_size] * window
-        spectrum = np.fft.rfft(chunk)
+        spectrum = fft(chunk)
         magnitudes = np.abs(spectrum)
         phases = np.angle(spectrum)
 
@@ -282,7 +283,7 @@ def apply_formant_shift(signal: np.ndarray, preset: VocalPreset,
                 new_mags[i] = magnitudes[src_idx]
 
         new_spectrum = new_mags * np.exp(1j * phases)
-        chunk_out = np.fft.irfft(new_spectrum, n=win_size)
+        chunk_out = ifft(new_spectrum, n=win_size)
         out[start:start + win_size] += chunk_out * window
         normalizer[start:start + win_size] += window ** 2
 

@@ -15,7 +15,6 @@ Banks: 5 types × 4 presets = 20 presets
 """
 
 import json
-import wave
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,6 +23,7 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft, convolve, write_wav
 FRAME_SIZE = 2048
 
 
@@ -60,9 +60,9 @@ def analyze_spectrum(signal: np.ndarray, preset: ResynthPreset,
     """Analyze spectral content of a signal."""
     n = min(len(signal), preset.fft_size)
     windowed = signal[:n] * np.hanning(n)
-    fft = np.fft.rfft(windowed)
-    magnitudes = np.abs(fft)
-    phases = np.angle(fft)
+    spectrum = fft(windowed)
+    magnitudes = np.abs(spectrum)
+    phases = np.angle(spectrum)
     freqs = np.fft.rfftfreq(n, 1.0 / sr)
 
     # Find peaks
@@ -123,7 +123,7 @@ def resynth_subtractive(signal: np.ndarray, preset: ResynthPreset,
 
     for fi in range(preset.num_output_frames):
         n = min(len(signal), preset.fft_size)
-        fft = np.fft.rfft(signal[:n] * np.hanning(n))
+        spectrum = fft(signal[:n] * np.hanning(n))
         freqs = analysis["freqs"]
         fundamental = max(analysis["fundamental"], 20.0)
 
@@ -144,9 +144,9 @@ def resynth_subtractive(signal: np.ndarray, preset: ResynthPreset,
                     break
             if not is_phi:
                 morph_factor = fi / max(preset.num_output_frames - 1, 1)
-                fft[i] *= (1 - morph_factor * 0.8)
+                spectrum[i] *= (1 - morph_factor * 0.8)
 
-        recon = np.fft.irfft(fft, n=preset.frame_size)
+        recon = ifft(spectrum, n=preset.frame_size)
         peak_val = np.max(np.abs(recon))
         if peak_val > 0:
             recon = recon / peak_val
@@ -185,12 +185,12 @@ def resynth_spectral_env(signal: np.ndarray, preset: ResynthPreset,
                          sr: int = SAMPLE_RATE) -> list[np.ndarray]:
     """Preserve spectral envelope, replace fine structure."""
     n = min(len(signal), preset.fft_size)
-    fft = np.fft.rfft(signal[:n] * np.hanning(n))
-    mag = np.abs(fft)
+    spectrum = fft(signal[:n] * np.hanning(n))
+    mag = np.abs(spectrum)
 
     # Spectral envelope via smoothing
     k = max(1, int(len(mag) * preset.env_smoothing))
-    envelope = np.convolve(mag, np.ones(k) / k, mode="same")
+    envelope = convolve(mag, np.ones(k) / k, mode="same")
 
     frames: list[np.ndarray] = []
 
@@ -201,7 +201,7 @@ def resynth_spectral_env(signal: np.ndarray, preset: ResynthPreset,
         for i in range(len(envelope)):
             phase = morph * 2 * np.pi * PHI * i / len(envelope)
             new_fft[i] = envelope[i] * np.exp(1j * phase)
-        frame = np.fft.irfft(new_fft, n=preset.frame_size)
+        frame = ifft(new_fft, n=preset.frame_size)
         peak_val = np.max(np.abs(frame))
         if peak_val > 0:
             frame = frame / peak_val
@@ -246,15 +246,8 @@ def resynthesize(signal: np.ndarray, preset: ResynthPreset,
 
 def _write_wav(path: Path, samples: np.ndarray,
                sample_rate: int = SAMPLE_RATE) -> None:
-    """Write 16-bit mono WAV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pcm = np.clip(samples, -1, 1)
-    pcm = (pcm * 32767).astype(np.int16)
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm.tobytes())
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    write_wav(str(path), samples, sample_rate=sample_rate)
 
 
 def _test_signal(duration_s: float = 1.0, freq: float = 200.0,

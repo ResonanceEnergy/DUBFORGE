@@ -23,6 +23,7 @@ import wave
 from pathlib import Path
 
 import numpy as np
+from engine.accel import fft, ifft
 
 # ── Constants ────────────────────────────────────────────────────
 
@@ -146,8 +147,8 @@ def _detect_pitch_hz(audio: np.ndarray, sr: int = SAMPLE_RATE) -> float:
 
     # Autocorrelation via FFT
     n = len(segment)
-    fft = np.fft.rfft(segment, n=2*n)
-    autocorr = np.fft.irfft(fft * np.conj(fft))[:n]
+    fft = fft(segment, n=2*n)
+    autocorr = ifft(fft * np.conj(fft))[:n]
     autocorr = autocorr / (autocorr[0] + 1e-12)
 
     # Find first peak after lag corresponding to max plausible freq
@@ -207,18 +208,13 @@ def _read_wav(path: str) -> np.ndarray:
 
 
 def _write_wav_temp(audio: np.ndarray, sr: int = SAMPLE_RATE) -> str:
-    """Write float64 mono audio to a temp WAV file, return path."""
-    fd, path = tempfile.mkstemp(suffix=".wav")
-    os.close(fd)
-    n = len(audio)
-    pcm = np.clip(audio, -1.0, 1.0)
-    pcm16 = (pcm * 32767).astype(np.int16)
-    with wave.open(path, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sr)
-        wf.writeframes(pcm16.tobytes())
-    return path
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    import numpy as np
+    _s = np.asarray(audio, dtype=np.float64) if not isinstance(audio, np.ndarray) else audio
+    write_wav(str(audio), _s, sample_rate=sr)
+    return str(audio)
+
+
 
 
 def _rubberband_pitch_and_time(audio: np.ndarray, semitones: float,

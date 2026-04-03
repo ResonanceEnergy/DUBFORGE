@@ -13,6 +13,8 @@ import numpy as np
 PHI = 1.6180339887
 SAMPLE_RATE = 44100
 
+from engine.accel import rms as accel_rms  # noqa: E402
+
 from engine.turboquant import (  # noqa: E402
     compress_audio_buffer,
     CompressedAudioBuffer,
@@ -74,7 +76,7 @@ def analyze_dynamics(signal: list[float],
         if signal.ndim == 2:
             signal = signal.mean(axis=1)
         peak = float(np.max(np.abs(signal)))
-        rms = float(np.sqrt(np.mean(signal ** 2)))
+        rms = accel_rms(signal)
         peak_db = 20 * math.log10(max(peak, 1e-10))
         rms_db = 20 * math.log10(max(rms, 1e-10))
         crest = peak_db - rms_db
@@ -83,7 +85,7 @@ def analyze_dynamics(signal: list[float],
         block_rms_list: list[float] = []
         for i in range(0, len(signal) - block_size, block_size):
             block = signal[i:i + block_size]
-            br = float(np.sqrt(np.mean(block ** 2)))
+            br = accel_rms(block)
             if br > 1e-10:
                 block_rms_list.append(20 * math.log10(br))
         dynamic_range = (max(block_rms_list) - min(block_rms_list)

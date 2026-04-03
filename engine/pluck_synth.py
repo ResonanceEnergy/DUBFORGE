@@ -29,6 +29,7 @@ import numpy as np
 from engine.config_loader import PHI
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
+from engine.accel import convolve, write_wav
 
 _log = get_logger("dubforge.pluck_synth")
 
@@ -104,7 +105,7 @@ def synthesize_string_pluck(preset: PluckPreset,
     if preset.brightness < 0.9:
         k = max(1, int((1 - preset.brightness) * 4))
         kernel = np.ones(k) / k
-        buf = np.convolve(buf, kernel, mode="same")
+        buf = convolve(buf, kernel, mode="same")
 
     out = np.zeros(n)
     damp = 0.495 + 0.005 * (1 - preset.damping)
@@ -140,7 +141,7 @@ def synthesize_bell_pluck(preset: PluckPreset,
     if preset.brightness < 0.8:
         k = max(1, int((1 - preset.brightness) * 6))
         kernel = np.ones(k) / k
-        osc = np.convolve(osc, kernel, mode="same")
+        osc = convolve(osc, kernel, mode="same")
     env = _pluck_envelope(n, preset, sample_rate)
     osc *= env
     osc = _soft_clip(osc, preset.distortion)
@@ -218,7 +219,7 @@ def synthesize_marimba_pluck(preset: PluckPreset,
     # Low-pass
     k = max(1, int((1 - preset.brightness) * 8) + 2)
     kernel = np.ones(k) / k
-    osc = np.convolve(osc, kernel, mode="same")
+    osc = convolve(osc, kernel, mode="same")
     osc = _soft_clip(osc, preset.distortion)
     osc /= np.max(np.abs(osc)) + 1e-10
     return osc
@@ -348,15 +349,11 @@ ALL_PLUCK_BANKS: dict[str, callable] = {
 
 def _write_wav(path: Path, samples: np.ndarray,
                sample_rate: int = SAMPLE_RATE) -> None:
-    """Write 16-bit mono WAV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pcm = np.clip(samples, -1, 1)
-    pcm = (pcm * 32767).astype(np.int16)
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm.tobytes())
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    import numpy as np
+    _s = np.asarray(samples, dtype=np.float64) if not isinstance(samples, np.ndarray) else samples
+    write_wav(str(path), _s, sample_rate=sample_rate)
+
 
 
 def write_pluck_manifest(output_dir: str = "output") -> dict:

@@ -16,6 +16,7 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -69,7 +70,7 @@ class EvolutionBank:
 def _score_signal(signal: np.ndarray) -> float:
     """Simple quality score: RMS × spectral flatness proxy."""
     rms = float(np.sqrt(np.mean(signal ** 2)))
-    spectrum = np.abs(np.fft.rfft(signal[:min(len(signal), 4096)]))
+    spectrum = np.abs(fft(signal[:min(len(signal), 4096)]))
     geo_mean = np.exp(np.mean(np.log(spectrum + 1e-12)))
     arith_mean = np.mean(spectrum) + 1e-12
     flatness = geo_mean / arith_mean

@@ -21,6 +21,7 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft
 PHI_INV = 1.0 / PHI
 
 
@@ -73,7 +74,7 @@ def _get_spectrum(signal: np.ndarray, fft_size: int) -> tuple[np.ndarray, np.nda
     """Return (frequencies, magnitudes) from FFT."""
     n = min(len(signal), fft_size)
     windowed = signal[:n] * np.hanning(n)
-    spectrum = np.abs(np.fft.rfft(windowed, n=fft_size))
+    spectrum = np.abs(fft(windowed, n=fft_size))
     freqs = np.fft.rfftfreq(fft_size, 1.0 / SAMPLE_RATE)
     return freqs, spectrum
 
@@ -188,7 +189,7 @@ def measure_phase_coherence(signal: np.ndarray, preset: PhiAnalyzerPreset) -> fl
     """Score phase alignment at phi-ratio frequencies."""
     n = min(len(signal), preset.fft_size)
     windowed = signal[:n] * np.hanning(n)
-    fft_result = np.fft.rfft(windowed, n=preset.fft_size)
+    fft_result = fft(windowed, n=preset.fft_size)
     freqs = np.fft.rfftfreq(preset.fft_size, 1.0 / SAMPLE_RATE)
     phases = np.angle(fft_result)
     mag = np.abs(fft_result)

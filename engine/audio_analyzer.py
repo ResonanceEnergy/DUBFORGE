@@ -16,6 +16,7 @@ import numpy as np
 
 from engine.config_loader import PHI
 from engine.turboquant import SpectralVectorIndex, TurboQuantConfig
+from engine.accel import fft, ifft
 
 SAMPLE_RATE = 48000
 
@@ -188,7 +189,7 @@ class AudioAnalyzer:
         windowed = arr * window
 
         # FFT
-        spectrum = np.fft.rfft(windowed)
+        spectrum = fft(windowed)
         magnitudes = np.abs(spectrum) / fft_size
         half = fft_size // 2
         mags = magnitudes[:half]

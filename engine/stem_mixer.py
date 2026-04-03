@@ -30,6 +30,7 @@ from engine.turboquant import (
     compress_audio_buffer,
     phi_optimal_bits,
 )
+from engine.accel import fft, ifft, convolve
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -132,7 +133,7 @@ def mix_stems_frequency(stems: list[np.ndarray], preset: MixPreset) -> np.ndarra
             continue
         gain = _db_to_linear(ch.gain_db)
         # Spectral centroid determines stereo position
-        fft_mag = np.abs(np.fft.rfft(stem[:min(len(stem), 4096)]))
+        fft_mag = np.abs(fft(stem[:min(len(stem), 4096)]))
         freqs = np.fft.rfftfreq(min(len(stem), 4096), 1 / SAMPLE_RATE)
         total = np.sum(fft_mag) + 1e-10
         centroid = np.sum(freqs * fft_mag) / total
@@ -162,7 +163,7 @@ def mix_stems_dynamic(stems: list[np.ndarray], preset: MixPreset) -> np.ndarray:
         gain = _db_to_linear(ch.gain_db)
         # Simple envelope follower for compression
         env = np.abs(stem)
-        smooth = np.convolve(env, np.ones(256) / 256, mode="same")
+        smooth = convolve(env, np.ones(256) / 256, mode="same")
         comp_ratio = 1.0 / (1.0 + smooth * 2)
         compressed = stem * comp_ratio * gain
         left_g, right_g = _pan_to_lr(ch.pan)
@@ -224,15 +225,12 @@ def mix_stems(stems: list[np.ndarray], preset: MixPreset) -> np.ndarray:
 
 def _write_wav_stereo(path: Path, samples: np.ndarray,
                       sample_rate: int = SAMPLE_RATE) -> None:
-    """Write 16-bit stereo WAV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pcm = np.clip(samples, -1, 1)
-    pcm = (pcm * 32767).astype(np.int16)
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(2)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm.tobytes())
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    from engine.audio_mmap import write_wav_fast
+    import numpy as np
+    _s = np.asarray(samples, dtype=np.float64) if not isinstance(samples, np.ndarray) else samples
+    write_wav_fast(str(path), _s, sample_rate=sample_rate)
+
 
 
 def _generate_test_stems(n_stems: int = 4, sr: int = SAMPLE_RATE) -> list[np.ndarray]:

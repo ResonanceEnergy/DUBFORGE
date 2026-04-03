@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft
 SAMPLE_RATE = 48000
 
 
@@ -53,7 +54,7 @@ def _compute_spectrogram(signal: np.ndarray,
     for i in range(n_frames):
         start = i * hop
         frame = signal[start:start + n_fft] * window
-        fft = np.fft.rfft(frame)
+        fft = fft(frame)
         S[:, i] = np.abs(fft)
 
     # Convert to dB

@@ -37,6 +37,7 @@ import numpy as np
 from engine.config_loader import PHI
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
+from engine.accel import write_wav
 
 _log = get_logger("dubforge.transition_fx")
 
@@ -76,17 +77,12 @@ class TransitionBank:
 
 def _write_wav(signal: np.ndarray, path: str,
                sample_rate: int = SAMPLE_RATE) -> str:
-    """Write signal to 16-bit mono WAV."""
-    out = Path(path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(out), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        data = np.clip(signal * 32767, -32768, 32767).astype(np.int16)
-        wf.writeframes(data.tobytes())
-    _log.info("Wrote transition WAV: %s (%d samples)", out.name, len(signal))
-    return str(out)
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    import numpy as np
+    _s = np.asarray(signal, dtype=np.float64) if not isinstance(signal, np.ndarray) else signal
+    write_wav(str(path), _s, sample_rate=sample_rate)
+    return str(path)
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════

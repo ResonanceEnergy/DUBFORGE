@@ -13,6 +13,7 @@ import wave
 from dataclasses import dataclass
 
 from engine.config_loader import PHI, A4_432
+from engine.accel import write_wav
 SAMPLE_RATE = 44100
 
 
@@ -179,19 +180,12 @@ KS_PRESETS: dict[str, KarplusStrongPatch] = {
 
 def _write_wav(path: str, signal: list[float],
                sample_rate: int = SAMPLE_RATE) -> str:
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    peak = max(abs(s) for s in signal) if signal else 1.0
-    scale = 32767.0 / max(peak, 1e-10) * 0.9
-    with wave.open(path, "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        frames = b"".join(
-            struct.pack("<h", max(-32768, min(32767, int(s * scale))))
-            for s in signal
-        )
-        wf.writeframes(frames)
-    return path
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    import numpy as np
+    _s = np.asarray(signal, dtype=np.float64) if not isinstance(signal, np.ndarray) else signal
+    write_wav(str(path), _s, sample_rate=sample_rate)
+    return str(path)
+
 
 
 def main() -> None:

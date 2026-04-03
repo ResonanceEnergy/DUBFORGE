@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft, convolve
 SAMPLE_RATE = 48000
 
 
@@ -114,7 +115,7 @@ def tutorial_fx_processing() -> dict[str, Any]:
     # Simple low-pass via moving average
     kernel_size = 21
     kernel = np.ones(kernel_size) / kernel_size
-    filtered = np.convolve(sig, kernel, mode="same")
+    filtered = convolve(sig, kernel, mode="same")
 
     # Simple comb reverb
     delay_samples = int(0.03 * SAMPLE_RATE)
@@ -182,7 +183,7 @@ def tutorial_export_workflow() -> dict[str, Any]:
     wav_bytes = _to_wav_bytes(sig)
 
     # Analyze
-    spectrum = np.abs(np.fft.rfft(sig))
+    spectrum = np.abs(fft(sig))
     freqs = np.fft.rfftfreq(len(sig), 1.0 / SAMPLE_RATE)
     peak_freq_idx = int(np.argmax(spectrum))
     peak_freq = float(freqs[peak_freq_idx])

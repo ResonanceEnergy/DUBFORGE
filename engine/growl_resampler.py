@@ -23,6 +23,7 @@ import numpy as np
 # Import shared constants and wavetable writer
 from engine.config_loader import PHI, get_config_value
 from engine.phi_core import WAVETABLE_SIZE, write_wav
+from engine.accel import fft, ifft
 from engine.turboquant import (
     CompressedWavetable,
     TurboQuantConfig,
@@ -38,7 +39,7 @@ def pitch_shift(frame: np.ndarray, semitones: float,
     Pitch shift a single-cycle frame.
     Simple spectral approach: shift FFT bins.
     """
-    spectrum = np.fft.rfft(frame)
+    spectrum = fft(frame)
     n = len(spectrum)
     shift_bins = int(semitones * n / 48)  # rough semitone-to-bin
 
@@ -65,7 +66,7 @@ def pitch_shift(frame: np.ndarray, semitones: float,
         new_mag = mag * (1 - blend) + shifted_env * blend
         shifted = new_mag * np.exp(1j * phase)
 
-    result = np.fft.irfft(shifted, n=len(frame))
+    result = ifft(shifted, n=len(frame))
     peak = np.max(np.abs(result))
     if peak > 0:
         result /= peak
@@ -86,7 +87,7 @@ def frequency_shift(frame: np.ndarray, hz: float = 34.0,
     Frequency shift by adding a fixed Hz offset in spectral domain.
     Creates inharmonic, metallic character.
     """
-    spectrum = np.fft.rfft(frame)
+    spectrum = fft(frame)
     n = len(spectrum)
     # Shift bins by hz amount (relative to single-cycle)
     shift = int(hz * n / 22050)
@@ -96,7 +97,7 @@ def frequency_shift(frame: np.ndarray, hz: float = 34.0,
         if 0 <= new_idx < n:
             shifted[new_idx] = spectrum[i]
 
-    result = np.fft.irfft(shifted, n=len(frame))
+    result = ifft(shifted, n=len(frame))
     peak = np.max(np.abs(result))
     if peak > 0:
         result /= peak
@@ -159,7 +160,7 @@ def formant_filter(frame: np.ndarray, vowel: str = "A",
     }
 
     centers = formants.get(vowel, formants["A"])
-    spectrum = np.fft.rfft(frame)
+    spectrum = fft(frame)
     n = len(spectrum)
     freqs = np.fft.rfftfreq(len(frame), d=1.0 / 44100)
 
@@ -170,7 +171,7 @@ def formant_filter(frame: np.ndarray, vowel: str = "A",
         formant_response += boost * depth * 3
 
     spectrum *= formant_response
-    result = np.fft.irfft(spectrum, n=len(frame))
+    result = ifft(spectrum, n=len(frame))
     peak = np.max(np.abs(result))
     if peak > 0:
         result /= peak
@@ -326,8 +327,8 @@ def dojo_audio_rate_fm(frame: np.ndarray, mod_freq: float = 55.0,
 
     # Apply as multiplicative AM + phase modulation hybrid
     # This creates both sum/difference frequencies (FM sidebands)
-    spectrum = np.fft.rfft(frame)
-    mod_spectrum = np.fft.rfft(modulator)
+    spectrum = fft(frame)
+    mod_spectrum = fft(modulator)
 
     # Convolve in frequency domain (= multiply in time domain creates FM)
     n_spec = min(len(spectrum), len(mod_spectrum))
@@ -335,7 +336,7 @@ def dojo_audio_rate_fm(frame: np.ndarray, mod_freq: float = 55.0,
     for i in range(n_spec):
         result_spectrum[i] = spectrum[i] * (1.0 + mod_spectrum[i] * depth)
 
-    result = np.fft.irfft(result_spectrum, n=n)
+    result = ifft(result_spectrum, n=n)
 
     # Blend with original
     mix = depth * 0.7

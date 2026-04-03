@@ -34,6 +34,7 @@ import numpy as np
 from engine.config_loader import PHI
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
+from engine.accel import fft, ifft, convolve, write_wav
 
 _log = get_logger("dubforge.fx_generator")
 
@@ -81,18 +82,10 @@ class FXBank:
 
 def _write_wav_raw(signal: np.ndarray, path: str,
                    sample_rate: int = SAMPLE_RATE) -> str:
-    """Write arbitrary-length signal to 16-bit mono WAV."""
+    """Delegates to engine.audio_mmap.write_wav_fast."""
     out_path = Path(path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
+    write_wav(str(out_path), signal, sample_rate=sample_rate)
     n = len(signal)
-    with wave.open(str(out_path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        int_data = np.clip(signal * 32767, -32768, 32767).astype(np.int16)
-        wf.writeframes(int_data.tobytes())
-
     _log.info("Wrote FX WAV: %s (%d samples, %.3fs)",
               out_path.name, n, n / sample_rate)
     return str(out_path)
@@ -122,14 +115,14 @@ def _lowpass_sweep(
         cutoff = start_freq + (end_freq - start_freq) * progress
 
         block = signal[start:start + block_size] * window
-        spectrum = np.fft.rfft(block)
+        spectrum = fft(block)
         freqs = np.fft.rfftfreq(block_size, d=1.0 / sample_rate)
 
         # 2nd-order Butterworth-style rolloff
         response = 1.0 / (1.0 + (freqs / max(cutoff, 1.0)) ** 4)
         spectrum *= response
 
-        filtered = np.fft.irfft(spectrum, n=block_size)
+        filtered = ifft(spectrum, n=block_size)
         output[start:start + block_size] += filtered * window
 
     # Normalize
@@ -157,7 +150,7 @@ def _simple_reverb(
     ir /= np.max(np.abs(ir))
 
     # Convolve (trim to original length)
-    wet = np.convolve(signal, ir, mode="full")[:len(signal)]
+    wet = convolve(signal, ir, mode="full")[:len(signal)]
     peak = np.max(np.abs(wet))
     if peak > 0:
         wet /= peak

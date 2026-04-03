@@ -20,6 +20,7 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA MODEL
 # ═══════════════════════════════════════════════════════════════════════════
@@ -135,7 +136,7 @@ def analyze_spectral_peaks(signal: np.ndarray, preset: AnalysisPreset,
     fft_size = min(preset.fft_size, n)
     window = _get_window(preset.window_type, fft_size)
     chunk = signal[:fft_size] * window
-    spectrum = np.fft.rfft(chunk)
+    spectrum = fft(chunk)
     freqs = np.fft.rfftfreq(fft_size, 1.0 / sample_rate)
     magnitudes = np.abs(spectrum)
     phases = np.angle(spectrum)
@@ -184,7 +185,7 @@ def analyze_harmonic_series(signal: np.ndarray, preset: AnalysisPreset,
     fft_size = min(preset.fft_size, n)
     window = _get_window(preset.window_type, fft_size)
     chunk = signal[:fft_size] * window
-    spectrum = np.fft.rfft(chunk)
+    spectrum = fft(chunk)
     freqs = np.fft.rfftfreq(fft_size, 1.0 / sample_rate)
     magnitudes = np.abs(spectrum)
 
@@ -303,7 +304,7 @@ def analyze_spectral_flux(signal: np.ndarray, preset: AnalysisPreset,
 
     for start in range(0, n - preset.fft_size, preset.hop_size):
         chunk = signal[start:start + preset.fft_size] * window
-        spectrum = np.abs(np.fft.rfft(chunk))
+        spectrum = np.abs(fft(chunk))
 
         if prev_spectrum is not None:
             # Half-wave rectified spectral difference

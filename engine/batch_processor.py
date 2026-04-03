@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI
+from engine.accel import write_wav
 SAMPLE_RATE = 48000
 
 
@@ -199,19 +200,12 @@ class BatchProcessor:
 
     def _write_wav(self, path: str, samples: list[float],
                    sr: int = SAMPLE_RATE) -> None:
-        """Write float samples to WAV."""
-        import struct
-        import wave
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with wave.open(path, "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(sr)
-            data = struct.pack(
-                f"<{len(samples)}h",
-                *[max(-32768, min(32767, int(s * 32767))) for s in samples]
-            )
-            wf.writeframes(data)
+        """Delegates to engine.audio_mmap.write_wav_fast."""
+        import numpy as np
+        _s = np.asarray(samples, dtype=np.float64) if not isinstance(samples, np.ndarray) else samples
+        write_wav(str(path), _s, sample_rate=sr)
+
+
 
     def process_samples(self, samples: list[float],
                         steps: list[ProcessingStep]) -> list[float]:

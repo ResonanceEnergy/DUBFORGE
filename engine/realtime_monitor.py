@@ -15,6 +15,7 @@ from typing import Optional
 import numpy as np
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft
 SAMPLE_RATE = 48000
 
 
@@ -78,7 +79,7 @@ def analyze_chunk(signal: np.ndarray, sr: int = SAMPLE_RATE) -> MonitorSnapshot:
 
     # Spectral centroid
     n_fft = min(len(signal), 4096)
-    spectrum = np.abs(np.fft.rfft(signal[:n_fft]))
+    spectrum = np.abs(fft(signal[:n_fft]))
     freqs = np.fft.rfftfreq(n_fft, 1.0 / sr)
     total = np.sum(spectrum) + 1e-12
     centroid = float(np.sum(freqs * spectrum) / total)

@@ -32,6 +32,7 @@ import numpy as np
 from engine.config_loader import PHI
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
+from engine.accel import fft, ifft
 
 _log = get_logger("dubforge.vocal_chop")
 
@@ -101,7 +102,7 @@ def _bandpass_filter(
 ) -> np.ndarray:
     """Apply a 2nd-order bandpass filter using FFT."""
     n = len(signal)
-    spectrum = np.fft.rfft(signal)
+    spectrum = fft(signal)
     freqs = np.fft.rfftfreq(n, d=1.0 / sample_rate)
 
     # Gaussian bandpass response
@@ -111,7 +112,7 @@ def _bandpass_filter(
     response = np.exp(-0.5 * ((freqs - center_freq) / sigma) ** 2)
     spectrum *= response
 
-    return np.fft.irfft(spectrum, n=n)
+    return ifft(spectrum, n=n)
 
 
 def formant_filter(

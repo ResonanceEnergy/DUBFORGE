@@ -24,6 +24,7 @@ import numpy as np
 from engine.phi_core import SAMPLE_RATE
 
 from engine.config_loader import PHI
+from engine.accel import fft, ifft, convolve, write_wav
 from engine.turboquant import (
     CompressedWavetable,
     TurboQuantConfig,
@@ -127,7 +128,7 @@ def morph_spectral(frames: list[np.ndarray], preset: MorphPreset) -> list[np.nda
     """FFT-domain morphing of magnitude and phase."""
     if len(frames) < 2:
         return frames * preset.num_frames
-    ffts = [np.fft.rfft(f) for f in frames]
+    ffts = [fft(f) for f in frames]
     mags = [np.abs(f) for f in ffts]
     phases = [np.angle(f) for f in ffts]
     result: list[np.ndarray] = []
@@ -144,9 +145,9 @@ def morph_spectral(frames: list[np.ndarray], preset: MorphPreset) -> list[np.nda
         # Smooth spectral transitions
         if preset.spectral_smooth > 0:
             k = max(1, int(len(mag) * preset.spectral_smooth))
-            mag = np.convolve(mag, np.ones(k) / k, mode="same")
+            mag = convolve(mag, np.ones(k) / k, mode="same")
         phase = pa * (1 - frac) + pb * frac
-        frame = np.fft.irfft(mag * np.exp(1j * phase), n=preset.frame_size)
+        frame = ifft(mag * np.exp(1j * phase), n=preset.frame_size)
         peak = np.max(np.abs(frame))
         if peak > 0:
             frame = frame / peak
@@ -166,8 +167,8 @@ def morph_formant(frames: list[np.ndarray], preset: MorphPreset) -> list[np.ndar
         a = frames[min(idx, len(frames) - 1)]
         b = frames[min(idx + 1, len(frames) - 1)]
         # Extract spectral envelopes
-        fft_a = np.fft.rfft(a)
-        fft_b = np.fft.rfft(b)
+        fft_a = fft(a)
+        fft_b = fft(b)
         env_a = np.abs(fft_a)
         env_b = np.abs(fft_b)
         # Interpolate envelope
@@ -178,7 +179,7 @@ def morph_formant(frames: list[np.ndarray], preset: MorphPreset) -> list[np.ndar
             env_blend = np.roll(env_blend, shift)
         # Use phase from source A
         phase = np.angle(fft_a) * (1 - frac) + np.angle(fft_b) * frac
-        frame = np.fft.irfft(env_blend * np.exp(1j * phase), n=preset.frame_size)
+        frame = ifft(env_blend * np.exp(1j * phase), n=preset.frame_size)
         peak = np.max(np.abs(frame))
         if peak > 0:
             frame = frame / peak
@@ -273,15 +274,8 @@ def tq_decompress_morph(
 
 def _write_wav(path: Path, samples: np.ndarray,
                sample_rate: int = SAMPLE_RATE) -> None:
-    """Write 16-bit mono WAV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pcm = np.clip(samples, -1, 1)
-    pcm = (pcm * 32767).astype(np.int16)
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm.tobytes())
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    write_wav(str(path), samples, sample_rate=sample_rate)
 
 
 def export_morph_wavetables(output_dir: str = "output") -> list[str]:

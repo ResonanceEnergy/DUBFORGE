@@ -27,6 +27,7 @@ import wave
 from dataclasses import dataclass, field
 
 from engine.config_loader import PHI, A4_432
+from engine.accel import write_wav
 FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]
 SAMPLE_RATE = 44100
 
@@ -394,16 +395,11 @@ class AscensionEngine:
         return path
 
     def _write_wav(self, path: str, samples: list[float]) -> None:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with wave.open(path, "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(self.sample_rate)
-            data = b""
-            for s in samples:
-                clamped = max(-1.0, min(1.0, s))
-                data += struct.pack("<h", int(clamped * 32767))
-            wf.writeframes(data)
+        """Delegates to engine.audio_mmap.write_wav_fast."""
+        import numpy as np
+        _s = np.asarray(samples, dtype=np.float64) if not isinstance(samples, np.ndarray) else samples
+        write_wav(str(path), _s)
+
 
     # ═══════════════════════════════════════════
     # ASCII Art

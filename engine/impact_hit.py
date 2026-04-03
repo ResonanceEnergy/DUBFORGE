@@ -23,6 +23,7 @@ import numpy as np
 from engine.config_loader import PHI
 from engine.log import get_logger
 from engine.phi_core import SAMPLE_RATE
+from engine.accel import write_wav
 
 logger = get_logger(__name__)
 
@@ -507,14 +508,11 @@ ALL_IMPACT_BANKS: dict[str, callable] = {
 
 def _write_wav(path: Path, samples: np.ndarray,
                sample_rate: int = SAMPLE_RATE) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pcm = np.clip(samples, -1, 1)
-    pcm = (pcm * 32767).astype(np.int16)
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(pcm.tobytes())
+    """Delegates to engine.audio_mmap.write_wav_fast."""
+    import numpy as np
+    _s = np.asarray(samples, dtype=np.float64) if not isinstance(samples, np.ndarray) else samples
+    write_wav(str(path), _s, sample_rate=sample_rate)
+
 
 
 def write_impact_manifest(output_dir: str = "output") -> dict:

@@ -41,6 +41,8 @@ fmt: ## Auto-format with ruff
 
 check: lint test ## Lint + test together
 
+all: build track ## Full engine build + track render
+
 nightly: ## Run nightly health check (manual trigger)
 	bash tools/nightly.sh
 

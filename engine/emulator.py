@@ -26,6 +26,7 @@ import numpy as np
 
 from engine.audio_analyzer import AudioAnalyzer, SpectralProfile, WaveformStats
 from engine.config_loader import PHI
+from engine.accel import fft, ifft
 
 
 SAMPLE_RATE = 44100
@@ -190,7 +191,7 @@ def estimate_key(samples: np.ndarray, sr: int = SAMPLE_RATE) -> tuple[str, str]:
         if end > n:
             break
         frame = chunk[start:end] * np.hanning(fft_size)
-        spectrum = np.abs(np.fft.rfft(frame))
+        spectrum = np.abs(fft(frame))
         freqs = np.fft.rfftfreq(fft_size, 1.0 / sr)
 
         # Accumulate energy per pitch class
