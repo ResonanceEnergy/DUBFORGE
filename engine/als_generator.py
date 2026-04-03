@@ -770,11 +770,9 @@ def _build_vst3_plugin_device(
     ps_elem = ET.SubElement(vp, "ProcessorState")
     cs_elem = ET.SubElement(vp, "ControllerState")
     if processor_state:
-        import base64
-        ps_elem.text = base64.b64encode(processor_state).decode("ascii")
+        ps_elem.text = processor_state.hex().upper()
     if controller_state:
-        import base64
-        cs_elem.text = base64.b64encode(controller_state).decode("ascii")
+        cs_elem.text = controller_state.hex().upper()
     _v(vp, "Name", "")
     ET.SubElement(vp, "PresetRef")
 
