@@ -1,6 +1,6 @@
 # DUBFORGE — Build & Quality Targets
 # ─────────────────────────────────────
-.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track auto song fury v3 all verify nightly nightly-install nightly-uninstall
+.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track auto song fury v3 all verify nightly nightly-install nightly-uninstall launch launch-ui wild-ones apology
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -42,6 +42,18 @@ fmt: ## Auto-format with ruff
 check: lint test ## Lint + test together
 
 all: build track ## Full engine build + track render
+
+launch: ## Render track + launch all browser UIs (TRACK=wild-ones|apology|forge|quick)
+	python3 launch.py --track $(or $(TRACK),quick)
+
+launch-ui: ## Launch all browser UIs only (no render)
+	python3 launch.py --ui-only
+
+wild-ones: ## Produce Wild Ones V12 (MIDI+ALS+GALATCIA)
+	python3 make_wild_ones_v12.py
+
+apology: ## Produce The Apology That Never Came V4 (MIDI+ALS)
+	python3 make_apology_v4.py
 
 nightly: ## Run nightly health check (manual trigger)
 	bash tools/nightly.sh
