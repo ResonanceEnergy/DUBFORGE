@@ -51,6 +51,7 @@ from engine.als_generator import (
 )
 from engine.midi_export import NoteEvent, write_midi_file
 from engine.fxp_writer import FXPPreset, FXPBank, VSTParam, write_fxp, write_fxb
+from engine.serum2_preset import build_all_presets as build_serum2_presets, install_all_presets
 from engine.galatcia import (
     DEFAULT_DRUM_LOOPS,
     DEFAULT_DRUM_SAMPLES,
@@ -1218,6 +1219,9 @@ TRACK_PANS = {
     "FX": 0.25, "RISER": -0.2,
 }
 
+# Module-level cache for Serum 2 preset state bytes (populated during build)
+_serum2_state_cache: dict[str, bytes] = {}
+
 
 def _build_als_project(
     midi_data: dict[str, list[ALSMidiNote]],
@@ -1248,6 +1252,13 @@ def _build_als_project(
         # Drums use Drum Rack (no Serum 2) — all other tracks get Serum 2
         devices = [] if track_name == "DRUMS" else ["Serum 2"]
 
+        # Embed Serum 2 preset state so Ableton loads the preset on open
+        states: dict[str, bytes] = {}
+        if devices and preset_info:
+            state_bytes = _serum2_state_cache.get(preset_info[0])
+            if state_bytes:
+                states["Serum 2"] = state_bytes
+
         als_tracks.append(ALSTrack(
             name=display_name,
             track_type="midi",
@@ -1257,6 +1268,7 @@ def _build_als_project(
             mute=False,
             armed=False,
             device_names=devices,
+            preset_states=states,
             midi_clips=[midi_clip],
             automations=automations,
         ))
@@ -1330,7 +1342,7 @@ def main() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
     # -- Step 1: Generate MIDI note data ------------------------------
-    print("[1/6] Generating MIDI note data...")
+    print("[1/8] Generating MIDI note data...")
     generators = {
         "DRUMS":      _gen_drums,      "BASS":       _gen_bass,
         "SUB":        _gen_sub,        "GROWL":      _gen_growl,
@@ -1352,7 +1364,7 @@ def main() -> None:
     print(f"    {'TOTAL':12s}: {total_notes:5d} notes")
 
     # -- Step 2: Build automation envelopes ---------------------------
-    print("\n[2/6] Building automation envelopes...")
+    print("\n[2/8] Building automation envelopes...")
     track_automations = _build_track_automations()
     total_auto_pts = 0
     for track_name, autos in track_automations.items():
@@ -1365,7 +1377,7 @@ def main() -> None:
           f"{total_auto_pts:5d} points")
 
     # -- Step 3: Generate Serum 2 presets (.fxp) ----------------------
-    print("\n[3/6] Generating Serum 2 presets (.fxp)...")
+    print("\n[3/8] Generating Serum 2 presets (.fxp)...")
     presets = _build_serum2_presets()
     fxp_presets: list[FXPPreset] = []
     for track_name, fxp in presets.items():
@@ -1379,8 +1391,27 @@ def main() -> None:
     write_fxb(bank, str(bank_path))
     print(f"    {bank_path.name} (bank of {len(fxp_presets)})")
 
+    # -- Step 3b: Build native Serum 2 presets (.SerumPreset) ---------
+    print("\n[4/8] Building native Serum 2 presets...")
+    global _serum2_state_cache
+    try:
+        s2_presets = build_serum2_presets()
+        for s2_name, s2_preset in s2_presets.items():
+            # Save to output/presets/ for reference
+            s2_path = preset_dir / f"{s2_name}.SerumPreset"
+            s2_preset.write(s2_path)
+            # Cache the raw state bytes for ALS embedding
+            _serum2_state_cache[s2_name] = s2_preset.get_processor_state()
+            print(f"    {s2_name}.SerumPreset ({len(_serum2_state_cache[s2_name])} bytes)")
+        # Install to Serum 2 User presets folder
+        installed = install_all_presets()
+        print(f"    Installed {len(installed)} presets to Serum 2 User/DUBFORGE/")
+    except Exception as exc:
+        print(f"    WARNING: Native Serum 2 presets failed: {exc}")
+        print("    (Falling back to FXP-only mode)")
+
     # -- Step 4: Export MIDI file -------------------------------------
-    print("\n[4/6] Exporting MIDI file...")
+    print("\n[5/8] Exporting MIDI file...")
     midi_tracks_for_export: list[tuple[str, list[NoteEvent]]] = []
     for name in SYNTH_TRACK_ORDER:
         als_notes = midi_data.get(name, [])
@@ -1400,7 +1431,7 @@ def main() -> None:
           f"{len(midi_tracks_for_export)} tracks)")
 
     # -- Step 5: Build MIDI ALS file ----------------------------------
-    print("\n[5/6] Building MIDI Ableton Live Set...")
+    print("\n[6/8] Building MIDI Ableton Live Set...")
     project = _build_als_project(midi_data, track_automations)
     als_path = als_dir / f"{TRACK_NAME}.als"
     write_als(project, str(als_path))
@@ -1417,7 +1448,7 @@ def main() -> None:
           f"{len(project.cue_points)} cue points")
 
     # -- Step 6: Install GALATCIA assets ------------------------------
-    print("\n[6/7] Installing GALATCIA assets...")
+    print("\n[7/8] Installing GALATCIA assets...")
     wt_count = install_wavetables()
     print(f"    Wavetables: {wt_count} installed to Serum Tables")
     preset_count = copy_presets(output_dir=str(output_dir))
@@ -1431,7 +1462,7 @@ def main() -> None:
     print(f"    Audio trks: {audio_count} GALATCIA audio tracks in ALS")
 
     # -- Step 7: Open MIDI ALS in Ableton ----------------------------
-    print("\n[7/7] Opening MIDI ALS in Ableton Live...")
+    print("\n[8/8] Opening MIDI ALS in Ableton Live...")
     abs_als = str(als_path.resolve())
     if sys.platform == "win32":
         os.startfile(abs_als)

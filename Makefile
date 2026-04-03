@@ -1,6 +1,6 @@
 # DUBFORGE — Build & Quality Targets
 # ─────────────────────────────────────
-.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track song all verify nightly nightly-install nightly-uninstall launch launch-ui wild-ones apology
+.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track song all verify nightly nightly-install nightly-uninstall launch launch-ui wild-ones apology serum-presets
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -20,6 +20,9 @@ wild-ones: ## Produce Wild Ones V12 (MIDI+ALS+GALATCIA)
 
 apology: ## Produce The Apology That Never Came V4 (MIDI+ALS)
 	python3 make_apology_v4.py
+
+serum-presets: ## Install DUBFORGE presets to Serum 2 User folder
+	python3 -c "from engine.serum2_preset import install_all_presets; p=install_all_presets(); print(f'Installed {len(p)} presets')"
 
 test: ## Run full pytest suite
 	python3 -m pytest tests/ -v

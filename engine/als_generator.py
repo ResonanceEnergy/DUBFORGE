@@ -80,6 +80,7 @@ class ALSTrack:
     armed: bool = False
     midi_channel: int = 0           # 0-15
     device_names: list[str] = field(default_factory=list)
+    preset_states: dict[str, bytes] = field(default_factory=dict)  # device_name -> raw state bytes
     clip_names: list[str] = field(default_factory=list)
     clip_paths: list[str] = field(default_factory=list)
     send_levels: list[float] = field(default_factory=list)
@@ -706,13 +707,15 @@ def _build_vst3_plugin_device(
     device_name: str,
     ids: _IdCounter,
     device_id: int = 0,
+    processor_state: bytes | None = None,
 ) -> None:
     """Build a VST3 PluginDevice element inside <Devices>.
 
     Creates a PluginDevice matching the structure Ableton Live 12 expects:
     standard device header, Vst3PluginInfo with correct Uid Fields.N naming,
-    and an empty Vst3Preset (Ableton fills the plugin state on load when the
-    VST3 is installed and has been scanned).
+    and a Vst3Preset.  When *processor_state* is provided the raw bytes are
+    base64-encoded into <ProcessorState> so Ableton restores the plugin with
+    a specific preset already loaded.
     """
     info = _VST3_REGISTRY.get(device_name)
     if info is None:
@@ -761,8 +764,12 @@ def _build_vst3_plugin_device(
     _v(vp, "ParametersListWrapperLomId", "0")
     _build_vst3_uid(vp, cid_fields)
     _v(vp, "DeviceType", str(info["device_type"]))
-    ET.SubElement(vp, "ProcessorState")
-    ET.SubElement(vp, "ControllerState")
+    ps_elem = ET.SubElement(vp, "ProcessorState")
+    cs_elem = ET.SubElement(vp, "ControllerState")
+    if processor_state:
+        import base64
+        ps_elem.text = base64.b64encode(processor_state).decode("ascii")
+        cs_elem.text = ps_elem.text
     _v(vp, "Name", "")
     ET.SubElement(vp, "PresetRef")
 
@@ -842,8 +849,10 @@ def _build_device_chain(dc: ET.Element, track: ALSTrack, ids: _IdCounter,
     # Ableton instantiates instruments when the .als is opened.
     if track_role != "return":
         for dev_idx, dev_name in enumerate(track.device_names):
+            state = track.preset_states.get(dev_name)
             _build_vst3_plugin_device(devices_elem, dev_name, ids,
-                                      device_id=dev_idx)
+                                      device_id=dev_idx,
+                                      processor_state=state)
         ET.SubElement(inner_dc, "SignalModulations")
 
     return events_elem
