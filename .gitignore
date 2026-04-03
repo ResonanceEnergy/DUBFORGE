@@ -1,6 +1,21 @@
 # Ignore generated output
 output/
 
+# Temp scripts and logs (one-off debug/migration)
+_*.py
+*.log
+stderr*.txt
+stdout*.txt
+output_*.txt
+run_*.txt
+error_*.txt
+test_results*.txt
+test_errors*.txt
+all_output.txt
+full_*.txt
+tr.txt
+tr2.txt
+
 # API keys — NEVER commit
 .env
 .env.*
