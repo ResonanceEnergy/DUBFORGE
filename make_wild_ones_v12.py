@@ -1220,7 +1220,8 @@ TRACK_PANS = {
 }
 
 # Module-level cache for Serum 2 preset state bytes (populated during build)
-_serum2_state_cache: dict[str, bytes] = {}
+_serum2_proc_cache: dict[str, bytes] = {}
+_serum2_ctrl_cache: dict[str, bytes] = {}
 
 
 def _build_als_project(
@@ -1252,12 +1253,16 @@ def _build_als_project(
         # Drums use Drum Rack (no Serum 2) — all other tracks get Serum 2
         devices = [] if track_name == "DRUMS" else ["Serum 2"]
 
-        # Embed Serum 2 preset state so Ableton loads the preset on open
-        states: dict[str, bytes] = {}
+        # Embed Serum 2 processor + controller state so Ableton loads the preset on open
+        proc_states: dict[str, bytes] = {}
+        ctrl_states: dict[str, bytes] = {}
         if devices and preset_info:
-            state_bytes = _serum2_state_cache.get(preset_info[0])
-            if state_bytes:
-                states["Serum 2"] = state_bytes
+            proc_bytes = _serum2_proc_cache.get(preset_info[0])
+            ctrl_bytes = _serum2_ctrl_cache.get(preset_info[0])
+            if proc_bytes:
+                proc_states["Serum 2"] = proc_bytes
+            if ctrl_bytes:
+                ctrl_states["Serum 2"] = ctrl_bytes
 
         als_tracks.append(ALSTrack(
             name=display_name,
@@ -1268,7 +1273,8 @@ def _build_als_project(
             mute=False,
             armed=False,
             device_names=devices,
-            preset_states=states,
+            preset_states=proc_states,
+            controller_states=ctrl_states,
             midi_clips=[midi_clip],
             automations=automations,
         ))
@@ -1393,16 +1399,19 @@ def main() -> None:
 
     # -- Step 3b: Build native Serum 2 presets (.SerumPreset) ---------
     print("\n[4/8] Building native Serum 2 presets...")
-    global _serum2_state_cache
+    global _serum2_proc_cache, _serum2_ctrl_cache
     try:
         s2_presets = build_serum2_presets()
         for s2_name, s2_preset in s2_presets.items():
             # Save to output/presets/ for reference
             s2_path = preset_dir / f"{s2_name}.SerumPreset"
             s2_preset.write(s2_path)
-            # Cache the raw state bytes for ALS embedding
-            _serum2_state_cache[s2_name] = s2_preset.get_processor_state()
-            print(f"    {s2_name}.SerumPreset ({len(_serum2_state_cache[s2_name])} bytes)")
+            # Cache processor + controller state bytes for ALS embedding
+            proc = s2_preset.get_processor_state()
+            ctrl = s2_preset.get_controller_state()
+            _serum2_proc_cache[s2_name] = proc
+            _serum2_ctrl_cache[s2_name] = ctrl
+            print(f"    {s2_name}: proc={len(proc)}B ctrl={len(ctrl)}B")
         # Install to Serum 2 User presets folder
         installed = install_all_presets()
         print(f"    Installed {len(installed)} presets to Serum 2 User/DUBFORGE/")

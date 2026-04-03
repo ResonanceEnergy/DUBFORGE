@@ -4,9 +4,12 @@ Reads XferJson-wrapped presets (header + JSON metadata + zstd-compressed CBOR),
 modifies parameters, re-serializes, and writes valid .SerumPreset files that
 Serum 2 loads natively.
 
-Also provides ``get_processor_state()`` to produce raw bytes suitable for
-embedding into an Ableton Live .als <ProcessorState> element (base64-encoded
-by the caller).
+Produces **Processor State** and **Controller State** XferJson blobs suitable
+for embedding into Ableton Live .als ``<ProcessorState>`` and
+``<ControllerState>`` elements (base64-encoded by the caller).  These blobs
+use the same XferJson header/CBOR/zstd format as .SerumPreset files but with
+``"component": "processor"`` or ``"component": "controller"`` JSON metadata
+and the correct CBOR key subset for each VST3 component.
 """
 from __future__ import annotations
 
@@ -35,6 +38,87 @@ _USER_DIR = _SERUM2_PRESET_DIR / "Presets" / "User"
 _DUBFORGE_DIR = _USER_DIR / "DUBFORGE"
 
 ZSTD_LEVEL = 3  # compression level (1-22, 3 is default)
+
+# ──────────────────────────────────────────────────────────────────────
+# VST3 state key sets – extracted from Serum 2 v2.1.1 via AU hosting
+# ──────────────────────────────────────────────────────────────────────
+# IComponent::getState() keys (162)
+_PROCESSOR_KEYS: set[str] = {
+    "Arp0",
+    *(f"ArpClip{i}" for i in range(12)),
+    "ClipPlayer0",
+    *(f"Env{i}" for i in range(4)),
+    *(f"FXRack{i}" for i in range(3)),
+    "Global0",
+    *(f"LFO{i}" for i in range(10)),
+    *(f"LFOPointModBus{i}" for i in range(16)),
+    *(f"Macro{i}" for i in range(8)),
+    *(f"MidiClip{i}" for i in range(12)),
+    *(f"ModSlot{i}" for i in range(64)),
+    *(f"Oscillator{i}" for i in range(5)),
+    "PitchQuantizer0",
+    "RetriggerState0",
+    *(f"RoutingSlot{i}" for i in range(7)),
+    "VoiceFilter0", "VoiceFilter1",
+    "VoicePanel0",
+    # Metadata / config keys in processor CBOR
+    "component", "lockOversampling", "lockTuning",
+    "mpeConfig", "mpeEnabled", "mpePitchBendRange",
+    "product", "productVersion", "scalars", "tags", "url",
+    "vendor", "version",
+}
+
+# IEditController::getState() keys (58)
+_CONTROLLER_KEYS: set[str] = {
+    *(f"ArpClip{i}" for i in range(12)),
+    "ClipPlayer",
+    *(f"FXRack{i}" for i in range(3)),
+    "Filter", "GranularOsc",
+    *(f"LFO{i}" for i in range(10)),
+    *(f"MidiClip{i}" for i in range(12)),
+    "MultiSampleOsc", "Osc", "SerumGUI", "SpectralOsc",
+    "VoicePanel0", "WTOsc",
+    "arpBankDisplayName", "clipBankDisplayName",
+    "component",
+    "presetAuthor", "presetDescription", "presetHasBeenEdited", "presetName",
+    "product", "productVersion", "url", "vendor", "version",
+}
+
+# JSON metadata templates for state blobs
+_PROCESSOR_JSON_META = {
+    "component": "processor",
+    "product": "Serum2",
+    "productVersion": "2.1.1",
+    "url": "https://xferrecords.com/",
+    "vendor": "Xfer Records",
+    "version": 10.0,
+}
+
+_CONTROLLER_JSON_META = {
+    "component": "controller",
+    "presetAuthor": "",
+    "presetDescription": "",
+    "presetName": "",
+    "product": "Serum2",
+    "productVersion": "2.1.1",
+    "url": "https://xferrecords.com/",
+    "vendor": "Xfer Records",
+    "version": 10.0,
+}
+
+
+def _build_xferjson_blob(json_meta: dict[str, Any],
+                         cbor_data: dict[str, Any],
+                         version: int = 2) -> bytes:
+    """Assemble an XferJson state blob from JSON metadata and CBOR dict."""
+    json_str = json.dumps(json_meta, separators=(",", ":"))
+    json_bytes = json_str.encode("utf-8")
+    cbor_raw = cbor2.dumps(cbor_data)
+    cctx = zstandard.ZstdCompressor(level=ZSTD_LEVEL)
+    compressed = cctx.compress(cbor_raw)
+    payload = struct.pack("<II", len(cbor_raw), version) + compressed
+    header = _MAGIC + struct.pack("<I", len(json_bytes)) + b"\x00\x00\x00\x00"
+    return header + json_bytes + payload
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -166,12 +250,43 @@ class SerumPreset:
         return header + json_bytes + payload
 
     def get_processor_state(self) -> bytes:
-        """Return bytes suitable for Ableton ALS <ProcessorState> embedding.
+        """Return bytes for Ableton ALS ``<ProcessorState>`` embedding.
 
-        This is the raw .SerumPreset binary that Serum 2's VST3
-        ``IComponent::setState()`` can restore.
+        Builds an XferJson blob with ``"component": "processor"`` metadata
+        and the 162 processor CBOR keys extracted from this preset's data.
+        Ableton passes these bytes to ``IComponent::setState()``.
         """
-        return self.to_file_bytes()
+        cbor_out: dict[str, Any] = {"component": "processor"}
+        for k in _PROCESSOR_KEYS:
+            if k in self.cbor_data:
+                cbor_out[k] = self.cbor_data[k]
+        meta = dict(_PROCESSOR_JSON_META)
+        meta["hash"] = hashlib.md5(self.name.encode()).hexdigest()
+        return _build_xferjson_blob(meta, cbor_out)
+
+    def get_controller_state(self) -> bytes:
+        """Return bytes for Ableton ALS ``<ControllerState>`` embedding.
+
+        Builds an XferJson blob with ``"component": "controller"`` metadata
+        and the 58 controller CBOR keys extracted from this preset's data.
+        Ableton passes these bytes to ``IEditController::setState()``.
+        """
+        cbor_out: dict[str, Any] = {"component": "controller"}
+        for k in _CONTROLLER_KEYS:
+            if k in self.cbor_data:
+                cbor_out[k] = self.cbor_data[k]
+        # Override preset metadata in CBOR
+        cbor_out["presetName"] = self.name
+        cbor_out["presetAuthor"] = self.author
+        cbor_out["presetDescription"] = self.description
+        meta = dict(_CONTROLLER_JSON_META)
+        meta["hash"] = hashlib.md5(
+            (self.name + ":controller").encode()
+        ).hexdigest()
+        meta["presetName"] = self.name
+        meta["presetAuthor"] = self.author
+        meta["presetDescription"] = self.description
+        return _build_xferjson_blob(meta, cbor_out)
 
     def write(self, path: str | Path) -> Path:
         """Write the preset to a .SerumPreset file."""
@@ -375,15 +490,16 @@ def install_all_presets() -> list[Path]:
     return paths
 
 
-def get_preset_state_map() -> dict[str, bytes]:
-    """Return {preset_name: state_bytes} for all DUBFORGE presets.
+def get_preset_state_map() -> dict[str, tuple[bytes, bytes]]:
+    """Return ``{preset_name: (processor_state, controller_state)}`` for all presets.
 
-    The bytes are the raw .SerumPreset file content, ready for
-    base64-encoding into ALS <ProcessorState>.
+    The bytes are XferJson state blobs ready for base64-encoding into ALS
+    ``<ProcessorState>`` and ``<ControllerState>`` elements.
     """
-    result = {}
+    result: dict[str, tuple[bytes, bytes]] = {}
     for name, preset in build_all_presets().items():
-        result[name] = preset.get_processor_state()
+        result[name] = (preset.get_processor_state(),
+                        preset.get_controller_state())
     return result
 
 
