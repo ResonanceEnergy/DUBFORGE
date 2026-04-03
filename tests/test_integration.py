@@ -359,93 +359,39 @@ def _load_bank_dict(mod_path: str, attr: str) -> dict:
     return getattr(mod, attr)
 
 
-class TestBankRegistryNotEmpty:
-    """Every registered ALL_*_BANKS dict should be non-empty."""
+class TestBankConsistency:
+    """All 6 bank checks in one parametrized class (was 6 classes x 45 = 270 tests, now 45)."""
 
     @pytest.mark.parametrize("mod_path,attr", _BANK_REGISTRY,
                              ids=[f"{m.split('.')[-1]}.{a}" for m, a in _BANK_REGISTRY])
-    def test_bank_dict_is_non_empty(self, mod_path, attr):
+    def test_bank_full_validation(self, mod_path, attr):
         banks = _load_bank_dict(mod_path, attr)
+        # 1) Registry not empty
         assert len(banks) >= 1, f"{mod_path}.{attr} is empty"
-
-
-class TestBankPresetsHaveExpectedCount:
-    """Each bank function should return an object whose .presets list has at least 1 item."""
-
-    @pytest.mark.parametrize("mod_path,attr", _BANK_REGISTRY,
-                             ids=[f"{m.split('.')[-1]}.{a}" for m, a in _BANK_REGISTRY])
-    def test_every_bank_has_presets(self, mod_path, attr):
-        banks = _load_bank_dict(mod_path, attr)
-        for bank_name, bank_fn in banks.items():
-            bank = bank_fn()
-            items = _get_bank_items(bank)
-            assert len(items) >= 1, (
-                f"{mod_path} bank '{bank_name}' has no presets"
-            )
-
-
-class TestBankPresetNamesValid:
-    """All preset names within each individual bank should be non-empty strings."""
-
-    @pytest.mark.parametrize("mod_path,attr", _BANK_REGISTRY,
-                             ids=[f"{m.split('.')[-1]}.{a}" for m, a in _BANK_REGISTRY])
-    def test_preset_names_are_strings(self, mod_path, attr):
-        banks = _load_bank_dict(mod_path, attr)
-        for bank_name, bank_fn in banks.items():
-            bank = bank_fn()
-            items = _get_bank_items(bank)
-            for p in items:
-                assert isinstance(p.name, str) and len(p.name) > 0, (
-                    f"Bad name in {mod_path} bank '{bank_name}'"
-                )
-
-
-class TestBankCallable:
-    """Each bank value must be callable and return an object with .name."""
-
-    @pytest.mark.parametrize("mod_path,attr", _BANK_REGISTRY,
-                             ids=[f"{m.split('.')[-1]}.{a}" for m, a in _BANK_REGISTRY])
-    def test_bank_functions_are_callable(self, mod_path, attr):
-        banks = _load_bank_dict(mod_path, attr)
-        for bank_name, bank_fn in banks.items():
-            assert callable(bank_fn), f"{bank_name} is not callable"
-            bank = bank_fn()
-            assert hasattr(bank, "name") or hasattr(bank, "presets")
-
-
-class TestBankKeyRelatesName:
-    """Dictionary key should be related to the bank object's .name attribute."""
-
-    @pytest.mark.parametrize("mod_path,attr", _BANK_REGISTRY,
-                             ids=[f"{m.split('.')[-1]}.{a}" for m, a in _BANK_REGISTRY])
-    def test_bank_key_relates_to_name(self, mod_path, attr):
-        banks = _load_bank_dict(mod_path, attr)
         for bank_key, bank_fn in banks.items():
+            # 2) Callable
+            assert callable(bank_fn), f"{bank_key} is not callable"
             bank = bank_fn()
+            # 3) Has name or presets
+            assert hasattr(bank, "name") or hasattr(bank, "presets")
+            # 4) Key relates to name
             if hasattr(bank, "name"):
-                # key and name should share at least one meaningful token (3+ chars)
-                k_tokens = set(t for t in bank_key.lower().split("_") if len(t) >= 3)
-                n_tokens = set(t for t in bank.name.lower().split("_") if len(t) >= 3)
                 k_flat = bank_key.lower().replace("_", "")
                 n_flat = bank.name.lower().replace("_", "")
+                k_tokens = set(t for t in bank_key.lower().split("_") if len(t) >= 3)
+                n_tokens = set(t for t in bank.name.lower().split("_") if len(t) >= 3)
                 shared = k_tokens & n_tokens
                 assert shared or k_flat in n_flat or n_flat in k_flat or k_flat == n_flat, (
                     f"{mod_path}: key '{bank_key}' unrelated to bank.name '{bank.name}'"
                 )
-
-
-class TestBankPresetHasName:
-    """Every preset should have a non-empty .name string."""
-
-    @pytest.mark.parametrize("mod_path,attr", _BANK_REGISTRY,
-                             ids=[f"{m.split('.')[-1]}.{a}" for m, a in _BANK_REGISTRY])
-    def test_preset_has_name(self, mod_path, attr):
-        banks = _load_bank_dict(mod_path, attr)
-        for bank_name, bank_fn in banks.items():
-            bank = bank_fn()
+            # 5) Has presets
             items = _get_bank_items(bank)
+            assert len(items) >= 1, f"{mod_path} bank '{bank_key}' has no presets"
+            # 6) All preset names valid
             for preset in items:
-                assert isinstance(preset.name, str) and len(preset.name) > 0
+                assert isinstance(preset.name, str) and len(preset.name) > 0, (
+                    f"Bad name in {mod_path} bank '{bank_key}'"
+                )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -571,408 +517,17 @@ class TestExportFunctions:
             assert Path(p).exists(), f"Missing export file: {p}"
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 5  CLI INTEGRATION  (10 tests)
-# ═══════════════════════════════════════════════════════════════════════════
+# Sections 5 (CLI) and 6 (ConfigLoader) removed — covered by
+# tests/test_cli.py and tests/test_config_loader.py respectively.
 
-class TestCLIIntegration:
-    def test_cli_module_imports(self):
-        import engine.cli  # noqa: F401
 
-    def test_cli_has_main(self):
-        from engine.cli import main
-        assert callable(main)
+# Section 7 (MemorySystem) removed — covered by tests/test_memory.py.
 
-    def test_cli_has_cmd_render(self):
-        from engine.cli import cmd_render
-        assert callable(cmd_render)
 
-    def test_cli_has_cmd_export(self):
-        from engine.cli import cmd_export
-        assert callable(cmd_export)
+# Sections 8 (DojoQualityMetrics) and 15 (DojoBeltSystem) removed —
+# covered by tests/test_dojo.py.
 
-    def test_cli_has_cmd_analyze(self):
-        from engine.cli import cmd_analyze
-        assert callable(cmd_analyze)
-
-    def test_cli_has_cmd_info(self):
-        from engine.cli import cmd_info
-        assert callable(cmd_info)
-
-    def test_cli_parser_can_be_built(self):
-        """main() constructs a parser internally; verify it doesn't crash."""
-        import argparse
-        parser = argparse.ArgumentParser(prog="dubforge-cli")
-        assert parser is not None
-
-    def test_cli_parser_help(self):
-        import argparse
-        parser = argparse.ArgumentParser(prog="dubforge-cli",
-                                         description="DUBFORGE CLI")
-        parser.format_help()
-
-    def test_cli_info_runs(self, capsys):
-        """cmd_info should print engine information without error."""
-        try:
-            import argparse
-
-            from engine.cli import cmd_info
-            ns = argparse.Namespace()
-            cmd_info(ns)
-        except SystemExit:
-            pass
-        captured = capsys.readouterr()
-        assert len(captured.out) > 0 or True  # may or may not print
-
-    def test_cli_main_no_args(self):
-        """main() with no args should not crash (may print help)."""
-        from engine.cli import main
-        try:
-            main()
-        except SystemExit:
-            pass  # argparse exits on no args
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 6  CONFIG LOADER  (15 tests)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestConfigLoader:
-    def test_list_configs_returns_list(self):
-        from engine.config_loader import list_configs
-        configs = list_configs()
-        assert isinstance(configs, list)
-        assert len(configs) >= 1
-
-    def test_list_configs_has_memory(self):
-        from engine.config_loader import list_configs
-        assert "memory_v1" in list_configs()
-
-    def test_load_config_memory(self):
-        from engine.config_loader import load_config
-        cfg = load_config("memory_v1")
-        assert isinstance(cfg, dict)
-        assert "meta" in cfg or "storage" in cfg or len(cfg) > 0
-
-    def test_load_config_rco_psbs(self):
-        from engine.config_loader import load_config
-        cfg = load_config("rco_psbs_vip_delta_v1.1")
-        assert isinstance(cfg, dict)
-
-    def test_load_config_serum2(self):
-        from engine.config_loader import load_config
-        cfg = load_config("serum2_module_pack_v1")
-        assert isinstance(cfg, dict)
-
-    def test_load_config_fibonacci(self):
-        from engine.config_loader import load_config
-        cfg = load_config("fibonacci_blueprint_pack_v1")
-        assert isinstance(cfg, dict)
-
-    def test_load_config_sb_corpus(self):
-        from engine.config_loader import load_config
-        cfg = load_config("sb_corpus_v1")
-        assert isinstance(cfg, dict)
-
-    def test_validate_config_memory(self):
-        from engine.config_loader import validate_config
-        errors = validate_config("memory_v1")
-        assert isinstance(errors, list)
-        assert len(errors) == 0
-
-    def test_validate_config_rco_psbs(self):
-        from engine.config_loader import validate_config
-        errors = validate_config("rco_psbs_vip_delta_v1.1")
-        assert isinstance(errors, list)
-
-    def test_validate_all_configs(self):
-        from engine.config_loader import validate_all_configs
-        results = validate_all_configs()
-        assert isinstance(results, dict)
-
-    def test_get_config_value(self):
-        from engine.config_loader import get_config_value
-        val = get_config_value("memory_v1", "meta", default="fallback")
-        assert val is not None
-
-    def test_get_config_value_deep(self):
-        from engine.config_loader import get_config_value
-        val = get_config_value("memory_v1", "recall", "default_limit", default=13)
-        assert val is not None
-
-    def test_get_config_value_missing_key(self):
-        from engine.config_loader import get_config_value
-        val = get_config_value("memory_v1", "nonexistent_key_xyz", default="MISSING")
-        assert val == "MISSING"
-
-    def test_reload_if_changed(self):
-        from engine.config_loader import reload_if_changed
-        result = reload_if_changed("memory_v1")
-        assert isinstance(result, bool)
-
-    def test_watch_configs_once(self):
-        from engine.config_loader import watch_configs_once
-        result = watch_configs_once()
-        assert isinstance(result, list)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 7  MEMORY SYSTEM  (15 tests)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestMemorySystem:
-    def _mem(self, tmp_path):
-        from engine.memory import MemoryEngine
-        return MemoryEngine(memory_dir=tmp_path / "mem")
-
-    def test_init(self, tmp_path):
-        mem = self._mem(tmp_path)
-        assert mem is not None
-
-    def test_begin_session(self, tmp_path):
-        mem = self._mem(tmp_path)
-        sid = mem.begin_session("test session")
-        assert isinstance(sid, str)
-        assert len(sid) > 0
-
-    def test_end_session(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session("test")
-        result = mem.end_session("done")
-        assert isinstance(result, dict)
-
-    def test_log_event(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session()
-        mem.log_event("phi_core", "generate", {"frames": 256})
-        mem.end_session()
-
-    def test_register_asset(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session()
-        mem.register_asset("wavetable", "test.wav", "phi_core", {"frames": 256})
-        mem.end_session()
-
-    def test_recall_empty(self, tmp_path):
-        mem = self._mem(tmp_path)
-        results = mem.recall(module="phi_core")
-        assert isinstance(results, list)
-
-    def test_recall_after_register(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session()
-        mem.register_asset("wavetable", "test.wav", "phi_core", {"frames": 256})
-        mem.end_session()
-        results = mem.recall(module="phi_core")
-        assert isinstance(results, list)
-
-    def test_recall_phi_weighted(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session()
-        mem.log_event("phi_core", "generate")
-        mem.register_asset("wavetable", "a.wav", "phi_core")
-        mem.end_session()
-        results = mem.recall_phi_weighted(module="phi_core", limit=5)
-        assert isinstance(results, list)
-
-    def test_recall_events(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session()
-        mem.log_event("lead_synth", "render", {"preset": "alpha"})
-        mem.end_session()
-        events = mem.recall_events(module="lead_synth")
-        assert isinstance(events, list)
-
-    def test_recall_sessions(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session("s1")
-        mem.end_session()
-        mem.begin_session("s2")
-        mem.end_session()
-        sessions = mem.recall_sessions(last_n=5)
-        assert isinstance(sessions, list)
-
-    def test_multiple_events(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session()
-        for i in range(5):
-            mem.log_event("drum_generator", "render", {"pattern": i})
-        mem.end_session()
-
-    def test_multiple_assets(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session()
-        for i in range(3):
-            mem.register_asset("wav", f"file_{i}.wav", "bass_oneshot")
-        mem.end_session()
-
-    def test_session_notes_preserved(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session("Integration test session")
-        summary = mem.end_session("Completed successfully")
-        assert isinstance(summary, dict)
-
-    def test_index_updates(self, tmp_path):
-        mem = self._mem(tmp_path)
-        mem.begin_session()
-        mem.log_event("test_module", "test_action")
-        mem.end_session()
-        assert mem._index["total_sessions"] >= 1
-
-    def test_memory_lifecycle(self, tmp_path):
-        """Full lifecycle: begin → log → register → recall → end."""
-        mem = self._mem(tmp_path)
-        mem.begin_session("lifecycle test")
-        mem.log_event("phi_core", "generate", {"frames": 256})
-        mem.register_asset("wavetable", "lifecycle.wav", "phi_core", {"test": True})
-        results = mem.recall(module="phi_core")
-        assert isinstance(results, list)
-        summary = mem.end_session("lifecycle complete")
-        assert isinstance(summary, dict)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 8  DOJO QUALITY METRICS  (10 tests)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestDojoQualityMetrics:
-    def test_rate_output_quality_no_wav(self):
-        from engine.dojo import rate_output_quality
-        result = rate_output_quality()
-        assert isinstance(result, dict)
-        assert "phi_coherence_score" in result
-        assert "assigned_quality_belt" in result
-
-    def test_rate_output_quality_empty_path(self):
-        from engine.dojo import rate_output_quality
-        result = rate_output_quality("")
-        assert result["assigned_quality_belt"] == "White Belt"
-
-    def test_rate_output_quality_with_wav(self, tmp_path):
-        from engine.dojo import rate_output_quality
-        wav_p = _wav(tmp_path / "dojo_test.wav", 432.0, 0.5)
-        result = rate_output_quality(str(wav_p))
-        assert isinstance(result, dict)
-        assert "phi_coherence_score" in result
-
-    def test_rate_output_quality_nonexistent_wav(self):
-        from engine.dojo import rate_output_quality
-        result = rate_output_quality("/nonexistent/path.wav")
-        assert isinstance(result, dict)
-
-    def test_phi_belt_progression(self):
-        from engine.dojo import phi_belt_progression
-        result = phi_belt_progression()
-        assert isinstance(result, dict)
-        assert "belt_progression" in result
-        assert len(result["belt_progression"]) == 7
-
-    def test_phi_belt_progression_tracks(self):
-        from engine.dojo import phi_belt_progression
-        result = phi_belt_progression()
-        assert "total_tracks_to_black_belt" in result
-        assert result["total_tracks_to_black_belt"] > 0
-
-    def test_phi_belt_progression_fibonacci(self):
-        from engine.dojo import phi_belt_progression
-        result = phi_belt_progression()
-        assert "fibonacci_track_counts" in result
-        fib = result["fibonacci_track_counts"]
-        assert fib == [1, 3, 5, 8, 13, 21, 34]
-
-    def test_phi_approach_timing(self):
-        from engine.dojo import phi_approach_timing
-        result = phi_approach_timing(8.0)
-        assert isinstance(result, dict)
-        assert "phase_allocation" in result
-
-    def test_phi_approach_timing_custom_hours(self):
-        from engine.dojo import phi_approach_timing
-        result = phi_approach_timing(4.0)
-        assert result["total_session_hours"] == 4.0
-
-    def test_phi_mudpie_recipe(self):
-        from engine.dojo import phi_mudpie_recipe
-        result = phi_mudpie_recipe(8)
-        assert isinstance(result, dict)
-        assert "sources" in result
-        assert len(result["sources"]) == 8
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 9  ALS GENERATOR  (10 tests)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestALSGenerator:
-    def test_als_templates_exist(self):
-        from engine.als_generator import ALL_ALS_TEMPLATES
-        assert len(ALL_ALS_TEMPLATES) >= 3
-
-    def test_weapon_template(self):
-        from engine.als_generator import dubstep_weapon_session
-        project = dubstep_weapon_session()
-        assert hasattr(project, "name")
-        assert hasattr(project, "tracks")
-        assert len(project.tracks) >= 1
-
-    def test_emotive_template(self):
-        from engine.als_generator import emotive_melodic_session
-        project = emotive_melodic_session()
-        assert hasattr(project, "name")
-        assert len(project.tracks) >= 1
-
-    def test_hybrid_fractal_template(self):
-        from engine.als_generator import hybrid_fractal_session
-        project = hybrid_fractal_session()
-        assert hasattr(project, "name")
-        assert len(project.tracks) >= 1
-
-    def test_export_all_als(self, tmp_path):
-        from engine.als_generator import export_all_als
-        paths = export_all_als(str(tmp_path))
-        assert isinstance(paths, list)
-        assert len(paths) >= 1
-
-    def test_als_files_exist(self, tmp_path):
-        from engine.als_generator import export_all_als
-        paths = export_all_als(str(tmp_path))
-        for p in paths:
-            assert Path(p).exists()
-
-    def test_write_als(self, tmp_path):
-        from engine.als_generator import ALL_ALS_TEMPLATES, write_als
-        gen_fn = list(ALL_ALS_TEMPLATES.values())[0]
-        project = gen_fn()
-        out_path = str(tmp_path / "test.als")
-        write_als(project, out_path)
-        assert Path(out_path).exists()
-
-    def test_write_als_json(self, tmp_path):
-        from engine.als_generator import ALL_ALS_TEMPLATES, write_als_json
-        gen_fn = list(ALL_ALS_TEMPLATES.values())[0]
-        project = gen_fn()
-        out_path = str(tmp_path / "test_structure.json")
-        write_als_json(project, out_path)
-        assert Path(out_path).exists()
-
-    def test_auto_populate_stems(self, tmp_path):
-        from engine.als_generator import ALL_ALS_TEMPLATES, auto_populate_stems
-        gen_fn = list(ALL_ALS_TEMPLATES.values())[0]
-        project = gen_fn()
-        stem_dir = tmp_path / "stems"
-        stem_dir.mkdir()
-        _wav(stem_dir / "kick.wav", 60, 0.1)
-        out_dir = tmp_path / "ableton"
-        out_dir.mkdir()
-        result = auto_populate_stems(project, str(stem_dir), str(out_dir))
-        assert isinstance(result, str)
-
-    def test_all_templates_have_scenes(self):
-        from engine.als_generator import ALL_ALS_TEMPLATES
-        for name, gen_fn in ALL_ALS_TEMPLATES.items():
-            project = gen_fn()
-            assert hasattr(project, "scenes")
-            assert len(project.scenes) >= 1
+# Section 9 (ALSGenerator) removed — covered by tests/test_als_generator.py.
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1296,55 +851,7 @@ class TestModuleImports:
         assert mod is not None
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 13  RCO / PSBS SPECIFIC  (10 tests)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestRCOPSBS:
-    def test_rco_module_imports(self):
-        import engine.rco  # noqa: F401
-
-    def test_psbs_module_imports(self):
-        import engine.psbs  # noqa: F401
-
-    def test_rco_load_profiles(self):
-        from engine.rco import load_rco_profiles_from_config
-        profiles = load_rco_profiles_from_config()
-        assert isinstance(profiles, list)
-
-    def test_psbs_load_presets(self):
-        from engine.psbs import load_psbs_presets_from_config
-        presets = load_psbs_presets_from_config()
-        assert isinstance(presets, list)
-
-    def test_psbs_export_preset(self, tmp_path):
-        from engine.psbs import PSBSPreset, export_preset
-        try:
-            preset = PSBSPreset(name="test_preset", layers=[])
-            export_preset(preset, str(tmp_path))
-        except (TypeError, AttributeError):
-            # PSBSPreset may require specific fields; just verify the function exists
-            pass
-
-    def test_rco_profile_class(self):
-        from engine.rco import RCOProfile
-        assert RCOProfile is not None
-
-    def test_psbs_preset_class(self):
-        from engine.psbs import PSBSPreset
-        assert PSBSPreset is not None
-
-    def test_psbs_export_wavetable_exists(self):
-        from engine.psbs import export_wavetable
-        assert callable(export_wavetable)
-
-    def test_psbs_export_layer_stems_exists(self):
-        from engine.psbs import export_layer_stems
-        assert callable(export_layer_stems)
-
-    def test_psbs_export_phi_ladder_exists(self):
-        from engine.psbs import export_phi_ladder
-        assert callable(export_phi_ladder)
+# Section 13 (RCO/PSBS) removed — covered by tests/test_psbs.py.
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1499,86 +1006,8 @@ class TestExtraSignalProcessing:
         assert p.name == "test"
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 17  MIDI EXPORT SMOKE TESTS  (5 tests)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestMidiExport:
-    def test_midi_export_module(self):
-        import engine.midi_export  # noqa: F401
-
-    def test_export_progression_midi_fn(self):
-        from engine.midi_export import export_progression_midi
-        assert callable(export_progression_midi)
-
-    def test_export_arp_midi_fn(self):
-        from engine.midi_export import export_arp_midi
-        assert callable(export_arp_midi)
-
-    def test_export_clip_midi_fn(self):
-        from engine.midi_export import export_clip_midi
-        assert callable(export_clip_midi)
-
-    def test_export_full_arrangement_fn(self):
-        from engine.midi_export import export_full_arrangement
-        assert callable(export_full_arrangement)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 18  FXP WRITER SMOKE TESTS  (5 tests)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestFXPWriter:
-    def test_fxp_module_imports(self):
-        import engine.fxp_writer  # noqa: F401
-
-    def test_write_preset_manifest_fn(self):
-        from engine.fxp_writer import write_preset_manifest
-        assert callable(write_preset_manifest)
-
-    def test_fxp_preset_class(self):
-        from engine.fxp_writer import FXPPreset
-        assert FXPPreset is not None
-
-    def test_fxp_writer_has_write(self):
-        import engine.fxp_writer as fxp
-        assert hasattr(fxp, "write_fxp") or hasattr(fxp, "write_preset_manifest")
-
-    def test_fxp_preset_creation(self):
-        from engine.fxp_writer import FXPPreset
-        try:
-            p = FXPPreset(name="test")
-            assert p.name == "test"
-        except TypeError:
-            # May require additional fields
-            pass
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 19  SAMPLE SLICER  (5 tests)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestSampleSlicer:
-    def test_slicer_module_imports(self):
-        import engine.sample_slicer  # noqa: F401
-
-    def test_write_slice_manifest_fn(self):
-        from engine.sample_slicer import write_slice_manifest
-        assert callable(write_slice_manifest)
-
-    def test_slice_result_class(self):
-        from engine.sample_slicer import SliceResult
-        assert SliceResult is not None
-
-    def test_slicer_has_slice_fn(self):
-        import engine.sample_slicer as ss
-        assert hasattr(ss, "slice_audio") or hasattr(ss, "slice_sample") or hasattr(ss, "write_slice_manifest")
-
-    def test_slicer_module_attributes(self):
-        import engine.sample_slicer as ss
-        # Should have at least one public callable
-        public = [x for x in dir(ss) if not x.startswith("_") and callable(getattr(ss, x))]
-        assert len(public) >= 1
+# Sections 17-19 (MidiExport, FXPWriter, SampleSlicer) removed --
+# covered by tests/test_midi_export.py, tests/test_fxp_writer.py, tests/test_sample_slicer.py.
 
 
 # ═══════════════════════════════════════════════════════════════════════════

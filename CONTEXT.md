@@ -1,5 +1,5 @@
 # DUBFORGE — Reference Context File
-**v5.1.0 · Underground Industrial Bass Factory**
+**v4.0.0 · Underground Industrial Bass Factory**
 **Last Updated: 2026-03-31**
 
 ---
@@ -11,14 +11,14 @@ DUBFORGE is an **underground industrial bass factory** that generates the filthi
 DUBFORGE combines:
 - **ill.Gates (Producer Dojo)** — The sacred production methodology. Belt system, 128 Rack, Mudpies, The Approach, 14-Minute Hit, stock device mastery, ninja sounds, volume is the teacher. Backed by `engine/dojo.py` (belt system, 128 Rack technique, The Approach workflow, 23 codified production rules).
 - **SUBTRONICS** — The insane genius. Sound design, sample selection, huge drops, double drops, crowd excitement, track arrangement. Backed by `configs/sb_corpus_v1.yaml` (Subtronics discography corpus + VIP deltas + spectral profiles).
-- **Dan Winter's phase coherence** — Golden mean phi ratio (φ = 1.618...) and Planck × phi fractal mathematics. Every parameter — envelope timing, filter cutoffs, bar counts, unison detune, arrangement structure, modulation depth — is keyed to phi, Fibonacci, and fractal self-similarity. Backed by `engine/config_loader.py` (PHI, FIBONACCI, A4_432 constants) flowing into all 189 engine modules.
+- **Dan Winter's phase coherence** — Golden mean phi ratio (φ = 1.618...) and Planck × phi fractal mathematics. Every parameter — envelope timing, filter cutoffs, bar counts, unison detune, arrangement structure, modulation depth — is keyed to phi, Fibonacci, and fractal self-similarity. Backed by `engine/config_loader.py` (PHI, FIBONACCI, A4_432 constants) flowing into all 168 engine modules.
 - **TurboQuant** — Psychoacoustic compression from arXiv:2504.19874 (ICLR 2026). 10-band quantization integrated across 50 engine modules. Backed by `engine/turboquant.py`.
 
 The weapons: **Serum 2** for sound generation, **bass-heavy sample packs** for drums/FX/one-shots, and **Ableton Live 12** for arrangement, mixing, and mastering.
 
 ### Stats
-- **189 engine modules** in `engine/`
-- **174 test files** in `tests/` (~2764 tests passing)
+- **168 engine modules** in `engine/`
+- **170 test files** in `tests/` (~2838 tests passing)
 - **Dependencies**: numpy ≥ 1.24, pyyaml ≥ 6.0, mido ≥ 1.3
 - **Python**: ≥ 3.10 (tested on 3.10–3.13)
 - **License**: MIT
@@ -701,7 +701,7 @@ python -m engine.autonomous --queue configs/production_queue.yaml
 python run_all.py                        # Run all engine modules
 
 # ═══ TEST & LINT ═══
-python -m pytest tests/ -v               # Full test suite (~2764 tests)
+python -m pytest tests/ -v               # Full test suite (~2838 tests)
 python -m ruff check engine/ tests/      # Lint (line-length=100)
 make test                                # pytest
 make lint                                # ruff

@@ -147,9 +147,10 @@ def render_supersaw(patch: SupersawPatch, freq: float = 440.0,
 
 
 def render_supersaw_mono(patch: SupersawPatch, freq: float = 440.0,
-                          duration: float = 2.0) -> list[float]:
+                          duration: float = 2.0,
+                          sample_rate: int = SAMPLE_RATE) -> list[float]:
     """Render mono supersaw (L+R summed)."""
-    left, right = render_supersaw(patch, freq, duration)
+    left, right = render_supersaw(patch, freq, duration, sample_rate)
     return [(left_s + r) * 0.5 for left_s, r in zip(left, right)]
 
 

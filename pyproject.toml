@@ -44,7 +44,11 @@ subphonics = "engine.subphonics_server:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-x --tb=short"
+addopts = "-x --tb=short --durations=10 --strict-markers"
+markers = [
+    "fast: structure / data-model / config tests (no DSP rendering)",
+    "slow: DSP / audio-processing tests that render signals",
+]
 
 [tool.ruff]
 line-length = 100

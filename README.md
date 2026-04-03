@@ -4,7 +4,7 @@
 
 A Python-powered sound design engine built on Dan Winter's Planck x phi fractal mathematics. Every module — wavetable generation, arrangement optimization, bass layering, analysis, DSP processing — is keyed to the golden ratio, Fibonacci sequence, and fractal self-similarity.
 
-**51 engine modules · 1021 tests · v2.6.0**
+**168 engine modules · 2838 tests · v4.0.0**
 
 ## Project Structure
 
@@ -69,7 +69,7 @@ DUBFORGE/
 │   ├── convolution.py                 # Convolution engine (5 IR types, 20 presets)
 │   └── harmonic_analysis.py           # FFT harmonic analysis (5 types, 20 presets)
 │
-├── tests/                               # Test suite (1021 tests)
+├── tests/                               # Test suite (2838 tests)
 │
 ├── configs/                             # YAML configurations
 │   ├── serum2_module_pack_v1.yaml       # Serum 2 module specs

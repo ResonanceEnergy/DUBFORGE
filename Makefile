@@ -1,10 +1,10 @@
 # DUBFORGE — Build & Quality Targets
 # ─────────────────────────────────────
-.PHONY: build test lint fmt check clean help
+.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track auto song fury v3 all verify
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
 
 build: ## Run the full engine build
 	python3 run_all.py
@@ -21,8 +21,17 @@ fury: ## Produce GOLDEN FURY (full auto)
 track: ## Produce default dubstep track (full auto)
 	python3 make_track.py
 
-test: ## Run pytest suite
+test: ## Run full pytest suite
 	python3 -m pytest tests/ -v
+
+test-fast: ## Fast tests only (~88 files, <30s)
+	python3 -m pytest tests/ -m fast -q
+
+test-slow: ## Slow DSP tests only (~40 files)
+	python3 -m pytest tests/ -m slow -q
+
+test-parallel: ## Full suite in parallel (needs pytest-xdist)
+	python3 -m pytest tests/ -n auto -q
 
 lint: ## Lint with ruff
 	python3 -m ruff check engine/ run_all.py tests/

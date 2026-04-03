@@ -116,6 +116,9 @@ class ALSClipInfo:
     loop_end: float = 0.0
     gain: float = 1.0
     name: str = ""
+    sample_rate: int = 0
+    duration_frames: int = 0
+    file_size: int = 0
 
 
 @dataclass
@@ -348,12 +351,18 @@ def _routing(parent: ET.Element, tag: str, target: str,
     _mpe_settings(r)
 
 
+def _fmt_float(v) -> str:
+    """Format a float for ALS XML: drop trailing .0 for integer values."""
+    f = float(v)
+    return str(int(f)) if f == int(f) else str(f)
+
+
 def _float_param(parent: ET.Element, tag: str, value, ids: _IdCounter,
                  min_val=None, max_val=None) -> ET.Element:
     """Standard float parameter with AutomationTarget + ModulationTarget."""
     elem = ET.SubElement(parent, tag)
     _v(elem, "LomId", "0")
-    _v(elem, "Manual", str(value))
+    _v(elem, "Manual", _fmt_float(value))
     if min_val is not None and max_val is not None:
         mcr = ET.SubElement(elem, "MidiControllerRange")
         _v(mcr, "Min", str(min_val))
@@ -471,21 +480,43 @@ def _populate_automation_envelopes(envs: ET.Element, automations: list,
 
     Only emits envelopes for parameters that have a matching
     AutomationTarget in the Mixer.  Skips unknown parameter names.
+    Multiple automations targeting the same parameter are merged into
+    a single envelope (Ableton crashes on duplicate envelopes per target).
     """
     if not automations:
         return
     pmap = _mixer_param_map(mixer)
-    auto_idx = 0
+
+    # Merge automations by parameter so each target gets ONE envelope
+    merged: dict[str, list] = {}
     for auto in automations:
         target_id = pmap.get(auto.parameter_name)
         if target_id is None:
             continue  # skip parameters with no matching mixer target
+        merged.setdefault(auto.parameter_name, []).extend(auto.points)
+
+    auto_idx = 0
+    for param_name, points in merged.items():
+        target_id = pmap[param_name]
+        points.sort(key=lambda p: p.time)
+
+        # Ableton crashes (EXCEPTION_ACCESS_VIOLATION) if the first
+        # automation event doesn't start at or before Time 0.  Prepend
+        # a sentinel anchor at -63072000 (Ableton's "beginning of
+        # time") using the first point's value so the parameter holds
+        # constant until the actual automation begins.
+        if points and points[0].time > 0:
+            from types import SimpleNamespace
+            anchor = SimpleNamespace(time=-63072000, value=points[0].value,
+                                     curve=0.0)
+            points.insert(0, anchor)
+
         env = ET.SubElement(envs, "AutomationEnvelope", Id=str(auto_idx))
         env_target = ET.SubElement(env, "EnvelopeTarget")
         _v(env_target, "PointeeId", target_id)
         automation = ET.SubElement(env, "Automation")
         events = ET.SubElement(automation, "Events")
-        for pt_idx, pt in enumerate(auto.points):
+        for pt_idx, pt in enumerate(points):
             attrs = {
                 "Id": str(pt_idx),
                 "Time": str(round(pt.time, 4)),
@@ -663,6 +694,13 @@ def _cid_to_fields(cid_hex: str) -> tuple[int, int, int, int]:
     return struct.unpack(">iiii", bytes.fromhex(cid_hex))
 
 
+def _build_vst3_uid(parent: ET.Element, cid_fields: tuple[int, int, int, int]) -> None:
+    """Append a <Uid> element with Fields.0 .. Fields.3 children."""
+    uid = ET.SubElement(parent, "Uid")
+    for i, val in enumerate(cid_fields):
+        _v(uid, f"Fields.{i}", str(val))
+
+
 def _build_vst3_plugin_device(
     devices_elem: ET.Element,
     device_name: str,
@@ -671,55 +709,73 @@ def _build_vst3_plugin_device(
 ) -> None:
     """Build a VST3 PluginDevice element inside <Devices>.
 
-    Creates a minimal PluginDevice that Ableton will recognise and
-    instantiate when the .als is opened — provided the VST3 is installed
-    and has been scanned.
+    Creates a PluginDevice matching the structure Ableton Live 12 expects:
+    standard device header, Vst3PluginInfo with correct Uid Fields.N naming,
+    and an empty Vst3Preset (Ableton fills the plugin state on load when the
+    VST3 is installed and has been scanned).
     """
     info = _VST3_REGISTRY.get(device_name)
     if info is None:
-        _log.warning("No VST3 registry entry for %r — skipping", device_name)
+        _log.warning("No VST3 registry entry for %r -- skipping", device_name)
         return
 
     pd = ET.SubElement(devices_elem, "PluginDevice", Id=str(device_id))
 
-    # PluginDevice header (differs from sequencer/mixer headers)
-    _v(pd, "LomId", "0")
-    _v(pd, "LomIdView", "0")
-    _v(pd, "IsExpanded", "true")
-    _on_switch(pd, ids)
-    ET.SubElement(pd, "ParametersListWrapper", LomId="0")
-    lpr = ET.SubElement(pd, "LastPresetRef")
-    ET.SubElement(lpr, "Value")
-    ET.SubElement(pd, "LockedScripts")
-    _v(pd, "IsFolded", "false")
-    _v(pd, "ShouldShowPresetName", "true")
-    _v(pd, "UserName", "")
-    _v(pd, "Annotation", "")
-    sc = ET.SubElement(pd, "SourceContext")
-    ET.SubElement(sc, "Value")
+    # Standard device header (LomId through SourceContext)
+    _device_header(pd, ids)
 
-    # PluginDesc — Vst3PluginInfo (Id required — Ableton list container)
+    # PluginDevice-specific: MpePitchBendUsesTuning before PluginDesc
+    _v(pd, "MpePitchBendUsesTuning", "true")
+
+    # ── PluginDesc / Vst3PluginInfo ──────────────────────────────────────
     desc = ET.SubElement(pd, "PluginDesc")
     vst3 = ET.SubElement(desc, "Vst3PluginInfo", Id="0")
     _v(vst3, "WinPosX", "0")
     _v(vst3, "WinPosY", "0")
-    _v(vst3, "TransportFlags", "7")
+    num_inputs = "0" if info["device_type"] == 1 else "1"
+    _v(vst3, "NumAudioInputs", num_inputs)
+    _v(vst3, "NumAudioOutputs", "1")
+    _v(vst3, "IsPlaceholderDevice", "false")
 
-    uid = ET.SubElement(vst3, "Uid")
-    fields = ET.SubElement(uid, "Fields")
-    f1, f2, f3, f4 = _cid_to_fields(info["cid"])
-    _v(fields, "Field1", str(f1))
-    _v(fields, "Field2", str(f2))
-    _v(fields, "Field3", str(f3))
-    _v(fields, "Field4", str(f4))
+    # Preset > Vst3Preset (empty state -- Ableton loads defaults from plugin)
+    cid_fields = _cid_to_fields(info["cid"])
+    preset_wrap = ET.SubElement(vst3, "Preset")
+    vp = ET.SubElement(preset_wrap, "Vst3Preset", Id=str(ids.next()))
+    _v(vp, "OverwriteProtectionNumber", "3074")
+    _v(vp, "MpeEnabled", "0")
+    mpe_p = ET.SubElement(vp, "MpeSettings")
+    _v(mpe_p, "ZoneType", "0")
+    _v(mpe_p, "FirstNoteChannel", "1")
+    _v(mpe_p, "LastNoteChannel", "15")
+    ET.SubElement(vp, "ParameterSettings")
+    _v(vp, "IsOn", "true")
+    _v(vp, "PowerMacroControlIndex", "-1")
+    pmr = ET.SubElement(vp, "PowerMacroMappingRange")
+    _v(pmr, "Min", "64")
+    _v(pmr, "Max", "127")
+    _v(vp, "IsFolded", "false")
+    _v(vp, "StoredAllParameters", "true")
+    _v(vp, "DeviceLomId", "0")
+    _v(vp, "DeviceViewLomId", "0")
+    _v(vp, "IsOnLomId", "0")
+    _v(vp, "ParametersListWrapperLomId", "0")
+    _build_vst3_uid(vp, cid_fields)
+    _v(vp, "DeviceType", str(info["device_type"]))
+    ET.SubElement(vp, "ProcessorState")
+    ET.SubElement(vp, "ControllerState")
+    _v(vp, "Name", "")
+    ET.SubElement(vp, "PresetRef")
 
-    _v(vst3, "DeviceType", str(info["device_type"]))
+    # Outer Name & Uid on Vst3PluginInfo
     _v(vst3, "Name", device_name)
-    _v(vst3, "Vendor", info["vendor"])
-    _v(vst3, "Category", info["category"])
+    _build_vst3_uid(vst3, cid_fields)
+    _v(vst3, "DeviceType", str(info["device_type"]))
 
-    # Plugin display name + empty parameter list (Ableton fills on load)
-    _v(pd, "Name", device_name)
+    # ── Post-PluginDesc elements ─────────────────────────────────────────
+    _v(pd, "MpeEnabled", "false")
+    _mpe_settings(pd)
+
+    # Empty ParameterList (Ableton populates from plugin on load)
     ET.SubElement(pd, "ParameterList")
 
 
@@ -766,24 +822,29 @@ def _build_device_chain(dc: ET.Element, track: ALSTrack, ids: _IdCounter,
                                        num_scenes, is_midi=(track_role == "midi"),
                                        is_main=True)
 
-    # FreezeSequencer (present on audio, midi, and return tracks)
-    # Return tracks have an empty FreezeSequencer ClipSlotList in the template
-    freeze_scenes = 0 if track_role == "return" else num_scenes
-    _build_sequencer(dc, "FreezeSequencer", track, ids,
-                     freeze_scenes, is_midi=False, is_main=False)
+    if track_role == "return":
+        # Return tracks: inner DeviceChain BEFORE FreezeSequencer
+        # (matches factory template element ordering)
+        inner_dc = ET.SubElement(dc, "DeviceChain")
+        devices_elem = ET.SubElement(inner_dc, "Devices")
+        ET.SubElement(inner_dc, "SignalModulations")
+        _build_sequencer(dc, "FreezeSequencer", track, ids,
+                         0, is_midi=False, is_main=False)
+    else:
+        # Audio/MIDI tracks: FreezeSequencer BEFORE inner DeviceChain
+        freeze_scenes = num_scenes
+        _build_sequencer(dc, "FreezeSequencer", track, ids,
+                         freeze_scenes, is_midi=False, is_main=False)
+        inner_dc = ET.SubElement(dc, "DeviceChain")
+        devices_elem = ET.SubElement(inner_dc, "Devices")
 
-    # Inner DeviceChain (Devices + SignalModulations)
-    inner_dc = ET.SubElement(dc, "DeviceChain")
-    devices_elem = ET.SubElement(inner_dc, "Devices")
-
-    # NOTE: VST3 PluginDevice auto-loading is disabled.
-    # Ableton crashes with "invalid uuid string" during VST3 state restore
-    # because no valid preset buffer can be generated without a running
-    # plugin instance.  The MIDI tracks load correctly — just drag the
-    # VST3 instrument onto each track inside Ableton.
-    # track.device_names is preserved for documentation / future use.
-
-    ET.SubElement(inner_dc, "SignalModulations")
+    # VST3 PluginDevice auto-loading — embed plugin references so
+    # Ableton instantiates instruments when the .als is opened.
+    if track_role != "return":
+        for dev_idx, dev_name in enumerate(track.device_names):
+            _build_vst3_plugin_device(devices_elem, dev_name, ids,
+                                      device_id=dev_idx)
+        ET.SubElement(inner_dc, "SignalModulations")
 
     return events_elem
 
@@ -814,6 +875,9 @@ def _inject_audio_clips(events_elem: ET.Element, track: ALSTrack,
                 "loop_end": ci.loop_end,
                 "gain": ci.gain,
                 "name": ci.name or Path(ci.path).stem,
+                "sample_rate": ci.sample_rate,
+                "duration_frames": ci.duration_frames,
+                "file_size": ci.file_size,
             })
     elif track.clip_paths:
         for clip_path in track.clip_paths:
@@ -824,6 +888,7 @@ def _inject_audio_clips(events_elem: ET.Element, track: ALSTrack,
                 "warp_mode": 0, "warp_markers": [],
                 "loop": False, "loop_start": 0.0, "loop_end": 0.0,
                 "gain": 1.0, "name": Path(clip_path).stem,
+                "sample_rate": 0, "duration_frames": 0, "file_size": 0,
             })
 
     for clip_id, cs in enumerate(clip_sources):
@@ -938,14 +1003,14 @@ def _inject_audio_clips(events_elem: ET.Element, track: ALSTrack,
         _v(file_ref, "Type", "1")
         _v(file_ref, "LivePackName", "")
         _v(file_ref, "LivePackId", "")
-        _v(file_ref, "OriginalFileSize", "0")
+        _v(file_ref, "OriginalFileSize", str(cs.get("file_size") or 0))
         _v(file_ref, "OriginalCrc", "0")
         _v(file_ref, "SourceHint", "")
         _v(sample_ref, "LastModDate", "0")
         ET.SubElement(sample_ref, "SourceContext")
         _v(sample_ref, "SampleUsageHint", "0")
-        _v(sample_ref, "DefaultDuration", "0")
-        _v(sample_ref, "DefaultSampleRate", "44100")
+        _v(sample_ref, "DefaultDuration", str(cs.get("duration_frames") or 0))
+        _v(sample_ref, "DefaultSampleRate", str(cs.get("sample_rate") or 44100))
         _v(sample_ref, "SamplesToAutoWarp", "0")
 
         # Onsets
@@ -1104,6 +1169,7 @@ def _inject_midi_clips(events_elem: ET.Element, track: ALSTrack) -> None:
         notes_elem = ET.SubElement(clip, "Notes")
         key_tracks = ET.SubElement(notes_elem, "KeyTracks")
 
+        global_note_id = 0
         if mc.notes:
             # Group notes by pitch
             by_pitch: dict[int, list[ALSMidiNote]] = {}
@@ -1111,7 +1177,6 @@ def _inject_midi_clips(events_elem: ET.Element, track: ALSTrack) -> None:
                 by_pitch.setdefault(n.pitch, []).append(n)
 
             kt_id = 0
-            global_note_id = 0  # Must be unique across ALL KeyTracks
             for pitch in sorted(by_pitch.keys()):
                 kt = ET.SubElement(key_tracks, "KeyTrack", Id=str(kt_id))
                 _v(kt, "MidiKey", str(pitch))
@@ -1138,6 +1203,13 @@ def _inject_midi_clips(events_elem: ET.Element, track: ALSTrack) -> None:
         pnes = ET.SubElement(notes_elem, "PerNoteEventStore")
         ET.SubElement(pnes, "EventLists")
 
+        # NoteProbabilityGroups (required by Ableton 12)
+        ET.SubElement(notes_elem, "NoteProbabilityGroups")
+        pig = ET.SubElement(notes_elem, "ProbabilityGroupIdGenerator")
+        _v(pig, "NextId", "1")
+        nig = ET.SubElement(notes_elem, "NoteIdGenerator")
+        _v(nig, "NextId", str(global_note_id))
+
         _v(clip, "BankSelectCoarse", "-1")
         _v(clip, "BankSelectFine", "-1")
         _v(clip, "ProgramChange", "-1")
@@ -1145,7 +1217,14 @@ def _inject_midi_clips(events_elem: ET.Element, track: ALSTrack) -> None:
         _v(clip, "NoteEditorFoldInScroll", "0")
         _v(clip, "NoteEditorFoldOutZoom", "-1")
         _v(clip, "NoteEditorFoldOutScroll", "1024")
+        _v(clip, "NoteEditorFoldScaleZoom", "-1")
+        _v(clip, "NoteEditorFoldScaleScroll", "0")
+        scale_info = ET.SubElement(clip, "ScaleInformation")
+        _v(scale_info, "RootNote", "0")
+        _v(scale_info, "Name", "0")
+        _v(clip, "IsInKey", "false")
         _v(clip, "NoteSpellingPreference", "3")
+        _v(clip, "AccidentalSpellingPreference", "3")
         _v(clip, "PreferFlatRootNote", "false")
 
         # ExpressionGrid
@@ -1337,28 +1416,47 @@ def _build_master_track(live_set: ET.Element, project: ALSProject,
 # SCENES
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _build_scene_element(parent: ET.Element, scene_id: int,
+                         name: str, tempo: float) -> ET.Element:
+    """Build a single Scene element matching Ableton 12 factory template.
+
+    Key differences from Track Name elements:
+      - Scene Name is simple: <Name Value="text"/>
+      - Scene has FollowAction block
+      - Scene has ClipSlotsListWrapper
+    """
+    s = ET.SubElement(parent, "Scene", Id=str(scene_id))
+
+    # FollowAction (required by Ableton, even if disabled)
+    fa = ET.SubElement(s, "FollowAction")
+    _v(fa, "FollowTime", "4")
+    _v(fa, "IsLinked", "true")
+    _v(fa, "LoopIterations", "1")
+    _v(fa, "FollowActionA", "4")
+    _v(fa, "FollowActionB", "0")
+    _v(fa, "FollowChanceA", "100")
+    _v(fa, "FollowChanceB", "0")
+    _v(fa, "JumpIndexA", "0")
+    _v(fa, "JumpIndexB", "0")
+    _v(fa, "FollowActionEnabled", "false")
+
+    _v(s, "Name", name)
+    _v(s, "Annotation", "")
+    _v(s, "Color", "-1")
+    _v(s, "Tempo", str(round(tempo, 2)))
+    _v(s, "IsTempoEnabled", "false")
+    _v(s, "TimeSignatureId", "201")
+    _v(s, "IsTimeSignatureEnabled", "false")
+    _v(s, "LomId", "0")
+    ET.SubElement(s, "ClipSlotsListWrapper", LomId="0")
+    return s
+
+
 def _build_scenes(live_set: ET.Element, scenes: list[ALSScene]) -> None:
     """Build the Scenes element."""
     scenes_elem = ET.SubElement(live_set, "Scenes")
     for i, scene in enumerate(scenes):
-        s = ET.SubElement(scenes_elem, "Scene", Id=str(i))
-        _v(s, "LomId", "0")
-        _v(s, "LomIdView", "0")
-
-        name_el = ET.SubElement(s, "Name")
-        _v(name_el, "EffectiveName", scene.name)
-        _v(name_el, "UserName", scene.name)
-        _v(name_el, "Annotation", "")
-        _v(name_el, "MemorizedFirstClipName", "")
-
-        _v(s, "Color", "-1")
-        _v(s, "Tempo", str(round(scene.tempo, 2)))
-        _v(s, "IsTempoEnabled", "false")
-        _v(s, "TimeSignatureId", "201")
-        _v(s, "IsTimeSignatureEnabled", "false")
-        _v(s, "LegacyClipSlotProcessingDelay", "0")
-        _v(s, "LaunchMode", "0")
-        _v(s, "LaunchQuantisation", "0")
+        _build_scene_element(scenes_elem, i, scene.name, scene.tempo)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1595,23 +1693,13 @@ def build_als_xml(project: ALSProject,
     else:
         scenes_elem = ET.SubElement(live_set, "Scenes")
 
-    for i, scene in enumerate(project.scenes):
-        s = ET.SubElement(scenes_elem, "Scene", Id=str(i))
-        _v(s, "LomId", "0")
-        _v(s, "LomIdView", "0")
-        name_el = ET.SubElement(s, "Name")
-        _v(name_el, "EffectiveName", scene.name)
-        _v(name_el, "UserName", scene.name)
-        _v(name_el, "Annotation", "")
-        _v(name_el, "MemorizedFirstClipName", "")
-        _v(s, "Color", "-1")
-        _v(s, "Tempo", str(round(scene.tempo, 2)))
-        _v(s, "IsTempoEnabled", "false")
-        _v(s, "TimeSignatureId", "201")
-        _v(s, "IsTimeSignatureEnabled", "false")
-        _v(s, "LegacyClipSlotProcessingDelay", "0")
-        _v(s, "LaunchMode", "0")
-        _v(s, "LaunchQuantisation", "0")
+    if project.scenes:
+        for i, scene in enumerate(project.scenes):
+            _build_scene_element(scenes_elem, i, scene.name, scene.tempo)
+    else:
+        # Ableton crashes (EXCEPTION_ACCESS_VIOLATION) if Scenes is empty
+        # but tracks have clip slots — always emit at least one scene.
+        _build_scene_element(scenes_elem, 0, "", project.bpm)
 
     # -- Annotation -------------------------------------------------------
     annotation = live_set.find("Annotation")

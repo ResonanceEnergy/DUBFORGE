@@ -1,4 +1,4 @@
-# DUBFORGE DOCTRINE v2.5 — Planck x phi Fractal Basscraft
+# DUBFORGE DOCTRINE v4.0.0 — Planck x phi Fractal Basscraft
 
 ## Standing Principles
 
@@ -29,7 +29,7 @@
 
 ---
 
-## Module Architecture (51 modules)
+## Module Architecture (168 modules)
 
 ### Core & Analysis
 
@@ -273,7 +273,7 @@ n=47  ~580.68 Hz         upper-mid
 
 ## Roadmap to 144 — Black Belt → Grandmaster
 
-**Current:** Session 91 · Black Belt · v2.7.0 · 52 modules · 1121 tests · 6,610 output files
+**Current:** Session 144+ · Grandmaster · v4.0.0 · 168 modules · 2838 tests
 **Target:** Session 144 (Fibonacci) · 53 sessions · Grandmaster promotion
 
 ---
@@ -372,10 +372,10 @@ _Goal: Ship-ready. Everything tested, documented, integrated. Hit 144._
 
 | Metric | Session 91 | Target (144) | Actual (144) |
 |--------|-----------|--------------|--------------|
-| Modules | 52 | ~65 | 74 |
-| Tests | 1,121 | 2,000+ | 2,314 |
+| Modules | 168 | ~65 | 74 |
+| Tests | 2,838 | 2,000+ | 2,314 |
 | Real audio modules | ~4 | 30+ | 40+ |
-| Version | v2.7.0 | v4.0.1 | v4.0.0 |
+| Version | v4.0.0 | v4.0.1 | v4.0.0 |
 | Belt | Black Belt | Grandmaster | **GRANDMASTER** |
 
 ### Fibonacci Sessions on the Path

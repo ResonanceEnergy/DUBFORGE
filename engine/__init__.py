@@ -1941,3 +1941,30 @@ from engine.turboquant import (
     estimate_compression_stats,
     phi_optimal_bits,
 )
+
+# --- GALATCIA sample pack integration ---
+from engine.galatcia import (
+    DEFAULT_DRUM_LOOPS,
+    DEFAULT_DRUM_SAMPLES,
+    DEFAULT_FX_SAMPLES,
+    DEFAULT_PRESET_MAP,
+    GalatciaCatalog,
+    GalatciaPreset,
+    GalatciaRack,
+    GalatciaSample,
+    GalatciaWavetable,
+    SectionInfo,
+    build_drum_audio_tracks,
+    build_drum_loop_track,
+    build_fx_audio_tracks,
+    build_galatcia_manifest,
+    build_galatcia_marketplace_metadata,
+    catalog_galatcia,
+    copy_presets,
+    copy_racks,
+    export_all_galatcia,
+    ingest_fxp_presets,
+    install_wavetables,
+    integrate_galatcia_als,
+    read_wav_samples,
+)
