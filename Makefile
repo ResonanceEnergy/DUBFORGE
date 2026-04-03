@@ -1,6 +1,6 @@
 # DUBFORGE — Build & Quality Targets
 # ─────────────────────────────────────
-.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track auto song fury v3 all verify nightly nightly-install nightly-uninstall launch launch-ui wild-ones apology
+.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track song all verify nightly nightly-install nightly-uninstall launch launch-ui wild-ones apology
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -9,17 +9,17 @@ help: ## Show this help
 build: ## Run the full engine build
 	python3 run_all.py
 
-auto: ## Full auto: DNA → Serum install → Ableton open → play
-	python3 -m engine.auto_producer "$(or $(NAME),DUBFORGE AUTO)" $(ARGS)
+track: ## Quick dubstep track render (output/dubstep_track.wav)
+	python3 make_track.py
 
-song: ## Auto-produce a named song (NAME="MY SONG" make song)
+song: ## Full production pipeline (NAME="MY SONG" make song)
 	python3 forge.py --auto "$(or $(NAME),Untitled)" $(ARGS)
 
-fury: ## Produce GOLDEN FURY (full auto)
-	python3 make_golden_fury.py
+wild-ones: ## Produce Wild Ones V12 (MIDI+ALS+GALATCIA)
+	python3 make_wild_ones_v12.py
 
-track: ## Produce default dubstep track (full auto)
-	python3 make_track.py
+apology: ## Produce The Apology That Never Came V4 (MIDI+ALS)
+	python3 make_apology_v4.py
 
 test: ## Run full pytest suite
 	python3 -m pytest tests/ -v
@@ -48,12 +48,6 @@ launch: ## Render track + launch all browser UIs (TRACK=wild-ones|apology|forge|
 
 launch-ui: ## Launch all browser UIs only (no render)
 	python3 launch.py --ui-only
-
-wild-ones: ## Produce Wild Ones V12 (MIDI+ALS+GALATCIA)
-	python3 make_wild_ones_v12.py
-
-apology: ## Produce The Apology That Never Came V4 (MIDI+ALS)
-	python3 make_apology_v4.py
 
 nightly: ## Run nightly health check (manual trigger)
 	bash tools/nightly.sh
