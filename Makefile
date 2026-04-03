@@ -1,6 +1,6 @@
 # DUBFORGE — Build & Quality Targets
 # ─────────────────────────────────────
-.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track auto song fury v3 all verify
+.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track auto song fury v3 all verify nightly nightly-install nightly-uninstall
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -40,6 +40,20 @@ fmt: ## Auto-format with ruff
 	python3 -m ruff format engine/ run_all.py tests/
 
 check: lint test ## Lint + test together
+
+nightly: ## Run nightly health check (manual trigger)
+	bash tools/nightly.sh
+
+nightly-install: ## Install nightly launchd agent (runs at 3 AM)
+	cp tools/com.resonance.dubforge.nightly.plist ~/Library/LaunchAgents/
+	launchctl load ~/Library/LaunchAgents/com.resonance.dubforge.nightly.plist
+	@echo "✓ Nightly agent installed — runs at 03:00 daily"
+	@echo "  Manual trigger: launchctl start com.resonance.dubforge.nightly"
+
+nightly-uninstall: ## Remove nightly launchd agent
+	launchctl unload ~/Library/LaunchAgents/com.resonance.dubforge.nightly.plist 2>/dev/null || true
+	rm -f ~/Library/LaunchAgents/com.resonance.dubforge.nightly.plist
+	@echo "✓ Nightly agent removed"
 
 clean: ## Remove generated outputs and caches
 	rm -rf output/ __pycache__ engine/__pycache__ .pytest_cache

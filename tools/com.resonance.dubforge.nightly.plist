@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  DUBFORGE Nightly — launchd agent
+  Runs every night at 03:00 AM
+
+  Install:
+    cp tools/com.resonance.dubforge.nightly.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.resonance.dubforge.nightly.plist
+
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.resonance.dubforge.nightly.plist
+    rm ~/Library/LaunchAgents/com.resonance.dubforge.nightly.plist
+
+  Manual trigger:
+    launchctl start com.resonance.dubforge.nightly
+
+  Check status:
+    launchctl list | grep dubforge
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.resonance.dubforge.nightly</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-l</string>
+        <string>-c</string>
+        <string>$HOME/Documents/GitHub/DUBFORGE/tools/nightly.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/dubforge-nightly-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/dubforge-nightly-stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/natrix</string>
+        <key>OLLAMA_HOST</key>
+        <string>http://localhost:11434</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/natrix/Documents/GitHub/DUBFORGE</string>
+
+    <key>Nice</key>
+    <integer>10</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>LowPriorityBackgroundIO</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

@@ -1,0 +1,80 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build (All P-Cores)",
+      "type": "shell",
+      "command": "make parallel",
+      "group": "build",
+      "problemMatcher": ["$python"],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Test (Parallel)",
+      "type": "shell",
+      "command": "make test",
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Lint",
+      "type": "shell",
+      "command": "make lint",
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Format",
+      "type": "shell",
+      "command": "make fmt",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Check (Lint + Test)",
+      "type": "shell",
+      "command": "make check",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Render Track (Apology V3)",
+      "type": "shell",
+      "command": "make track",
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Full Build + Track",
+      "type": "shell",
+      "command": "make all",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Nightly (Manual)",
+      "type": "shell",
+      "command": "bash tools/nightly.sh",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Benchmark Modules",
+      "type": "shell",
+      "command": ".venv/bin/python3 -c \"import time,importlib,pathlib,sys,statistics; sys.path.insert(0,'.'); results=[]; [results.append((statistics.mean([(lambda t0=time.perf_counter_ns(): (importlib.import_module(f'engine.{f.stem}'),time.perf_counter_ns()-t0)[1]/1e6)() for _ in range(3)]),f'engine.{f.stem}')) for f in sorted(pathlib.Path('engine').glob('*.py')) if not f.name.startswith('__')]; results.sort(reverse=True); [print(f'{a:8.1f}ms  {n}') for a,n in results[:20]]\"",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    }
+  ]
+}
