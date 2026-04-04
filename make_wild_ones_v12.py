@@ -37,6 +37,7 @@ from engine.als_generator import (
     ALSAutomationPoint,
     ALSClipInfo,
     ALSCuePoint,
+    ALSDrumPad,
     ALSMidiClip,
     ALSMidiNote,
     ALSProject,
@@ -251,7 +252,26 @@ V12_SECTIONS: list[SectionInfo] = [
 _PITCH_TO_DRUM = {
     KICK: "kick", SNARE: "snare", CLAP: "clap",
     CLOSED_HH: "hat_cl", OPEN_HH: "hat_op",
+    TOM_LOW: "tom_lo", TOM_HIGH: "tom_hi",
+    RIDE: "ride", CRASH: "crash",
+    PERC1: "perc1", PERC2: "perc2",
 }
+
+# GM Drum Rack pad definitions — all 11 active pads with choke groups
+# Choke group 1: hi-hat family (closed HH chokes open HH)
+_GM_DRUM_PADS: list[ALSDrumPad] = [
+    ALSDrumPad(note=KICK,      name="KICK",      color=69, choke_group=-1),
+    ALSDrumPad(note=SNARE,     name="SNARE",     color=1,  choke_group=-1),
+    ALSDrumPad(note=CLAP,      name="CLAP",      color=2,  choke_group=-1),
+    ALSDrumPad(note=CLOSED_HH, name="CLOSED HH", color=3,  choke_group=1),
+    ALSDrumPad(note=OPEN_HH,   name="OPEN HH",   color=3,  choke_group=1),
+    ALSDrumPad(note=PERC1,     name="SIDE STICK", color=5,  choke_group=-1),
+    ALSDrumPad(note=TOM_LOW,   name="TOM LOW",   color=7,  choke_group=-1),
+    ALSDrumPad(note=TOM_HIGH,  name="TOM HIGH",  color=8,  choke_group=-1),
+    ALSDrumPad(note=CRASH,     name="CRASH",     color=9,  choke_group=-1),
+    ALSDrumPad(note=RIDE,      name="RIDE",      color=10, choke_group=-1),
+    ALSDrumPad(note=PERC2,     name="COWBELL",   color=6,  choke_group=-1),
+]
 
 
 # ======================================================================
@@ -1251,7 +1271,9 @@ def _build_als_project(
         automations = track_automations.get(track_name, [])
 
         # Drums use Drum Rack (no Serum 2) — all other tracks get Serum 2
-        devices = [] if track_name == "DRUMS" else ["Serum 2"]
+        is_drums = track_name == "DRUMS"
+        devices = [] if is_drums else ["Serum 2"]
+        drum_pads = _GM_DRUM_PADS if is_drums else []
 
         # Embed Serum 2 processor + controller state so Ableton loads the preset on open
         proc_states: dict[str, bytes] = {}
@@ -1277,6 +1299,7 @@ def _build_als_project(
             controller_states=ctrl_states,
             midi_clips=[midi_clip],
             automations=automations,
+            drum_rack_pads=drum_pads,
         ))
 
     # Return tracks

@@ -23,7 +23,7 @@ import wave
 from pathlib import Path
 
 import numpy as np
-from engine.accel import fft, ifft
+from engine.accel import fft as _accel_fft, ifft as _accel_ifft
 
 # ── Constants ────────────────────────────────────────────────────
 
@@ -147,8 +147,8 @@ def _detect_pitch_hz(audio: np.ndarray, sr: int = SAMPLE_RATE) -> float:
 
     # Autocorrelation via FFT
     n = len(segment)
-    fft = fft(segment, n=2*n)
-    autocorr = ifft(fft * np.conj(fft))[:n]
+    spec = _accel_fft(segment, n=2*n)
+    autocorr = _accel_ifft(spec * np.conj(spec))[:n]
     autocorr = autocorr / (autocorr[0] + 1e-12)
 
     # Find first peak after lag corresponding to max plausible freq
@@ -208,11 +208,17 @@ def _read_wav(path: str) -> np.ndarray:
 
 
 def _write_wav_temp(audio: np.ndarray, sr: int = SAMPLE_RATE) -> str:
-    """Delegates to engine.audio_mmap.write_wav_fast."""
-    import numpy as np
-    _s = np.asarray(audio, dtype=np.float64) if not isinstance(audio, np.ndarray) else audio
-    write_wav(str(audio), _s, sample_rate=sr)
-    return str(audio)
+    """Write audio to a temporary WAV file and return its path."""
+    fd, path = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    samples = np.clip(audio, -1.0, 1.0)
+    pcm = (samples * 32767).astype(np.int16)
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(pcm.tobytes())
+    return path
 
 
 

@@ -36,6 +36,8 @@ import math
 import os
 import sys
 
+import numpy as np
+
 if sys.stdout is None:
     sys.stdout = open(os.devnull, "w")
 if sys.stderr is None:
@@ -46,6 +48,7 @@ from pathlib import Path
 from engine.als_generator import (
     ALSAutomation,
     ALSAutomationPoint,
+    ALSClipInfo,
     ALSCuePoint,
     ALSMidiClip,
     ALSMidiNote,
@@ -61,6 +64,7 @@ from engine.als_generator import (
 )
 from engine.midi_export import NoteEvent, write_midi_file
 from engine.fxp_writer import FXPPreset, FXPBank, VSTParam, write_fxp, write_fxb
+from engine.vocal_tts import render_singing_vocal_stem_v8, SAMPLE_RATE as VOCAL_SR
 
 # ======================================================================
 # SONG CONSTANTS
@@ -1175,6 +1179,7 @@ TRACK_PANS = {
 def _build_als_project(
     midi_data: dict[str, list[ALSMidiNote]],
     track_automations: dict[str, list[ALSAutomation]],
+    vocal_wav_path: str | None = None,
 ) -> ALSProject:
     """Build ALSProject with MIDI tracks, automation, and Serum 2."""
     als_tracks: list[ALSTrack] = []
@@ -1218,6 +1223,36 @@ def _build_als_project(
     als_tracks.append(ALSTrack(
         name="DELAY", track_type="return",
         color=COLORS["DELAY"], volume_db=-9.0))
+
+    # Vocal audio track (TTS singing stem)
+    if vocal_wav_path and os.path.isfile(vocal_wav_path):
+        import wave as _wave
+        with _wave.open(vocal_wav_path, "rb") as wf:
+            n_frames = wf.getnframes()
+            wav_sr = wf.getframerate()
+            file_size = os.path.getsize(vocal_wav_path)
+        vocal_clip = ALSClipInfo(
+            path=str(Path(vocal_wav_path).resolve()),
+            start_beat=0.0,
+            length_beats=float(TOTAL_BEATS),
+            warp_mode=4,  # Complex Pro (best for vocals)
+            name="VOCALS",
+            sample_rate=wav_sr,
+            duration_frames=n_frames,
+            file_size=file_size,
+            gain=0.85,
+        )
+        # Insert vocal track BEFORE returns (returns must be last)
+        insert_idx = len(als_tracks) - 2  # before the 2 return tracks
+        als_tracks.insert(insert_idx, ALSTrack(
+            name="VOCALS [TTS Singing]",
+            track_type="audio",
+            color=13,  # warm purple
+            volume_db=-3.0,
+            pan=0.0,
+            arrangement_clips=[vocal_clip],
+            send_levels=[0.25, 0.15],  # light reverb + delay send
+        ))
 
     # Scenes
     scenes = [ALSScene(name=s[0], tempo=BPM) for s in SECTIONS]
@@ -1341,19 +1376,42 @@ def main() -> None:
     print(f"    {midi_path} ({total_notes} notes, "
           f"{len(midi_tracks_for_export)} tracks)")
 
+    # -- Step 4b: Render TTS vocal stem --------------------------------
+    print("\n[4b/6] Rendering TTS singing vocal stem...")
+    bar_dur = 4 * 60.0 / BPM
+    total_samples = int(TOTAL_BARS * bar_dur * VOCAL_SR)
+    vocal_stem = render_singing_vocal_stem_v8(BPM, total_samples)
+    vocal_wav_path = str(als_dir / f"{TRACK_NAME}_vocals.wav")
+    import wave as _wave_out
+    pcm = (np.clip(vocal_stem, -1.0, 1.0) * 32767).astype(np.int16)
+    with _wave_out.open(vocal_wav_path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(VOCAL_SR)
+        wf.writeframes(pcm.tobytes())
+    nonzero = np.count_nonzero(vocal_stem)
+    print(f"    {vocal_wav_path}")
+    print(f"    {len(vocal_stem)/VOCAL_SR:.1f}s, "
+          f"{nonzero} non-zero samples, "
+          f"peak {np.max(np.abs(vocal_stem)):.3f}")
+
     # -- Step 5: Build MIDI ALS file ----------------------------------
     print("\n[5/6] Building MIDI Ableton Live Set...")
-    project = _build_als_project(midi_data, track_automations)
+    project = _build_als_project(midi_data, track_automations,
+                                 vocal_wav_path=vocal_wav_path)
     als_path = als_dir / f"{TRACK_NAME}.als"
     write_als(project, str(als_path))
 
     midi_count = sum(1 for t in project.tracks
                      if t.track_type == "midi")
+    audio_count = sum(1 for t in project.tracks
+                      if t.track_type == "audio")
     return_count = sum(1 for t in project.tracks
                        if t.track_type == "return")
     auto_tracks = sum(1 for t in project.tracks if t.automations)
     print(f"    {als_path}")
-    print(f"    {midi_count} MIDI tracks + {return_count} returns")
+    print(f"    {midi_count} MIDI + {audio_count} audio + "
+          f"{return_count} returns")
     print(f"    {auto_tracks} tracks with automation")
     print(f"    {len(project.scenes)} scenes, "
           f"{len(project.cue_points)} cue points")

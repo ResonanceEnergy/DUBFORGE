@@ -13,6 +13,7 @@ Outputs:
 
 from __future__ import annotations
 
+import base64
 import gzip
 import json
 import math as _math
@@ -74,6 +75,16 @@ def _db_to_linear(db: float) -> float:
 # ═══════════════════════════════════════════════════════════════════════════
 
 @dataclass
+class ALSDrumPad:
+    """A single pad in a DrumGroupDevice (Drum Rack)."""
+    note: int                       # MIDI note (0-127)
+    name: str = ""                  # Pad label
+    color: int = 0                  # Ableton color index (0-69)
+    choke_group: int = -1           # Choke group (1-16), -1 = none
+    mute: bool = False
+
+
+@dataclass
 class ALSTrack:
     """Represents a track in an Ableton Live set."""
     name: str
@@ -94,6 +105,7 @@ class ALSTrack:
     arrangement_clips: list = field(default_factory=list)   # list[ALSClipInfo]
     automations: list = field(default_factory=list)         # list[ALSAutomation]
     midi_clips: list = field(default_factory=list)          # list[ALSMidiClip]
+    drum_rack_pads: list = field(default_factory=list)      # list[ALSDrumPad] — if set, builds DrumGroupDevice
 
 
 @dataclass
@@ -773,12 +785,14 @@ def _build_vst3_plugin_device(
     _v(vp, "ParametersListWrapperLomId", "0")
     _build_vst3_uid(vp, cid_fields)
     _v(vp, "DeviceType", str(info["device_type"]))
-    # ProcessorState / ControllerState left empty — Ableton instantiates
-    # the plugin with its default init patch.  Embedding raw binary state
-    # causes "VST3: Restore 1 failed" → "plug-in could not be found".
-    # Presets are pre-installed to User/DUBFORGE/ for manual selection.
-    ET.SubElement(vp, "ProcessorState")
-    ET.SubElement(vp, "ControllerState")
+    # Embed processor/controller state so Ableton restores the plugin
+    # with the correct preset already loaded.  Ableton uses hex encoding.
+    ps_el = ET.SubElement(vp, "ProcessorState")
+    if processor_state:
+        ps_el.text = processor_state.hex().upper()
+    cs_el = ET.SubElement(vp, "ControllerState")
+    if controller_state:
+        cs_el.text = controller_state.hex().upper()
     _v(vp, "Name", "")
     ET.SubElement(vp, "PresetRef")
 
@@ -793,6 +807,207 @@ def _build_vst3_plugin_device(
 
     # Empty ParameterList (Ableton populates from plugin on load)
     ET.SubElement(pd, "ParameterList")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DRUM RACK (DrumGroupDevice)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Builds an inline DrumGroupDevice inside a MIDI track's <Devices> element.
+# Structure follows the Ableton 12 schema (12.0_12117) exactly — reference
+# verified against Core Library/Racks/Drum Racks/Drum Machines/606 Core Kit.
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _build_audio_branch_mixer(
+    parent: ET.Element,
+    ids: _IdCounter,
+) -> None:
+    """Build an AudioBranchMixerDevice inside a DrumBranch's MixerDevice."""
+    abm = ET.SubElement(parent, "AudioBranchMixerDevice", Id=str(ids.next()))
+    _device_header(abm, ids)
+    _v(abm, "OverwriteProtectionNumber", "2816")
+
+    # Speaker (TimeableBool)
+    _on_switch(abm, ids, value="true")
+    # Rename last On to Speaker
+    children = list(abm)
+    for i in range(len(children) - 1, -1, -1):
+        if children[i].tag == "On":
+            children[i].tag = "Speaker"
+            break
+
+    # Volume (TimeableFloat)
+    _float_param(abm, "Volume", 1, ids,
+                 min_val="0.0003162277571", max_val="1.99526238")
+
+    # Panorama (TimeableFloat)
+    _float_param(abm, "Panorama", 0, ids, min_val="-1", max_val="1")
+
+    # SendInfos (empty RemoteableList)
+    ET.SubElement(abm, "SendInfos")
+
+    # RoutingHelper > Routable + TargetEnum
+    rh = ET.SubElement(abm, "RoutingHelper")
+    routable = ET.SubElement(rh, "Routable")
+    _v(routable, "Target", "AudioOut/None")
+    _v(routable, "UpperDisplayString", "No Output")
+    _v(routable, "LowerDisplayString", "")
+    _mpe_settings(routable)
+    _v(rh, "TargetEnum", "0")
+
+    ET.SubElement(abm, "SendsListWrapper", LomId="0")
+
+
+def _build_drum_branch(
+    parent: ET.Element,
+    pad: "ALSDrumPad",
+    branch_id: int,
+    ids: _IdCounter,
+) -> ET.Element:
+    """Build a single DrumBranch per the Ableton 12 schema."""
+    branch = ET.SubElement(parent, "DrumBranch", Id=str(branch_id))
+
+    _v(branch, "LomId", "0")
+
+    # Name — DeviceChainContainerName complex type
+    name_el = ET.SubElement(branch, "Name")
+    _v(name_el, "EffectiveName", pad.name or f"Pad {pad.note}")
+    _v(name_el, "UserName", pad.name or f"Pad {pad.note}")
+    _v(name_el, "Annotation", "")
+    _v(name_el, "MemorizedFirstClipName", "")
+
+    _v(branch, "IsSelected", "false")
+
+    # DeviceChain — Slot<EditableDeviceChain> needs concrete subclass
+    dc_slot = ET.SubElement(branch, "DeviceChain")
+    a2a = ET.SubElement(dc_slot, "AudioToAudioDeviceChain", Id=str(ids.next()))
+    ET.SubElement(a2a, "Devices")
+    ET.SubElement(a2a, "SignalModulations")
+
+    # BranchSelectorRange — ZoneRange type
+    bsr = ET.SubElement(branch, "BranchSelectorRange")
+    _v(bsr, "Min", str(pad.note))
+    _v(bsr, "Max", str(pad.note))
+    _v(bsr, "CrossfadeMin", str(pad.note))
+    _v(bsr, "CrossfadeMax", str(pad.note))
+
+    _v(branch, "IsSoloed", "false")
+    _v(branch, "SessionViewBranchWidth", "55")
+    _v(branch, "IsHighlightedInSessionView", "false")
+
+    # SourceContext — RemoteableSlot
+    sc = ET.SubElement(branch, "SourceContext")
+    ET.SubElement(sc, "Value")
+
+    _v(branch, "Color", str(pad.color))
+    _v(branch, "AutoColored", "true")
+    _v(branch, "AutoColorScheme", "0")
+    _v(branch, "SoloActivatedInSessionMixer", "false")
+
+    ET.SubElement(branch, "DevicesListWrapper", LomId="0")
+
+    # MixerDevice — full AudioBranchMixerDevice
+    mixer_wrap = ET.SubElement(branch, "MixerDevice")
+    _build_audio_branch_mixer(mixer_wrap, ids)
+
+    # BranchInfo — DrumZoneSettings
+    bi = ET.SubElement(branch, "BranchInfo")
+    _v(bi, "ReceivingNote", str(pad.note))
+    _v(bi, "SendingNote", "60")
+    _v(bi, "ChokeGroup", str(pad.choke_group))
+
+    return branch
+
+
+def _build_drum_group_device(
+    devices_elem: ET.Element,
+    pads: list,
+    ids: _IdCounter,
+    rack_name: str = "DUBFORGE Drum Rack",
+) -> None:
+    """Build a DrumGroupDevice per the Ableton 12 schema (12.0_12117).
+
+    *pads*: list[ALSDrumPad] — defines the active pads, each with a
+    MIDI note, name, color, and optional choke group.
+    """
+    device_id = ids.next()
+    dg = ET.SubElement(devices_elem, "DrumGroupDevice", Id=str(device_id))
+
+    # Standard device header (LomId … SourceContext)
+    _device_header(dg, ids)
+
+    # Override UserName from generic header
+    for child in dg:
+        if child.tag == "UserName":
+            child.set("Value", rack_name)
+            break
+
+    _v(dg, "OverwriteProtectionNumber", "2816")
+
+    # Branches — one DrumBranch per pad
+    branches = ET.SubElement(dg, "Branches")
+    for idx, pad in enumerate(pads):
+        _build_drum_branch(branches, pad, branch_id=idx, ids=ids)
+
+    _v(dg, "IsBranchesListVisible", "true")
+    _v(dg, "IsReturnBranchesListVisible", "false")
+    _v(dg, "IsRangesEditorVisible", "false")
+    _v(dg, "AreDevicesVisible", "true")
+    _v(dg, "NumVisibleMacroControls", "0")
+
+    # 16 × MacroControls (TimeableFloat)
+    for i in range(16):
+        _float_param(dg, f"MacroControls.{i}", 0, ids,
+                     min_val="0", max_val="127")
+
+    # 16 × MacroDisplayNames (RemoteableString → simple Value)
+    for i in range(16):
+        _v(dg, f"MacroDisplayNames.{i}", f"Macro {i + 1}")
+
+    # 16 × MacroDefaults (RemoteableFloat → simple Value)
+    for i in range(16):
+        _v(dg, f"MacroDefaults.{i}", "0")
+
+    # 16 × MacroAnnotations (RemoteableString → simple Value)
+    for i in range(16):
+        _v(dg, f"MacroAnnotations.{i}", "")
+
+    # 16 × ForceDisplayGenericValue (RemoteableBool → simple Value)
+    for i in range(16):
+        _v(dg, f"ForceDisplayGenericValue.{i}", "false")
+
+    _v(dg, "AreMacroControlsVisible", "false")
+    _v(dg, "IsAutoSelectEnabled", "true")
+
+    # ChainSelector (TimeableFloat)
+    _float_param(dg, "ChainSelector", 0, ids, min_val="0", max_val="127")
+
+    _v(dg, "ChainSelectorRelativePosition", "-1073741824")
+    _v(dg, "ViewsToRestoreWhenUnfolding", "0")
+
+    # ReturnBranches (empty RemoteableList)
+    ET.SubElement(dg, "ReturnBranches")
+
+    _v(dg, "BranchesSplitterProportion", "0.5")
+    _v(dg, "ShowBranchesInSessionMixer", "false")
+
+    # 16 × MacroColor (RemoteableDocumentColor → simple Value)
+    for i in range(16):
+        _v(dg, f"MacroColor.{i}", "-1")
+
+    _v(dg, "LockId", "0")
+    _v(dg, "LockSeal", "0")
+    ET.SubElement(dg, "ChainsListWrapper", LomId="0")
+    ET.SubElement(dg, "ReturnChainsListWrapper", LomId="0")
+
+    # MacroVariations (minimal — no snapshots)
+    mv = ET.SubElement(dg, "MacroVariations")
+    ET.SubElement(mv, "MacroSnapshots")
+
+    # 16 × ExcludeMacroFromRandomization (RemoteableBool)
+    for i in range(16):
+        _v(dg, f"ExcludeMacroFromRandomization.{i}", "false")
 
 
 def _build_device_chain(dc: ET.Element, track: ALSTrack, ids: _IdCounter,
@@ -857,6 +1072,10 @@ def _build_device_chain(dc: ET.Element, track: ALSTrack, ids: _IdCounter,
     # VST3 PluginDevice auto-loading — embed plugin references so
     # Ableton instantiates instruments when the .als is opened.
     if track_role != "return":
+        # DrumGroupDevice — if track has drum_rack_pads, build a Drum Rack
+        if track.drum_rack_pads:
+            _build_drum_group_device(devices_elem, track.drum_rack_pads, ids)
+
         for dev_idx, dev_name in enumerate(track.device_names):
             proc = track.preset_states.get(dev_name)
             ctrl = track.controller_states.get(dev_name)
@@ -1027,7 +1246,8 @@ def _inject_audio_clips(events_elem: ET.Element, track: ALSTrack,
         _v(file_ref, "OriginalCrc", "0")
         _v(file_ref, "SourceHint", "")
         _v(sample_ref, "LastModDate", "0")
-        ET.SubElement(sample_ref, "SourceContext")
+        src_ctx = ET.SubElement(sample_ref, "SourceContext")
+        ET.SubElement(src_ctx, "Value")
         _v(sample_ref, "SampleUsageHint", "0")
         _v(sample_ref, "DefaultDuration", str(cs.get("duration_frames") or 0))
         _v(sample_ref, "DefaultSampleRate", str(cs.get("sample_rate") or 44100))

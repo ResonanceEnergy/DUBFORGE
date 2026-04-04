@@ -1,6 +1,6 @@
 # DUBFORGE — Build & Quality Targets
 # ─────────────────────────────────────
-.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track song all verify nightly nightly-install nightly-uninstall launch launch-ui wild-ones apology serum-presets
+.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track song all verify nightly nightly-install nightly-uninstall launch launch-ui wild-ones apology template serum-presets state-template state-extract
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -21,8 +21,17 @@ wild-ones: ## Produce Wild Ones V12 (MIDI+ALS+GALATCIA)
 apology: ## Produce The Apology That Never Came V4 (MIDI+ALS)
 	python3 make_apology_v4.py
 
+template: ## Generate base template ALS (NAME="MY TRACK" BPM=150 KEY=D make template)
+	python3 make_template.py $(if $(NAME),--name "$(NAME)") $(if $(BPM),--bpm $(BPM)) $(if $(KEY),--key $(KEY)) $(if $(CONFIG),--config $(CONFIG))
+
 serum-presets: ## Install DUBFORGE presets to Serum 2 User folder
 	python3 -c "from engine.serum2_preset import install_all_presets; p=install_all_presets(); print(f'Installed {len(p)} presets')"
+
+state-template: ## Create template ALS for Serum 2 state capture
+	python3 tools/make_state_template.py
+
+state-extract: ## Extract VST3 state from Ableton-saved template ALS
+	python3 tools/extract_vst3_state.py output/ableton/_state_capture_template.als -p 'Serum 2' --first -o engine/_captured_serum2_state.py
 
 test: ## Run full pytest suite
 	python3 -m pytest tests/ -v
