@@ -45,6 +45,12 @@ DEFAULT_TIME_SIG_DEN = 4
 
 # Search paths for Ableton's factory default template (tried in order)
 _DEFAULT_TEMPLATE_PATHS = [
+    # macOS
+    Path("/Applications/Ableton Live 12 Suite.app/Contents/App-Resources/Builtin/Templates/DefaultLiveSet.als"),
+    Path("/Applications/Ableton Live 12 Standard.app/Contents/App-Resources/Builtin/Templates/DefaultLiveSet.als"),
+    Path("/Applications/Ableton Live 12 Lite.app/Contents/App-Resources/Builtin/Templates/DefaultLiveSet.als"),
+    Path("/Applications/Ableton Live 12 Intro.app/Contents/App-Resources/Builtin/Templates/DefaultLiveSet.als"),
+    # Windows
     Path(r"C:\ProgramData\Ableton\Live 12 Suite\Resources\Builtin\Templates\DefaultLiveSet.als"),
     Path(r"C:\ProgramData\Ableton\Live 12 Standard\Resources\Builtin\Templates\DefaultLiveSet.als"),
     Path(r"C:\ProgramData\Ableton\Live 12 Lite\Resources\Builtin\Templates\DefaultLiveSet.als"),
@@ -767,12 +773,12 @@ def _build_vst3_plugin_device(
     _v(vp, "ParametersListWrapperLomId", "0")
     _build_vst3_uid(vp, cid_fields)
     _v(vp, "DeviceType", str(info["device_type"]))
-    ps_elem = ET.SubElement(vp, "ProcessorState")
-    cs_elem = ET.SubElement(vp, "ControllerState")
-    if processor_state:
-        ps_elem.text = processor_state.hex().upper()
-    if controller_state:
-        cs_elem.text = controller_state.hex().upper()
+    # ProcessorState / ControllerState left empty — Ableton instantiates
+    # the plugin with its default init patch.  Embedding raw binary state
+    # causes "VST3: Restore 1 failed" → "plug-in could not be found".
+    # Presets are pre-installed to User/DUBFORGE/ for manual selection.
+    ET.SubElement(vp, "ProcessorState")
+    ET.SubElement(vp, "ControllerState")
     _v(vp, "Name", "")
     ET.SubElement(vp, "PresetRef")
 
