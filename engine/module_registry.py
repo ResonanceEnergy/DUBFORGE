@@ -74,8 +74,6 @@ REGISTRY = {
         "preset_mutator":       {"status": "wired",     "provides": "Genetic mutation of synth presets"},
         "serum_blueprint":      {"status": "wired",     "provides": "Serum 2 wavetable blueprint generation"},
         "variation_engine":     {"status": "wired",     "provides": "Controlled variation of parameters"},
-        "arrangement_sequencer": {"status": "wired",    "provides": "Section sequencing and energy curves"},
-        "auto_arranger":        {"status": "wired",     "provides": "Auto-arrangement from section templates"},
         "genetic_evolver":      {"status": "wired",     "provides": "Genetic algorithm preset evolution"},
         "fibonacci_feedback":   {"status": "wired",     "provides": "Phi-ratio feedback loop engine"},
         "vip_pack":             {"status": "wired",     "provides": "VIP bass mutation presets"},
@@ -156,8 +154,8 @@ REGISTRY = {
     },
 
     # ─── PHASE 6: DESIGN ──────────────────────────────────────
-    # Sound sculpting, effects, automation, spatial design.
-    # Brain: CHILD — creative effect application.
+    # Post-arrangement sound sculpting, FX chains, spatial design.
+    # Brain: CHILD — creative effect application, automation.
     "design": {
         "reverb_delay":         {"status": "wired",     "provides": "Algorithmic reverb + delay sends"},
         "dynamics":             {"status": "wired",     "provides": "Compression, expansion, gating"},

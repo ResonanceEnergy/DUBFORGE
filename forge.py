@@ -45,10 +45,12 @@ Output tree:
         └── DUBFORGE_SESSION_structure.json
 """
 
+import json
 import math
 import os
 import struct
 import sys
+import time
 import wave
 from pathlib import Path
 
@@ -424,6 +426,60 @@ def normalize(sig: list[float], target: float = 0.95) -> list[float]:
         g = target / peak
         return [s * g for s in sig]
     return sig
+
+
+# ═══════════════════════════════════════════
+#  PHASE AUDIT — per-phase output folders
+# ═══════════════════════════════════════════
+
+_PHASE_DIRS = [
+    "01_ORACLE", "02_COLLECT", "03_RECIPES", "04_SKETCH", "05_ARRANGE",
+    "06_DESIGN", "07_MIX", "08_MASTER", "09_RELEASE", "10_REFLECT",
+]
+
+
+def _init_phase_audit(safe_name: str) -> Path:
+    """Create per-phase output folders for audit/logging. Returns base path."""
+    base = OUTPUT / safe_name / "phases"
+    for d in _PHASE_DIRS:
+        (base / d).mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def _emit_phase_log(phase_dir: Path, phase_name: str, elapsed_s: float,
+                    data: dict | None = None):
+    """Write a JSON log for a completed phase with timing and audit data."""
+    log = {
+        "phase": phase_name,
+        "elapsed_s": round(elapsed_s, 3),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    if data:
+        log["data"] = data
+    with open(phase_dir / "phase_log.json", "w") as f:
+        json.dump(log, f, indent=2, default=str)
+    print(f"    📁 Phase audit → {phase_dir.name}/")
+
+
+def _write_audit_json(phase_dir: Path, filename: str, data):
+    """Write a JSON audit artifact to a phase directory."""
+    with open(phase_dir / filename, "w") as f:
+        json.dump(data, f, indent=2, default=str)
+
+
+def _write_audit_wav_mono(phase_dir: Path, filename: str, sig: list[float]):
+    """Write a mono WAV audit artifact (24-bit)."""
+    if not sig:
+        return
+    write_mono_wav(str(phase_dir / filename), sig)
+
+
+def _write_audit_wav_stereo(phase_dir: Path, filename: str,
+                            left: list[float], right: list[float]):
+    """Write a stereo WAV audit artifact (24-bit)."""
+    if not left or not right:
+        return
+    write_stereo_wav(str(phase_dir / filename), left, right)
 
 
 # ═══════════════════════════════════════════
@@ -1412,6 +1468,10 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     song_label = dna.name or "dubstep_track"
     safe_name = song_label.lower().replace(" ", "_").replace("'", "")
 
+    # ── Phase Audit: per-phase output folders ──
+    _phase_base = _init_phase_audit(safe_name)
+    _phase_t0 = time.perf_counter()
+
     print(f"\n═══ RENDERING: {dna.name} ═══")
     print(f"  {dna.key} {dna.scale} @ {dna.bpm} BPM | {total_bars} bars | Mood: {dna.mood_name}")
     print(f"  Bass: {' → '.join(dna.bass_rotation[:5])}")
@@ -1458,6 +1518,31 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     if workflow:
         workflow._run_hooks("post_oracle", ctx)
 
+    # ── ORACLE audit ──
+    _oracle_dir = _phase_base / "01_ORACLE"
+    _write_audit_json(_oracle_dir, "dna.json", {
+        "name": dna.name, "key": dna.key, "scale": dna.scale,
+        "bpm": dna.bpm, "mood_name": dna.mood_name,
+        "bass_rotation": dna.bass_rotation[:5],
+        "arrangement": [{"name": s.name, "bars": s.bars} for s in dna.arrangement],
+        "drums": {"kick_pitch": dd.kick_pitch, "kick_drive": dd.kick_drive,
+                  "snare_pitch": dd.snare_pitch},
+        "bass": {"fm_depth": bd.fm_depth, "distortion": bd.distortion},
+        "lead": {"partials": ld.additive_partials, "rolloff": ld.additive_rolloff},
+        "mix": {"target_lufs": md.target_lufs, "ceiling_db": md.ceiling_db},
+    })
+    _write_audit_json(_oracle_dir, "render_config.json", {
+        "sr": SR, "bpm": dna.bpm, "beat_s": BEAT, "bar_s": BAR,
+        "total_bars": total_bars, "total_samples": total_s,
+        "sections": {"intro": INTRO, "build": BUILD, "drop1": DROP1,
+                     "break": BREAK_, "build2": BUILD2, "drop2": DROP2,
+                     "outro": OUTRO},
+        "rco_energy": {k: str(v) for k, v in rco_energy.items()}
+        if isinstance(rco_energy, dict) else str(rco_energy),
+    })
+    _emit_phase_log(_oracle_dir, "ORACLE", time.perf_counter() - _phase_t0)
+    _phase_t0 = time.perf_counter()
+
     # ═══ MWP PHASE 2: COLLECT ═════════════════════════
     # Brain: CHILD — gather freely, no judgment
     # Wired: stage_integrations (tuning, session, memory, lessons, sample_library)
@@ -1502,6 +1587,20 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     if workflow:
         workflow._run_hooks("post_collect", ctx)
 
+    # ── COLLECT audit ──
+    _collect_dir = _phase_base / "02_COLLECT"
+    _write_audit_json(_collect_dir, "sample_inventory.json", {
+        "sample_library": str(_sample_lib) if _sample_lib else None,
+        "galatcia_catalog": str(_galatcia) if _galatcia else None,
+        "curated_palette": str(_curated_palette) if _curated_palette else None,
+        "rack_128_slots": len(_rack_128) if isinstance(_rack_128, (list, dict)) else str(_rack_128),
+        "loop_slices": len(_loop_slices) if isinstance(_loop_slices, (list, dict)) else str(_loop_slices),
+        "tonal_colors": str(_tonal_colors),
+        "ref_tempo_key": str(_ref_tempo_key),
+    })
+    _emit_phase_log(_collect_dir, "COLLECT", time.perf_counter() - _phase_t0)
+    _phase_t0 = time.perf_counter()
+
     # ═══ MWP PHASE 3: RECIPES ═════════════════════════
     # Brain: ARCHITECT — templates, blueprints, variation planning
     # Wired: template_engine, macro_presets, genetic_evolution, serum_blueprint
@@ -1529,6 +1628,18 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
 
     if workflow:
         workflow._run_hooks("post_recipes", ctx)
+
+    # ── RECIPES audit ──
+    _recipes_dir = _phase_base / "03_RECIPES"
+    _write_audit_json(_recipes_dir, "recipes.json", {
+        "template_config": str(_template_config),
+        "macro_presets": str(_macro_presets),
+        "evolved_patch": str(_evolved_patch),
+        "mutated_preset": str(_mutated_preset),
+        "serum_blueprint": str(_serum_blueprint),
+    })
+    _emit_phase_log(_recipes_dir, "RECIPES", time.perf_counter() - _phase_t0)
+    _phase_t0 = time.perf_counter()
 
     # ═══ MWP PHASE 4: SKETCH ═════════════════════════
     # Brain: CHILD — raw sound design, first instincts
@@ -2407,6 +2518,46 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     if workflow:
         workflow._run_hooks("post_sketch", ctx)
 
+    # ── SKETCH audit: individual element WAVs ──
+    _sketch_dir = _phase_base / "04_SKETCH"
+    _sketch_inventory = {}
+    for _el_name, _el_sig in [
+        ("kick", kick), ("snare", snare), ("hat_c", hat_c), ("hat_o", hat_o),
+        ("clap", clap), ("sub", sub), ("dark_pad", dark_pad), ("drone", drone),
+        ("lush", lush), ("drop_noise", drop_noise), ("riser", riser),
+        ("boom", boom), ("hit", hit), ("tape_stop", tape_stop),
+        ("pitch_dive", pitch_dive), ("rev_crash", rev_crash),
+        ("stutter", stutter), ("gate_chop", gate_chop),
+    ]:
+        if _el_sig:
+            _write_audit_wav_mono(_sketch_dir, f"{_el_name}.wav", _el_sig)
+            _sketch_inventory[_el_name] = {
+                "samples": len(_el_sig),
+                "duration_s": round(len(_el_sig) / SR, 3),
+                "peak": round(max(abs(s) for s in _el_sig), 4),
+            }
+    # Bass arsenal — write each variant
+    if bass_arsenal:
+        for _bi, (_bname, _bsig) in enumerate(bass_arsenal):
+            if _bsig:
+                _write_audit_wav_mono(_sketch_dir, f"bass_{_bname}.wav", _bsig)
+                _sketch_inventory[f"bass_{_bname}"] = {
+                    "samples": len(_bsig),
+                    "duration_s": round(len(_bsig) / SR, 3),
+                }
+    # Lead + chord stereo pairs
+    if lead_notes:
+        _write_audit_wav_mono(_sketch_dir, "lead_notes.wav", lead_notes)
+    if chord_notes_l and chord_notes_r:
+        _write_audit_wav_stereo(_sketch_dir, "chords.wav", chord_notes_l, chord_notes_r)
+    if vocal_chops:
+        _write_audit_wav_mono(_sketch_dir, "vocal_chops.wav", vocal_chops)
+    _write_audit_json(_sketch_dir, "element_inventory.json", _sketch_inventory)
+    _emit_phase_log(_sketch_dir, "SKETCH", time.perf_counter() - _phase_t0, {
+        "elements_count": _sketch_elements,
+    })
+    _phase_t0 = time.perf_counter()
+
     # ═══ MWP PHASE 5: ARRANGE ════════════════════════
     # Brain: ARCHITECT — structure, energy arc, section contrast
     # Wired: rhythm_engine, groove_engine, panning_engine
@@ -2890,18 +3041,65 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     if workflow:
         workflow._run_hooks("post_arrange", ctx)
 
+    # ── ARRANGE audit: pre-mix stereo snapshot ──
+    _arrange_dir = _phase_base / "05_ARRANGE"
+    _write_audit_wav_stereo(_arrange_dir, "arrangement_premix.wav", L, R)
+    _write_audit_json(_arrange_dir, "section_map.json", {
+        "sections": {"intro": INTRO, "build": BUILD, "drop1": DROP1,
+                     "break": BREAK_, "build2": BUILD2, "drop2": DROP2,
+                     "outro": OUTRO},
+        "total_bars": total_bars,
+        "total_duration_s": round(total_s / SR, 2),
+        "kick_positions_count": len(kick_positions),
+        "arrangement_samples": len(L),
+        "peak_L": round(max(abs(s) for s in L) if L else 0, 4),
+        "peak_R": round(max(abs(s) for s in R) if R else 0, 4),
+    })
+    _emit_phase_log(_arrange_dir, "ARRANGE", time.perf_counter() - _phase_t0)
+    _phase_t0 = time.perf_counter()
+
     # ═══ MWP PHASE 6: DESIGN ═════════════════════════
-    # Brain: ARCHITECT — effect design, automation, spatial processing
-    # Available: fx_rack, automation_recorder, clip_launcher, live_fx
-    # Available: render_pipeline, atmos_pipeline, sub_pipeline
+    # Brain: CHILD — creative effect application, automation, spatial design
+    # Wired: fx_generator, signal_chain, convolution, sidechain, resonance
+    # Available: fx_rack, automation_recorder, live_fx, atmos_pipeline, sub_pipeline
     _dojo.begin_phase(DojoPhase.DESIGN)
     print(_dojo.phase_banner(DojoPhase.DESIGN,
-          "Effect design, automation — ARCHITECT BRAIN..."))
+          "Effect design, automation, spatial — CHILD BRAIN..."))
     if workflow:
         workflow._run_hooks("pre_design", ctx)
-    # TODO: Wire DESIGN modules — fx_rack, automation_recorder, live_fx
+
+    # ── Post-arrangement spatial design + FX routing ──
+    # Convolution reverb — subtle plate verb on full arrangement
+    _conv_L = apply_convolution_reverb(np.array(L, dtype=np.float64),
+                                       room_type="plate", mix=0.05, sr=SR)
+    _conv_R = apply_convolution_reverb(np.array(R, dtype=np.float64),
+                                       room_type="plate", mix=0.05, sr=SR)
+    L = _conv_L.tolist()
+    R = _conv_R.tolist()
+
+    # Bus routing — map sketch sounds to standard dubstep buses
+    _sketch_stems = {}
+    for _sn in ['kick', 'snare', 'hat_c', 'hat_o', 'clap', 'sub',
+                'fm_growl', 'growl_wt', 'dark_pad', 'lush', 'drone']:
+        _sv = locals().get(_sn)
+        if _sv is not None:
+            _sketch_stems[_sn] = _sv
+    _bus_routing = setup_bus_routing(_sketch_stems, SR)
+    log_milestone(_session_logger, "DESIGN — spatial reverb + bus routing applied")
+
     if workflow:
         workflow._run_hooks("post_design", ctx)
+
+    # ── DESIGN audit: post-FX stereo + bus routing ──
+    _design_dir = _phase_base / "06_DESIGN"
+    _write_audit_wav_stereo(_design_dir, "post_design.wav", L, R)
+    _write_audit_json(_design_dir, "bus_routing.json", {
+        "bus_routing": str(_bus_routing),
+        "reverb": {"type": "plate", "mix": 0.05},
+        "stems_routed": list(_sketch_stems.keys()),
+    })
+    _emit_phase_log(_design_dir, "DESIGN", time.perf_counter() - _phase_t0)
+    _phase_t0 = time.perf_counter()
 
     # ═══ MWP PHASE 7: MIX ════════════════════════════
     # Brain: CRITIC — surgical mixing, frequency balance
@@ -3083,6 +3281,27 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     if workflow:
         workflow._run_hooks("post_mix", ctx)
 
+    # ── MIX audit: post-mix stereo snapshot ──
+    _mix_dir = _phase_base / "07_MIX"
+    _mix_L = stereo[:, 0].tolist()
+    _mix_R = stereo[:, 1].tolist()
+    _write_audit_wav_stereo(_mix_dir, "post_mix.wav", _mix_L, _mix_R)
+    _mix_peak = float(np.max(np.abs(stereo)))
+    _mix_rms = float(np.sqrt(np.mean(stereo ** 2)))
+    _write_audit_json(_mix_dir, "mix_analysis.json", {
+        "peak": round(_mix_peak, 4),
+        "rms": round(_mix_rms, 4),
+        "rms_db": round(20 * np.log10(max(_mix_rms, 1e-10)), 1),
+        "upward_compression": {
+            "blocks_boosted": _uc_boosted,
+            "blocks_total": _uc_n,
+            "floor_db": round(_uc_floor, 1),
+            "p95_db": round(_uc_p95, 1),
+        },
+    })
+    _emit_phase_log(_mix_dir, "MIX", time.perf_counter() - _phase_t0)
+    _phase_t0 = time.perf_counter()
+
     # ═══ MWP PHASE 8: MASTER ══════════════════════════════
     # Brain: CRITIC — final loudness, limiting, stereo
     # Wired: mastering_chain, dsp_core
@@ -3162,6 +3381,27 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     if workflow:
         workflow._run_hooks("post_master", ctx)
 
+    # ── MASTER audit: mastered WAV + report ──
+    _master_dir = _phase_base / "08_MASTER"
+    _write_audit_wav_stereo(_master_dir, "mastered.wav", master_L, master_R)
+    _write_audit_json(_master_dir, "master_report.json", {
+        "output_lufs": round(report.output_lufs, 1),
+        "output_peak_db": round(report.output_peak_db, 1),
+        "duration_s": round(duration, 2),
+        "file_size_mb": round(fsize / 1024 / 1024, 1),
+        "settings": {
+            "target_lufs": md.target_lufs,
+            "ceiling_db": md.ceiling_db,
+            "compression_ratio": 3.5,
+            "compression_threshold_db": -20.0,
+            "stereo_width": 0.5,
+            "limiter_enabled": md.limiter_enabled,
+        },
+        "phi_score": round(_phi_score, 4) if isinstance(_phi_score, (int, float)) else str(_phi_score),
+    })
+    _emit_phase_log(_master_dir, "MASTER", time.perf_counter() - _phase_t0)
+    _phase_t0 = time.perf_counter()
+
     # ═══ MWP PHASE 9: RELEASE ════════════════════════
     # Brain: ARCHITECT — export, metadata, artwork, presets
     # Wired: audio_analysis, midi_export, artwork_generator, metadata
@@ -3199,6 +3439,17 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     _cue_info = set_cue_points(out_path, dna, duration=duration)
     _rack = export_ableton_rack()
     tag_output_file(out_path, dna)
+
+    # ═══ ALS + 128 Rack ADG export ════════════════════
+    print("  🔧 Ableton Live project + 128 Rack ADG...")
+    _als_path = generate_ableton_project()
+    try:
+        from engine.ableton_rack_builder import export_128_rack_adg
+        _rack_adg = export_128_rack_adg(str(OUTPUT))
+        print(f"  ✓ 128 Rack ADG exported")
+    except Exception as _adg_exc:
+        print(f"  ⚠ 128 Rack ADG skipped: {_adg_exc}")
+
     log_milestone(_session_logger, "Sprint 3 exports complete")
 
     # ═══ SPRINT 4 — Grandmaster + Ascension + Session close ════
@@ -3209,6 +3460,26 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
 
     if workflow:
         workflow._run_hooks("post_release", ctx)
+
+    # ── RELEASE audit: exports manifest ──
+    _release_dir = _phase_base / "09_RELEASE"
+    _write_audit_json(_release_dir, "exports_manifest.json", {
+        "wav_output": out_path,
+        "midi_path": str(_midi_path),
+        "artwork": str(_artwork),
+        "serum2_preset": str(_serum2),
+        "als_path": str(_als_path) if '_als_path' in dir() else None,
+        "rack_adg": str(_rack_adg) if '_rack_adg' in dir() else None,
+        "genre_info": str(_genre_info),
+        "pattern_info": str(_pattern_info),
+        "analysis": str(_analysis),
+        "key_check": str(_key_check),
+        "fib_check": str(_fib_check),
+        "ep_info": str(_ep_info),
+        "cue_info": str(_cue_info),
+    })
+    _emit_phase_log(_release_dir, "RELEASE", time.perf_counter() - _phase_t0)
+    _phase_t0 = time.perf_counter()
 
     # ═══ MWP PHASE 10: REFLECT ═══════════════════════
     # Brain: CRITIC — lessons learned, belt assessment, evolution
@@ -3256,6 +3527,21 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     if workflow:
         workflow._run_hooks("post_reflect", ctx)
         workflow.ctx = ctx
+
+    # ── REFLECT audit: report card + belt + session ──
+    _reflect_dir = _phase_base / "10_REFLECT"
+    _write_audit_json(_reflect_dir, "report_card.json", _report_card)
+    _write_audit_json(_reflect_dir, "session_report.json", _session_report)
+    _write_audit_json(_reflect_dir, "belt_assessment.json", _belt_assessment)
+    _emit_phase_log(_reflect_dir, "REFLECT", time.perf_counter() - _phase_t0)
+
+    # ── Final audit summary ──
+    _total_elapsed = sum(
+        json.loads((d / "phase_log.json").read_text()).get("elapsed_s", 0)
+        for d in sorted(_phase_base.iterdir()) if (d / "phase_log.json").exists()
+    )
+    print(f"\n  📁 Phase audit complete → {_phase_base.relative_to(OUTPUT)}/")
+    print(f"     10 phases logged | {_total_elapsed:.1f}s total")
 
     return out_path
 # ═══════════════════════════════════════════
