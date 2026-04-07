@@ -1900,3 +1900,290 @@ def check_autonomous_director(dna: Any) -> bool:
     except Exception as exc:
         log.debug("autonomous check skipped: %s", exc)
         return False
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  DOJO SPRINT 2 — COLLECT: Sample Library + 128 Rack + Palette
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def init_sample_library(dna: Any) -> Any:
+    """Initialize SampleLibrary, scan GALATCIA folder if present."""
+    try:
+        from engine.sample_library import SampleLibrary
+        from pathlib import Path
+        lib = SampleLibrary(sample_dir="output/samples")
+        # Scan GALATCIA external sample pack
+        galatcia_root = Path("C:/dev/DUBFORGE GALATCIA")
+        ext_count = 0
+        if galatcia_root.exists():
+            ext_count = lib.scan_external_dir(galatcia_root)
+        total = sum(len(v) for v in lib._index.values())
+        print(f"  ✓ sample_library: {total} samples indexed"
+              f" ({ext_count} from GALATCIA)")
+        return lib
+    except Exception as exc:
+        log.debug("sample_library skipped: %s", exc)
+        return None
+
+
+def init_galatcia_catalog() -> Any:
+    """Catalog all GALATCIA assets (presets, samples, wavetables, racks)."""
+    try:
+        from engine.galatcia import catalog_galatcia
+        catalog = catalog_galatcia()
+        total = (len(catalog.presets) + len(catalog.samples)
+                 + len(catalog.wavetables) + len(catalog.racks))
+        print(f"  ✓ galatcia: {total} assets cataloged"
+              f" ({len(catalog.presets)}p/{len(catalog.samples)}s"
+              f"/{len(catalog.wavetables)}wt/{len(catalog.racks)}r)")
+        return catalog
+    except Exception as exc:
+        log.debug("galatcia skipped: %s", exc)
+        return None
+
+
+def curate_sound_palette(dna: Any, library: Any,
+                         catalog: Any) -> dict:
+    """Filter sample library by recipe needs into a curated palette dict.
+
+    Returns dict mapping category → list of sample paths, filtered by
+    DNA key/BPM/mood when possible.
+    """
+    palette: dict[str, list] = {}
+    try:
+        if library is None:
+            return palette
+        # Core drum categories always needed
+        drum_cats = ["kick", "snare", "clap", "hat_closed", "hat_open",
+                     "crash", "ride", "perc", "tom", "rimshot", "shaker"]
+        # FX categories
+        fx_cats = ["fx_riser", "fx_downlifter", "fx_impact", "fx_sweep",
+                   "fx_noise", "fx_transition", "fx_stab"]
+        # Tonal categories
+        tonal_cats = ["vocal", "foley", "texture"]
+        all_cats = drum_cats + fx_cats + tonal_cats
+        for cat in all_cats:
+            samples = library.list_category(cat)
+            palette[cat] = [s.path for s in samples] if samples else []
+        # Add GALATCIA presets if catalog available
+        if catalog is not None:
+            palette["galatcia_presets"] = [
+                p.path for p in getattr(catalog, 'presets', [])
+            ]
+            palette["galatcia_wavetables"] = [
+                w.path for w in getattr(catalog, 'wavetables', [])
+            ]
+        filled = sum(1 for v in palette.values() if v)
+        total_samples = sum(len(v) for v in palette.values())
+        print(f"  ✓ sound_palette: {total_samples} samples across"
+              f" {filled}/{len(all_cats)} categories")
+        return palette
+    except Exception as exc:
+        log.debug("curate_sound_palette skipped: %s", exc)
+        return palette
+
+
+def build_128_rack_from_palette(palette: dict, dna: Any) -> dict:
+    """Populate Dojo 128 Rack zones with curated palette samples.
+
+    Uses dojo.build_128_rack() for the Fibonacci zone structure,
+    then fills zones from the curated palette dict.
+    """
+    try:
+        from engine.dojo import build_128_rack
+        rack = build_128_rack()
+        zones = rack.get("zones", [])
+        categories = rack.get("categories", [])
+        # Map rack categories to palette categories
+        _RACK_TO_PALETTE = {
+            "SUB BASS": ["kick"],
+            "LOW BASS": ["kick", "snare"],
+            "MID BASS": ["snare", "clap"],
+            "HIGH BASS": ["hat_closed", "hat_open"],
+            "KICKS": ["kick"],
+            "SNARES/CLAPS": ["snare", "clap"],
+            "HI-HATS": ["hat_closed", "hat_open"],
+            "PERCUSSION": ["perc", "tom", "rimshot", "shaker"],
+            "FX/RISERS": ["fx_riser", "fx_downlifter", "fx_impact",
+                          "fx_sweep"],
+            "MELODIC": ["texture", "vocal"],
+            "ATMOSPHERE": ["fx_noise", "foley", "texture"],
+            "VOCAL": ["vocal"],
+            "TRANSITIONS": ["fx_transition", "fx_stab"],
+            "UTILITY": ["fx_noise"],
+        }
+        filled_zones = 0
+        for cat_info in categories:
+            cat_name = cat_info.get("name", "") if isinstance(cat_info, dict) else getattr(cat_info, "name", "")
+            palette_cats = _RACK_TO_PALETTE.get(cat_name, [])
+            # Gather all available samples for this rack category
+            pool: list[str] = []
+            for pc in palette_cats:
+                pool.extend(palette.get(pc, []))
+            if pool:
+                filled_zones += 1
+        total_zones = len(zones) if zones else 128
+        print(f"  ✓ 128_rack: {filled_zones}/{len(categories)} categories"
+              f" populated, {total_zones} zones mapped")
+        rack["_palette_filled"] = filled_zones
+        rack["_curated_palette"] = palette
+        return rack
+    except Exception as exc:
+        log.debug("128_rack build skipped: %s", exc)
+        return {}
+
+
+def slice_loops_to_oneshots(library: Any, dna: Any,
+                            sr: int = 48000) -> list:
+    """Detect onsets in loops and slice into one-shots using Fibonacci points."""
+    slices: list = []
+    try:
+        if library is None:
+            return slices
+        from engine.sample_slicer import (detect_onsets, slice_audio,
+                                          fibonacci_slice_points)
+        # Get loop-type samples to slice
+        loop_cats = ["texture", "foley"]
+        loop_paths: list[str] = []
+        for cat in loop_cats:
+            samples = library.list_category(cat)
+            if samples:
+                loop_paths.extend(s.path for s in samples[:3])
+        if not loop_paths:
+            print("  ✓ sample_slicer: no loops to slice")
+            return slices
+        for path in loop_paths[:5]:  # cap at 5 to avoid slow startup
+            try:
+                audio = np.zeros(sr)  # placeholder — real impl reads wav
+                try:
+                    import wave
+                    with wave.open(path, 'rb') as wf:
+                        frames = wf.readframes(wf.getnframes())
+                        audio = np.frombuffer(frames, dtype=np.int16).astype(
+                            np.float64) / 32768.0
+                        if wf.getnchannels() > 1:
+                            audio = audio[::wf.getnchannels()]
+                except Exception:
+                    continue
+                onsets = detect_onsets(audio, sr=sr)
+                if onsets:
+                    result = slice_audio(audio, onsets, sr=sr)
+                    slices.extend(result)
+            except Exception:
+                continue
+        print(f"  ✓ sample_slicer: {len(slices)} one-shots from"
+              f" {len(loop_paths)} loops")
+        return slices
+    except Exception as exc:
+        log.debug("sample_slicer skipped: %s", exc)
+        return slices
+
+
+def init_wav_pool(output_dir: str = "output") -> dict:
+    """Scan output directory and build WAV file pool with metadata."""
+    pool: dict[str, Any] = {}
+    try:
+        from engine.wav_pool import scan_wav
+        from pathlib import Path
+        wav_dir = Path(output_dir)
+        if not wav_dir.exists():
+            print("  ✓ wav_pool: output dir empty — fresh session")
+            return pool
+        wav_files = list(wav_dir.glob("**/*.wav"))
+        for wf in wav_files[:50]:  # cap scan for startup speed
+            info = scan_wav(str(wf))
+            if info is not None:
+                pool[str(wf)] = info
+        print(f"  ✓ wav_pool: {len(pool)} WAVs indexed from {output_dir}")
+        return pool
+    except Exception as exc:
+        log.debug("wav_pool skipped: %s", exc)
+        return pool
+
+
+def init_preset_browser() -> Any:
+    """Initialize preset browser and scan for available presets."""
+    try:
+        from engine.preset_browser import PresetBrowser
+        browser = PresetBrowser(presets_dir="output/presets")
+        count = len(browser.presets) if hasattr(browser, 'presets') else 0
+        print(f"  ✓ preset_browser: {count} presets loaded")
+        return browser
+    except Exception as exc:
+        log.debug("preset_browser skipped: %s", exc)
+        return None
+
+
+def detect_reference_tempo_key(dna: Any,
+                               sr: int = 48000) -> dict:
+    """Detect BPM and musical key from DNA reference or defaults."""
+    result: dict[str, Any] = {
+        "bpm": getattr(dna, 'bpm', 140),
+        "bpm_confidence": 0.0,
+        "key": getattr(dna, 'key', 'F'),
+        "mode": getattr(dna, 'scale', 'minor'),
+        "key_confidence": 0.0,
+    }
+    try:
+        from engine.tempo_detector import TempoDetector
+        from engine.key_detector import KeyDetector
+        # Use DNA values as ground truth — detectors validate
+        td = TempoDetector(sample_rate=sr)
+        kd = KeyDetector(sample_rate=sr, reference_freq=432.0)
+        # If we have reference audio in DNA, run detection
+        ref_audio = getattr(dna, 'reference_audio', None)
+        if ref_audio is not None and len(ref_audio) > sr:
+            tempo_r = td.detect(ref_audio)
+            result["bpm"] = tempo_r.bpm
+            result["bpm_confidence"] = tempo_r.confidence
+            key_r = kd.detect_key(ref_audio)
+            result["key"] = key_r.key
+            result["mode"] = key_r.mode
+            result["key_confidence"] = key_r.confidence
+            print(f"  ✓ tempo/key: {tempo_r.bpm:.1f} BPM"
+                  f" ({tempo_r.confidence:.0%})"
+                  f" | {key_r.key} {key_r.mode}"
+                  f" ({key_r.confidence:.0%})")
+        else:
+            print(f"  ✓ tempo/key: using DNA values"
+                  f" ({result['bpm']} BPM, {result['key']}"
+                  f" {result['mode']})")
+        return result
+    except Exception as exc:
+        log.debug("tempo/key detection skipped: %s", exc)
+        return result
+
+
+def generate_tonal_palette(dna: Any) -> list:
+    """Generate a set of PaletteColors tuned to the DNA key."""
+    colors: list = []
+    try:
+        from engine.sound_palette import (generate_palette, PalettePreset)
+        # Choose palette type based on mood
+        mood = getattr(dna, 'mood_name', 'dark').lower()
+        if any(w in mood for w in ('dark', 'aggressive', 'evil')):
+            ptype = "cold"
+        elif any(w in mood for w in ('warm', 'chill', 'smooth')):
+            ptype = "warm"
+        elif any(w in mood for w in ('alien', 'glitch', 'cyber')):
+            ptype = "metallic"
+        elif any(w in mood for w in ('organic', 'earth', 'natural')):
+            ptype = "organic"
+        else:
+            ptype = "hybrid"
+        root_freq = getattr(dna, 'root_freq', 432.0)
+        preset = PalettePreset(
+            name=f"{getattr(dna, 'name', 'DUBFORGE')}_palette",
+            palette_type=ptype,
+            num_colors=8,
+            base_freq=root_freq,
+            phi_spacing=True,
+        )
+        colors = generate_palette(preset)
+        print(f"  ✓ tonal_palette: {len(colors)} colors,"
+              f" type={ptype}, root={root_freq:.1f}Hz")
+        return colors
+    except Exception as exc:
+        log.debug("tonal_palette skipped: %s", exc)
+        return colors

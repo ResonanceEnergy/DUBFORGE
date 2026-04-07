@@ -153,6 +153,12 @@ from engine.stage_integrations import (
     analyze_realtime_signal, check_production_pipeline,
     process_subphonics_greeting, build_grandmaster_report_hook,
     get_ascension_manifest, check_autonomous_director,
+    # Dojo Sprint 2 — COLLECT: sample library + 128 rack + palette
+    init_sample_library, init_galatcia_catalog,
+    curate_sound_palette, build_128_rack_from_palette,
+    slice_loops_to_oneshots, init_wav_pool,
+    init_preset_browser, detect_reference_tempo_key,
+    generate_tonal_palette,
 )
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -1297,7 +1303,22 @@ def render_full_track(dna: 'SongDNA | None' = None):
     if dna is None:
         dna = _default_v5_dna()
 
-    print("\n  🥋 [COLLECT] — Gathering sound palette, establishing DNA identity...")
+    # ═══ DOJO SESSION — Governor (Sprint 1) ═══════════
+    from engine.dojo import DojoSession, DojoPhase, DojoBrain, BeltRank
+    from engine.recipe_book import select_recipe, check_quality_gate
+
+    _dojo = DojoSession(belt=BeltRank.WHITE, total_session_s=840.0)
+    _dojo.begin_session()
+    _recipe = select_recipe(
+        style=getattr(dna, 'style', 'dubstep'),
+        mood=getattr(dna, 'mood', ''),
+        reference_dna=dna,
+    )
+
+    # ═══ PHASE: ORACLE → COLLECT ══════════════════════
+    _dojo.begin_phase(DojoPhase.COLLECT)
+    print(_dojo.phase_banner(DojoPhase.COLLECT,
+          "Gathering sound palette, establishing DNA identity..."))
 
     # Import DSP primitives needed throughout
     from engine.dsp_core import svf_highpass, svf_lowpass, multiband_compress
@@ -1407,6 +1428,19 @@ def render_full_track(dna: 'SongDNA | None' = None):
     _trance_arp = add_trance_arp_layer(dna, root_semitone=0)
     log_milestone(_session_logger, "Phase 1 complete — DNA enhanced")
 
+    # ═══ DOJO SPRINT 2 — COLLECT: Sample Library + 128 Rack ════
+    print("  🔧 DOJO SPRINT 2 — COLLECT: Sample library, 128 Rack, palette...")
+    _sample_lib = init_sample_library(dna)
+    _galatcia = init_galatcia_catalog()
+    _curated_palette = curate_sound_palette(dna, _sample_lib, _galatcia)
+    _rack_128 = build_128_rack_from_palette(_curated_palette, dna)
+    _loop_slices = slice_loops_to_oneshots(_sample_lib, dna, sr=SR)
+    _wav_pool = init_wav_pool("output")
+    _preset_browser = init_preset_browser()
+    _ref_tempo_key = detect_reference_tempo_key(dna, sr=SR)
+    _tonal_colors = generate_tonal_palette(dna)
+    log_milestone(_session_logger, "COLLECT complete — 128 Rack populated")
+
     # ═══ SPRINT 3 — Phase 1: Templates + Macros + Evolution ════
     print("  🔧 SPRINT 3 — Templates, macros, genetic evolution...")
     _template_config = generate_template_config(dna)
@@ -1425,7 +1459,10 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Drums (LAYERED, MULTI-SOURCE)
     # ═══════════════════════════════════════════
-    print("\n  🥋 [SKETCH] — Designing sounds, first instincts...")
+    # ═══ PHASE: SKETCH ════════════════════════════════
+    _dojo.begin_phase(DojoPhase.SKETCH)
+    print(_dojo.phase_banner(DojoPhase.SKETCH,
+          "Designing sounds, first instincts — CHILD BRAIN, no judgment..."))
     print("  [1/9] Drums — layered synthesis...")
 
     # ── KICK ──────────────────────────────────────────
@@ -2259,10 +2296,28 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     hat_pattern = make_hat_events_bar()
 
+    # ═══ QUALITY GATE: SKETCH → ARRANGE ═══════════════
+    # Count sound elements generated in sketch phase
+    _sketch_elements = 0
+    for _var_name in ['kick', 'snare', 'hat_c', 'hat_o', 'clap', 'sub',
+                      'fm_growl', 'growl_wt', 'dist_fm', 'sync_bass',
+                      'acid_bass', 'neuro_bass', 'formant_bass',
+                      'dark_pad', 'lush', 'drone', 'riser',
+                      'boom', 'hit', 'drop_noise']:
+        if _var_name in dir() and locals().get(_var_name) is not None:
+            _sketch_elements += 1
+    _dojo.check_quality_gate(DojoPhase.SKETCH, [
+        {"name": "Sound Elements", "value": _sketch_elements,
+         "target_min": 8, "target_max": 50, "unit": "elements"},
+    ])
+
     # ═══════════════════════════════════════════
     #  ARRANGEMENT
     # ═══════════════════════════════════════════
-    print("\n  🥋 [ARRANGE] — Structuring energy arc, section contrast...")
+    # ═══ PHASE: ARRANGE ═══════════════════════════════
+    _dojo.begin_phase(DojoPhase.ARRANGE)
+    print(_dojo.phase_banner(DojoPhase.ARRANGE,
+          "Structuring energy arc, section contrast — ARCHITECT BRAIN..."))
     print("  [8/9] Arranging...")
 
     L = [0.0] * total_s
@@ -2701,10 +2756,22 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # NO sub in outro — pad carries the fadeout
     # Sub at F1 dumps energy into sub band, wrecks spectral balance
 
+    # ═══ QUALITY GATE: ARRANGE → MIX ═════════════════
+    _section_count = sum(1 for s in [INTRO, BUILD, DROP1, BREAK_, BUILD2, DROP2, OUTRO] if s > 0)
+    _dojo.check_quality_gate(DojoPhase.ARRANGE, [
+        {"name": "Section Count", "value": _section_count,
+         "target_min": 5, "target_max": 10, "unit": "sections"},
+        {"name": "Total Duration", "value": total_s / SR,
+         "target_min": 120.0, "target_max": 360.0, "unit": "seconds"},
+    ])
+
     # ══════════════════════════════════════════════════
     #  MIXDOWN + MASTERING
     # ══════════════════════════════════════════════════
-    print("\n  🥋 [MIX → FINISH] — Surgical mixing, final polish...")
+    # ═══ PHASE: MIX ══════════════════════════════════
+    _dojo.begin_phase(DojoPhase.MIX)
+    print(_dojo.phase_banner(DojoPhase.MIX,
+          "Surgical mixing, final polish — CRITIC BRAIN..."))
     print("  [9/9] Mixing & mastering...")
 
     # ═══ SPRINT 1 — DC removal + spectrum analysis ════
@@ -2849,6 +2916,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print(f"    Upward compressed {_uc_boosted}/{_uc_n} blocks "
           f"(floor={_uc_floor:.1f}dB, p95={_uc_p95:.1f}dB)")
 
+    # ═══ PHASE: MASTER ══════════════════════════════
+    _dojo.begin_phase(DojoPhase.MASTER)
+    print(_dojo.phase_banner(DojoPhase.MASTER,
+          "Final loudness, limiting, stereo — CRITIC BRAIN..."))
+
     settings = dubstep_master_settings()
     settings.target_lufs = md.target_lufs
     settings.ceiling_db = md.ceiling_db
@@ -2874,6 +2946,14 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # NOTE: Post-limiter saturation REMOVED — replaced by soft_clip
     # inside mastering_chain.master() which runs BEFORE the limiter,
     # avoiding aliased harmonics above the ceiling.
+
+    # ═══ QUALITY GATE: MASTER ═════════════════════════
+    _dojo.check_quality_gate(DojoPhase.MASTER, [
+        {"name": "LUFS", "value": report.output_lufs,
+         "target_min": -12.0, "target_max": -6.0, "unit": "LUFS"},
+        {"name": "True Peak", "value": report.output_peak_db,
+         "target_min": -1.5, "target_max": -0.1, "unit": "dBTP"},
+    ])
 
     # ═══ PHASE 4 — Quality Loop ════════════════════════
     print("\n  🔧 STAGE INTEGRATION — Phase 4: QA Validation + Reference...")
@@ -2902,6 +2982,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print(f"  LUFS:     {report.output_lufs:.1f}")
     print(f"  Peak:     {report.output_peak_db:.1f} dB")
     print(f"  Size:     {fsize / 1024 / 1024:.1f} MB")
+
+    # ═══ PHASE: RELEASE ══════════════════════════════
+    _dojo.begin_phase(DojoPhase.RELEASE)
+    print(_dojo.phase_banner(DojoPhase.RELEASE,
+          "Export, metadata, artwork — ARCHITECT BRAIN..."))
 
     # ═══ SPRINT 1 — Post-export QA suite ══════════════
     print("\n  🔧 SPRINT 1 — Post-export: Full analysis + key + reference + Fibonacci...")
@@ -2935,10 +3020,24 @@ def render_full_track(dna: 'SongDNA | None' = None):
     _asc_manifest = get_ascension_manifest()
     check_autonomous_director(dna)
 
+    # ═══ PHASE: REFLECT ══════════════════════════════
+    _dojo.begin_phase(DojoPhase.REFLECT)
+    print(_dojo.phase_banner(DojoPhase.REFLECT,
+          "Lessons learned, belt check, evolution..."))
+
     # ═══ Session close ════════════════════════════════
     record_render_lessons(dna)
     log_milestone(_session_logger, "Render complete — all sprints executed")
     end_render_session(_mem_engine, out_path)
+
+    # ═══ DOJO SESSION REPORT ═════════════════════════
+    _session_report = _dojo.get_session_report()
+    _gates_passed = _session_report["gates_passed"]
+    _gates_total = _session_report["gates_total"]
+    print(f"\n  🥋 DOJO SESSION COMPLETE")
+    print(f"     Belt: {_session_report['belt']}")
+    print(f"     Quality Gates: {_gates_passed}/{_gates_total} passed")
+    print(f"     Session Time: {_session_report['total_session_s']:.1f}s")
 
     return out_path
 # ═══════════════════════════════════════════

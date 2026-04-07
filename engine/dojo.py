@@ -826,6 +826,274 @@ class RackCategory:
     description: str
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# DOJO SESSION — Pipeline Governor (Sprint 1: GOVERNOR)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class DojoPhase(Enum):
+    """The 10-phase Dojo production pipeline."""
+    ORACLE = "oracle"
+    COLLECT = "collect"
+    RECIPES = "recipes"
+    SKETCH = "sketch"
+    ARRANGE = "arrange"
+    DESIGN = "design"
+    MIX = "mix"
+    MASTER = "master"
+    RELEASE = "release"
+    REFLECT = "reflect"
+
+
+class DojoBrain(Enum):
+    """Three brains — only one active per phase."""
+    CHILD = "child"        # Creative, generative, no judgment
+    ARCHITECT = "architect"  # Structure, planning, decisions
+    CRITIC = "critic"      # Technical precision, quality enforcement
+
+
+# Phase → required brain mapping
+PHASE_BRAIN_MAP: dict[DojoPhase, DojoBrain] = {
+    DojoPhase.ORACLE: DojoBrain.ARCHITECT,
+    DojoPhase.COLLECT: DojoBrain.CHILD,
+    DojoPhase.RECIPES: DojoBrain.ARCHITECT,
+    DojoPhase.SKETCH: DojoBrain.CHILD,
+    DojoPhase.ARRANGE: DojoBrain.ARCHITECT,
+    DojoPhase.DESIGN: DojoBrain.CHILD,
+    DojoPhase.MIX: DojoBrain.CRITIC,
+    DojoPhase.MASTER: DojoBrain.CRITIC,
+    DojoPhase.RELEASE: DojoBrain.ARCHITECT,
+    DojoPhase.REFLECT: DojoBrain.ARCHITECT,
+}
+
+# Phase ordering for advancement
+PHASE_ORDER: list[DojoPhase] = [
+    DojoPhase.ORACLE, DojoPhase.COLLECT, DojoPhase.RECIPES,
+    DojoPhase.SKETCH, DojoPhase.ARRANGE, DojoPhase.DESIGN,
+    DojoPhase.MIX, DojoPhase.MASTER, DojoPhase.RELEASE, DojoPhase.REFLECT,
+]
+
+# Modules FORBIDDEN per brain (enforced as warnings, not blocks)
+BRAIN_FORBIDDEN_MODULES: dict[DojoBrain, list[str]] = {
+    DojoBrain.CHILD: [
+        "mastering_chain", "intelligent_eq", "auto_mixer", "mix_bus",
+        "frequency_analyzer", "spectral_gate", "dynamics_processor",
+    ],
+    DojoBrain.ARCHITECT: [
+        "bass_oneshot", "lead_synth", "pad_synth", "fm_synth",
+        "growl_resampler", "additive_synth", "granular_synth",
+        "formant_synth", "drone_synth", "vocal_chop",
+    ],
+    DojoBrain.CRITIC: [
+        "bass_oneshot", "lead_synth", "pad_synth", "fm_synth",
+        "growl_resampler", "additive_synth", "granular_synth",
+        "formant_synth", "drone_synth", "vocal_chop",
+        "arrangement_sequencer", "auto_arranger", "song_templates",
+    ],
+}
+
+# Phi-ratio timebox defaults (seconds) — golden ratio distribution of 840s (14 min)
+PHASE_TIMEBOX_DEFAULTS: dict[DojoPhase, float] = {
+    DojoPhase.ORACLE: 60.0,
+    DojoPhase.COLLECT: 120.0,
+    DojoPhase.RECIPES: 30.0,
+    DojoPhase.SKETCH: 200.0,   # ~24% — largest creative block
+    DojoPhase.ARRANGE: 150.0,  # ~18%
+    DojoPhase.DESIGN: 100.0,   # ~12%
+    DojoPhase.MIX: 100.0,      # ~12%
+    DojoPhase.MASTER: 30.0,
+    DojoPhase.RELEASE: 30.0,
+    DojoPhase.REFLECT: 20.0,
+}
+
+
+@dataclass
+class QualityGateResult:
+    """Result of a quality gate check between phases."""
+    phase: str
+    passed: bool
+    checks: list[dict]     # [{name, passed, value, target_min, target_max, unit}]
+    warnings: list[str]
+    errors: list[str]
+
+    @property
+    def summary(self) -> str:
+        n_pass = sum(1 for c in self.checks if c["passed"])
+        return (f"[{self.phase}] {n_pass}/{len(self.checks)} checks passed"
+                f" | {len(self.warnings)} warnings | {len(self.errors)} errors")
+
+
+class DojoSession:
+    """
+    Pipeline governor — enforces Dojo phase boundaries, brain separation,
+    timeboxes, and quality gates. Sprint 1: GOVERNOR pattern.
+
+    Usage:
+        session = DojoSession(belt=BeltRank.WHITE)
+        session.begin_phase(DojoPhase.SKETCH)
+        # ... do sketch work ...
+        gate = session.check_quality_gate(DojoPhase.SKETCH, sketch_data)
+        session.advance_phase()  # → ARRANGE
+    """
+
+    def __init__(self, belt: BeltRank = BeltRank.WHITE,
+                 total_session_s: float = 840.0):
+        self.belt = belt
+        self.total_session_s = total_session_s
+        self.current_phase: DojoPhase = DojoPhase.ORACLE
+        self.active_brain: DojoBrain = PHASE_BRAIN_MAP[DojoPhase.ORACLE]
+        self.phase_log: list[dict] = []
+        self.gate_results: list[QualityGateResult] = []
+        self._phase_start_time: float = 0.0
+        self._session_start_time: float = 0.0
+        self.timeboxes: dict[DojoPhase, float] = dict(PHASE_TIMEBOX_DEFAULTS)
+        # Scale timeboxes to total session time
+        default_total = sum(PHASE_TIMEBOX_DEFAULTS.values())
+        if default_total > 0:
+            scale = total_session_s / default_total
+            self.timeboxes = {p: t * scale for p, t in PHASE_TIMEBOX_DEFAULTS.items()}
+
+    def begin_session(self) -> None:
+        """Start the Dojo session clock."""
+        import time
+        self._session_start_time = time.time()
+        self._phase_start_time = self._session_start_time
+        self.current_phase = DojoPhase.ORACLE
+        self.active_brain = PHASE_BRAIN_MAP[DojoPhase.ORACLE]
+        self.phase_log.append({
+            "phase": self.current_phase.value,
+            "brain": self.active_brain.value,
+            "action": "session_start",
+            "belt": self.belt.value,
+        })
+
+    def begin_phase(self, phase: DojoPhase) -> None:
+        """Transition to a specific phase, updating brain and logging."""
+        import time
+        prev = self.current_phase
+        self.current_phase = phase
+        self.active_brain = PHASE_BRAIN_MAP[phase]
+        self._phase_start_time = time.time()
+        self.phase_log.append({
+            "phase": phase.value,
+            "brain": self.active_brain.value,
+            "action": "begin_phase",
+            "from_phase": prev.value,
+        })
+
+    def advance_phase(self) -> DojoPhase:
+        """Advance to the next phase in order. Returns the new phase."""
+        idx = PHASE_ORDER.index(self.current_phase)
+        if idx + 1 < len(PHASE_ORDER):
+            next_phase = PHASE_ORDER[idx + 1]
+            self.begin_phase(next_phase)
+            return next_phase
+        return self.current_phase  # Already at REFLECT
+
+    def check_module_allowed(self, module_name: str) -> bool:
+        """Check if a module is allowed under the current brain. Warn if not."""
+        forbidden = BRAIN_FORBIDDEN_MODULES.get(self.active_brain, [])
+        if module_name in forbidden:
+            print(f"  ⚠️  DOJO WARNING: [{self.active_brain.value.upper()} BRAIN] "
+                  f"module '{module_name}' is discouraged in {self.current_phase.value} phase")
+            return False
+        return True
+
+    def get_phase_elapsed(self) -> float:
+        """Seconds elapsed in current phase."""
+        import time
+        return time.time() - self._phase_start_time
+
+    def get_session_elapsed(self) -> float:
+        """Seconds elapsed in entire session."""
+        import time
+        return time.time() - self._session_start_time
+
+    def check_timebox(self) -> bool:
+        """Check if current phase is still within its timebox. Warn if over."""
+        elapsed = self.get_phase_elapsed()
+        budget = self.timeboxes.get(self.current_phase, 999.0)
+        if elapsed > budget:
+            over = elapsed - budget
+            print(f"  ⏱️  DOJO: {self.current_phase.value} phase is {over:.0f}s "
+                  f"over timebox ({budget:.0f}s budget)")
+            return False
+        return True
+
+    def check_quality_gate(self, phase: DojoPhase,
+                           checks: list[dict]) -> QualityGateResult:
+        """
+        Run quality gate checks for a phase transition.
+
+        Args:
+            phase: The phase being completed
+            checks: List of dicts with keys:
+                name, value, target_min, target_max, unit
+        Returns:
+            QualityGateResult with pass/fail per check
+        """
+        results = []
+        warnings = []
+        errors = []
+        for c in checks:
+            val = c.get("value", 0)
+            t_min = c.get("target_min")
+            t_max = c.get("target_max")
+            passed = True
+            if t_min is not None and val < t_min:
+                passed = False
+                warnings.append(
+                    f"{c['name']}: {val:.2f} below min {t_min} {c.get('unit', '')}")
+            if t_max is not None and val > t_max:
+                passed = False
+                warnings.append(
+                    f"{c['name']}: {val:.2f} above max {t_max} {c.get('unit', '')}")
+            results.append({**c, "passed": passed})
+
+        all_passed = all(r["passed"] for r in results)
+        if not all_passed:
+            errors.append(f"Quality gate for {phase.value} has failing checks")
+
+        gate = QualityGateResult(
+            phase=phase.value,
+            passed=all_passed,
+            checks=results,
+            warnings=warnings,
+            errors=errors,
+        )
+        self.gate_results.append(gate)
+
+        # Print gate summary (warn, don't block)
+        icon = "✅" if all_passed else "⚠️"
+        print(f"  {icon} QUALITY GATE [{phase.value.upper()}]: {gate.summary}")
+        for w in warnings:
+            print(f"       → {w}")
+
+        return gate
+
+    def get_session_report(self) -> dict:
+        """Final session report with all phases, gates, and timing."""
+        return {
+            "belt": self.belt.value,
+            "total_session_s": self.get_session_elapsed(),
+            "phases": self.phase_log,
+            "quality_gates": [
+                {"phase": g.phase, "passed": g.passed, "summary": g.summary}
+                for g in self.gate_results
+            ],
+            "gates_passed": sum(1 for g in self.gate_results if g.passed),
+            "gates_total": len(self.gate_results),
+        }
+
+    def phase_banner(self, phase: DojoPhase, description: str = "") -> str:
+        """Generate a formatted phase transition banner."""
+        brain = PHASE_BRAIN_MAP[phase]
+        brain_icon = {"child": "🧒", "architect": "📐", "critic": "🔍"}
+        icon = brain_icon.get(brain.value, "🥋")
+        desc = f" — {description}" if description else ""
+        return (f"\n  {icon} [{phase.value.upper()}] "
+                f"[{brain.value.upper()} BRAIN]{desc}")
+
+
 def build_128_rack() -> dict:
     """
     Build a DUBFORGE-doctrine 128 Rack with Fibonacci zone distribution.

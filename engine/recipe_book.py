@@ -1623,3 +1623,126 @@ class RecipeBook:
                      f"{len(self.quality_targets)} quality targets     ║"[:48] + "║")
         lines.append("╚══════════════════════════════════════════════╝")
         return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# QUALITY GATE FUNCTIONS — Sprint 1: GOVERNOR
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Style overrides for recipe selection
+STYLE_OVERRIDES: dict[str, dict[str, tuple[float, float]]] = {
+    "riddim": {"Mid %": (5.0, 30.0), "Stereo Width": (0.20, 0.70)},
+    "dubstep": {"Stereo Width": (0.30, 0.85)},
+    "hybrid": {"Low %": (12.0, 38.0), "Mid %": (10.0, 38.0)},
+}
+
+
+def select_recipe(style: str = "dubstep", mood: str = "",
+                   reference_dna: Any = None) -> dict:
+    """
+    Select a production recipe with quality targets and per-phase timeboxes.
+
+    Returns a dict with:
+        targets: list of quality target dicts (name, target_min, target_max, unit)
+        timeboxes: dict of phase → seconds
+        style: resolved style
+        mood: resolved mood
+        recipe_names: list of selected recipe names
+    """
+    book = RecipeBook()
+
+    # Start with global quality targets
+    targets = []
+    for qt in book.get_quality_targets():
+        t = {
+            "name": qt.name,
+            "metric": qt.metric,
+            "target_min": qt.target_min,
+            "target_max": qt.target_max,
+            "unit": qt.unit,
+            "priority": qt.priority,
+        }
+        targets.append(t)
+
+    # Apply style-specific overrides
+    overrides = STYLE_OVERRIDES.get(style.lower(), {})
+    for t in targets:
+        if t["name"] in overrides:
+            t["target_min"], t["target_max"] = overrides[t["name"]]
+
+    # Select relevant recipes by style tags
+    selected = book.get_recipes_by_tag(style.lower())
+    if not selected:
+        selected = book.get_all_recipes()[:10]  # Fallback: top 10
+
+    # Default phi-ratio timeboxes (840s = 14 minutes total)
+    timeboxes = {
+        "oracle": 60.0, "collect": 120.0, "recipes": 30.0,
+        "sketch": 200.0, "arrange": 150.0, "design": 100.0,
+        "mix": 100.0, "master": 30.0, "release": 30.0, "reflect": 20.0,
+    }
+
+    return {
+        "targets": targets,
+        "timeboxes": timeboxes,
+        "style": style,
+        "mood": mood,
+        "recipe_names": [r.name for r in selected],
+    }
+
+
+def check_quality_gate(audio_data: dict, targets: list[dict],
+                        phase_name: str = "") -> dict:
+    """
+    Check measured audio metrics against quality targets.
+
+    Args:
+        audio_data: dict with metric names as keys, measured values as values
+            e.g. {"LUFS": -8.5, "Dynamic Range": 12.0, "Sub %": 22.0}
+        targets: list of target dicts from select_recipe()
+        phase_name: name of the phase being gated
+
+    Returns:
+        dict with:
+            passed: bool — all checks passed
+            checks: list of individual check results
+            warnings: list of warning strings
+    """
+    checks = []
+    warnings = []
+
+    for t in targets:
+        name = t["name"]
+        if name not in audio_data:
+            continue
+        value = audio_data[name]
+        t_min = t.get("target_min")
+        t_max = t.get("target_max")
+        passed = True
+        if t_min is not None and value < t_min:
+            passed = False
+            warnings.append(
+                f"{name}: {value:.2f} below min {t_min} {t.get('unit', '')}")
+        if t_max is not None and value > t_max:
+            passed = False
+            warnings.append(
+                f"{name}: {value:.2f} above max {t_max} {t.get('unit', '')}")
+        checks.append({
+            "name": name,
+            "value": value,
+            "target_min": t_min,
+            "target_max": t_max,
+            "unit": t.get("unit", ""),
+            "passed": passed,
+            "priority": t.get("priority", "MEDIUM"),
+        })
+
+    all_passed = all(c["passed"] for c in checks) if checks else True
+    return {
+        "phase": phase_name,
+        "passed": all_passed,
+        "checks": checks,
+        "warnings": warnings,
+        "checks_passed": sum(1 for c in checks if c["passed"]),
+        "checks_total": len(checks),
+    }
