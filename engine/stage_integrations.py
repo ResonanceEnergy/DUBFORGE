@@ -2187,3 +2187,331 @@ def generate_tonal_palette(dna: Any) -> list:
     except Exception as exc:
         log.debug("tonal_palette skipped: %s", exc)
         return colors
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  DOJO SPRINT 3 — FAT LOOP: Subtractive Arrangement Intelligence
+# ═══════════════════════════════════════════════════════════════════
+
+# Phi-based energy thresholds for element inclusion per section type
+_SECTION_ENERGY = {
+    "intro":  0.15,   # 10-20% of elements
+    "build":  0.50,   # Rising tension
+    "drop1":  1.00,   # FAT LOOP — everything plays
+    "break":  0.20,   # Contrast valley
+    "build2": 0.55,   # Second rise
+    "drop2":  1.00,   # Second climax
+    "outro":  0.12,   # Minimal fadeout
+}
+
+# Element priority for subtractive decisions (higher = kept longer)
+_ELEMENT_PRIORITY = {
+    "kick": 0.95, "sub": 0.92, "snare": 0.88, "bass": 0.85,
+    "hat_c": 0.70, "hat_o": 0.65, "clap": 0.60,
+    "drone": 0.55, "pad": 0.50, "lead": 0.78,
+    "riser": 0.45, "hit": 0.40, "drop_noise": 0.35,
+    "fm_growl": 0.82, "growl_wt": 0.80, "dist_fm": 0.77,
+    "sync_bass": 0.75, "acid_bass": 0.73, "neuro_bass": 0.76,
+    "formant_bass": 0.72, "dark_pad": 0.48, "lush": 0.46,
+    "boom": 0.38,
+}
+
+
+def build_fat_loop_map(dna, sound_elements: dict, sr: int = 48000) -> dict:
+    """Build the Fat Loop — a conceptual 8-bar section with ALL elements at full
+    intensity (the Drop/climax). Returns a dict mapping element names to their
+    priority and gain settings for the Fat Loop.
+
+    This is the ill.GATES approach: build the DROP first, then subtract.
+    """
+    fat_loop: dict = {"elements": {}, "bars": 8, "bpm": 0.0, "energy": 1.0}
+    try:
+        bpm = getattr(dna, 'bpm', 150.0)
+        fat_loop["bpm"] = bpm
+
+        for name, audio in sound_elements.items():
+            if audio is None:
+                continue
+            n_samples = len(audio) if isinstance(audio, (list, tuple)) else 0
+            priority = _ELEMENT_PRIORITY.get(name, 0.50)
+            fat_loop["elements"][name] = {
+                "priority": priority,
+                "gain": 1.0,
+                "samples": n_samples,
+                "active": True,
+            }
+
+        n_el = len(fat_loop["elements"])
+        print(f"  ✓ fat_loop: {n_el} elements in Fat Loop"
+              f" @ {bpm:.0f} BPM, 8 bars")
+        return fat_loop
+    except Exception as exc:
+        log.debug("fat_loop build skipped: %s", exc)
+        return fat_loop
+
+
+def compute_subtractive_map(
+    fat_loop: dict, dna, rco_energy: dict | None = None,
+) -> dict:
+    """For each arrangement section, compute which elements from the Fat Loop
+    should be ACTIVE vs MUTED based on the section's energy target.
+
+    Returns {section_name: {element_name: {"active": bool, "gain": float}}}.
+
+    The Dojo Way: Start with everything ON (the Fat Loop), then SUBTRACT
+    for each section that isn't the drop.
+    """
+    subtract_map: dict = {}
+    try:
+        elements = fat_loop.get("elements", {})
+        if not elements:
+            return subtract_map
+
+        # Sort elements by priority descending
+        sorted_els = sorted(
+            elements.items(), key=lambda kv: kv[1].get("priority", 0.5),
+            reverse=True,
+        )
+        n_total = len(sorted_els)
+
+        # Get section energies — either from RCO or defaults
+        sec_energies = dict(_SECTION_ENERGY)  # copy defaults
+        if rco_energy and isinstance(rco_energy, dict):
+            sections = rco_energy.get("sections", [])
+            for sec in sections:
+                sname = sec.get("name", "").lower()
+                if sname in sec_energies:
+                    raw = sec.get("energy_avg", sec_energies[sname])
+                    sec_energies[sname] = raw
+
+        # Arrangement from DNA
+        sec_names = []
+        if hasattr(dna, 'arrangement'):
+            sec_names = [s.name for s in dna.arrangement]
+        if not sec_names:
+            sec_names = list(_SECTION_ENERGY.keys())
+
+        for sec_name in sec_names:
+            energy = sec_energies.get(sec_name, 0.5)
+            # Number of elements to keep = energy × total
+            n_keep = max(1, int(round(energy * n_total)))
+            sec_elements: dict = {}
+            for i, (el_name, el_info) in enumerate(sorted_els):
+                active = i < n_keep
+                # Gain ramps with priority position within the active set
+                gain = 1.0 if active else 0.0
+                if active and energy < 1.0:
+                    # Taper lower-priority active elements
+                    pos_ratio = i / max(n_keep, 1)
+                    gain = 1.0 - (pos_ratio * 0.3 * (1.0 - energy))
+                sec_elements[el_name] = {"active": active, "gain": gain}
+            subtract_map[sec_name] = sec_elements
+
+        n_sections = len(subtract_map)
+        # Summary: how many elements per section
+        counts = {s: sum(1 for e in v.values() if e["active"])
+                  for s, v in subtract_map.items()}
+        summary = ", ".join(f"{s}={c}" for s, c in counts.items())
+        print(f"  ✓ subtractive_map: {n_sections} sections — [{summary}]")
+        return subtract_map
+    except Exception as exc:
+        log.debug("subtractive_map skipped: %s", exc)
+        return subtract_map
+
+
+def extract_ghost_markers(dna, sr: int = 48000) -> list:
+    """Extract Ghost Track section markers from reference analysis.
+
+    Returns list of dicts: [{name, start_pct, end_pct, energy, bars}].
+    Falls back to DNA arrangement if no reference analysis is available.
+    """
+    markers: list = []
+    try:
+        from engine.reference_analyzer import analyze_reference
+        ref_path = getattr(dna, 'reference_path', None)
+        if ref_path:
+            import os
+            if os.path.isfile(ref_path):
+                analysis = analyze_reference(ref_path,
+                                             genre="dubstep",
+                                             max_duration_s=600)
+                arr_dna = getattr(analysis, 'arrangement', None)
+                if arr_dna:
+                    labels = getattr(arr_dna, 'section_labels', [])
+                    bounds = getattr(arr_dna, 'section_boundaries_pct', [])
+                    energy = getattr(arr_dna, 'energy_curve', [])
+                    for i, label in enumerate(labels):
+                        start = bounds[i] if i < len(bounds) else 0.0
+                        end = bounds[i + 1] if (i + 1) < len(bounds) else 1.0
+                        e = energy[i] if i < len(energy) else 0.5
+                        markers.append({
+                            "name": label,
+                            "start_pct": start,
+                            "end_pct": end,
+                            "energy": e,
+                        })
+                    print(f"  ✓ ghost_markers: {len(markers)} sections"
+                          f" from reference — [{', '.join(labels)}]")
+                    return markers
+
+        # Fallback: derive markers from DNA arrangement
+        if hasattr(dna, 'arrangement'):
+            total_bars = sum(s.bars for s in dna.arrangement)
+            cum = 0
+            for sec in dna.arrangement:
+                start_pct = cum / total_bars if total_bars else 0.0
+                cum += sec.bars
+                end_pct = cum / total_bars if total_bars else 1.0
+                markers.append({
+                    "name": sec.name,
+                    "start_pct": start_pct,
+                    "end_pct": end_pct,
+                    "energy": sec.intensity,
+                    "bars": sec.bars,
+                })
+            print(f"  ✓ ghost_markers: {len(markers)} sections"
+                  f" from DNA arrangement (no reference)")
+        return markers
+    except Exception as exc:
+        log.debug("ghost_markers skipped: %s", exc)
+        return markers
+
+
+def measure_section_contrast(
+    subtract_map: dict, dna,
+) -> dict:
+    """Measure contrast between high-energy and low-energy sections.
+
+    ill.GATES: "Contrast is King" — the difference between drop and breakdown
+    matters more than the absolute energy of either.
+
+    Returns {drop_energy, breakdown_energy, contrast_db, contrast_ratio,
+             section_contrasts: [{from, to, contrast}]}.
+    """
+    result: dict = {
+        "drop_energy": 0.0, "breakdown_energy": 0.0,
+        "contrast_db": 0.0, "contrast_ratio": 0.0,
+        "section_contrasts": [],
+    }
+    try:
+        import math
+
+        # Count active elements per section as proxy for energy
+        sec_energy: dict = {}
+        for sec_name, elements in subtract_map.items():
+            n_active = sum(1 for e in elements.values() if e.get("active"))
+            total = max(len(elements), 1)
+            sec_energy[sec_name] = n_active / total
+
+        # Identify drop and breakdown sections
+        drop_names = {"drop1", "drop2"}
+        breakdown_names = {"break", "intro", "outro"}
+
+        drops = [e for s, e in sec_energy.items() if s in drop_names]
+        breakdowns = [e for s, e in sec_energy.items() if s in breakdown_names]
+
+        drop_avg = sum(drops) / len(drops) if drops else 1.0
+        break_avg = sum(breakdowns) / len(breakdowns) if breakdowns else 0.2
+
+        result["drop_energy"] = drop_avg
+        result["breakdown_energy"] = break_avg
+
+        # Contrast ratio and dB
+        ratio = drop_avg / max(break_avg, 0.01)
+        result["contrast_ratio"] = ratio
+        result["contrast_db"] = (
+            20.0 * math.log10(ratio) if ratio > 0 else 0.0
+        )
+
+        # Per-transition contrast
+        if hasattr(dna, 'arrangement'):
+            sec_list = [s.name for s in dna.arrangement]
+            for i in range(len(sec_list) - 1):
+                a_name = sec_list[i]
+                b_name = sec_list[i + 1]
+                a_e = sec_energy.get(a_name, 0.5)
+                b_e = sec_energy.get(b_name, 0.5)
+                delta = b_e - a_e
+                result["section_contrasts"].append({
+                    "from": a_name, "to": b_name,
+                    "delta": delta,
+                    "type": "rise" if delta > 0.1 else (
+                        "drop" if delta < -0.1 else "sustain"),
+                })
+
+        quality = "STRONG" if result["contrast_db"] > 6.0 else (
+            "WEAK" if result["contrast_db"] < 3.0 else "OK")
+        print(f"  ✓ contrast: drop={drop_avg:.0%} vs break={break_avg:.0%}"
+              f" → {result['contrast_db']:.1f}dB ({quality})")
+        return result
+    except Exception as exc:
+        log.debug("contrast measurement skipped: %s", exc)
+        return result
+
+
+def compute_arrangement_energy_curve(
+    dna, ghost_markers: list, rco_energy: dict | None = None,
+) -> list:
+    """Compute a per-bar energy curve for the full arrangement by blending
+    the Ghost Track markers, RCO energy profile, and DNA section intensities.
+
+    Returns a list of dicts: [{bar, energy, section_name}] for every bar.
+    """
+    curve: list = []
+    try:
+        from engine.arrangement_sequencer import (
+            build_arrangement, arrangement_energy_curve,
+        )
+
+        # Get arrangement template energy
+        style = getattr(dna, 'mood_name', 'weapon').lower()
+        template_type = "weapon"
+        if any(w in style for w in ('emotive', 'melodic', 'chill')):
+            template_type = "emotive"
+        elif any(w in style for w in ('hybrid', 'experimental')):
+            template_type = "hybrid"
+        elif any(w in style for w in ('fibonacci', 'golden', 'phi')):
+            template_type = "fibonacci"
+
+        bpm = getattr(dna, 'bpm', 150.0)
+        key = getattr(dna, 'key', 'Fm')
+        template = build_arrangement(template_type, bpm=bpm, key=key)
+        template_curve = arrangement_energy_curve(template)
+
+        # Build per-bar curve from DNA arrangement
+        if hasattr(dna, 'arrangement'):
+            bar_idx = 0
+            for sec in dna.arrangement:
+                for b in range(sec.bars):
+                    # Blend DNA intensity with template curve energy
+                    t_energy = 0.5
+                    for tc in template_curve:
+                        if tc.get("start_bar", 0) <= bar_idx < tc.get("end_bar", 0):
+                            t_energy = tc.get("intensity", 0.5)
+                            break
+                    # Ghost marker energy if available
+                    g_energy = sec.intensity
+                    for gm in ghost_markers:
+                        if gm.get("name", "").lower() == sec.name.lower():
+                            g_energy = gm.get("energy", sec.intensity)
+                            break
+                    # Weighted blend: 50% DNA, 30% template, 20% ghost
+                    blended = (sec.intensity * 0.5 + t_energy * 0.3
+                               + g_energy * 0.2)
+                    curve.append({
+                        "bar": bar_idx,
+                        "energy": blended,
+                        "section": sec.name,
+                    })
+                    bar_idx += 1
+
+        n_bars = len(curve)
+        if n_bars > 0:
+            avg_e = sum(c["energy"] for c in curve) / n_bars
+            peak_e = max(c["energy"] for c in curve)
+            print(f"  ✓ energy_curve: {n_bars} bars,"
+                  f" avg={avg_e:.2f}, peak={peak_e:.2f}")
+        return curve
+    except Exception as exc:
+        log.debug("energy_curve computation skipped: %s", exc)
+        return curve

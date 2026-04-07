@@ -159,6 +159,10 @@ from engine.stage_integrations import (
     slice_loops_to_oneshots, init_wav_pool,
     init_preset_browser, detect_reference_tempo_key,
     generate_tonal_palette,
+    # Dojo Sprint 3 — FAT LOOP: Subtractive Arrangement
+    build_fat_loop_map, compute_subtractive_map,
+    extract_ghost_markers, measure_section_contrast,
+    compute_arrangement_energy_curve,
 )
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -2319,6 +2323,24 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print(_dojo.phase_banner(DojoPhase.ARRANGE,
           "Structuring energy arc, section contrast — ARCHITECT BRAIN..."))
     print("  [8/9] Arranging...")
+
+    # ═══ DOJO SPRINT 3 — FAT LOOP: Subtractive Arrangement ════
+    print("  \U0001f528 DOJO SPRINT 3 — Fat Loop → Subtractive Arrangement...")
+    _sketch_sounds = {}
+    for _snd_name in ['kick', 'snare', 'hat_c', 'hat_o', 'clap', 'sub',
+                      'fm_growl', 'growl_wt', 'dist_fm', 'sync_bass',
+                      'acid_bass', 'neuro_bass', 'formant_bass',
+                      'dark_pad', 'lush', 'drone', 'riser',
+                      'boom', 'hit', 'drop_noise']:
+        _snd = locals().get(_snd_name)
+        if _snd is not None:
+            _sketch_sounds[_snd_name] = _snd
+    _fat_loop = build_fat_loop_map(dna, _sketch_sounds, SR)
+    _ghost_markers = extract_ghost_markers(dna, SR)
+    _subtract_map = compute_subtractive_map(_fat_loop, dna, rco_energy)
+    _section_contrast = measure_section_contrast(_subtract_map, dna)
+    _energy_curve = compute_arrangement_energy_curve(dna, _ghost_markers, rco_energy)
+    log_milestone(_session_logger, "FAT LOOP complete — subtractive map ready")
 
     L = [0.0] * total_s
     R = [0.0] * total_s
