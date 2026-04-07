@@ -51,15 +51,61 @@ except ImportError:
 
 DEFAULT_SAMPLE_DIR = "output/samples"
 INDEX_FILE = "sample_index.json"
+DEFAULT_EXTERNAL_ROOT = Path(r"C:\dev\DUBFORGE GALATCIA")
 
 CATEGORIES = [
     "kick", "snare", "clap", "hat_closed", "hat_open",
     "crash", "ride", "perc", "tom", "rimshot", "shaker",
     "fx_riser", "fx_downlifter", "fx_impact", "fx_sweep",
-    "fx_noise", "fx_transition", "fx_stab",
+    "fx_noise", "fx_transition", "fx_stab", "fx_shepard",
+    "fx_tonal_rise", "fx_tonal_fall",
     "vocal", "foley", "texture", "one_shot", "bass_hit",
     "808", "cymbal", "tambourine",
+    # Loop categories (GALATCIA / external packs)
+    "loop_beat", "loop_buildup", "loop_perc", "loop_hihat",
+    "loop_kick_snare",
+    # Wavetable & preset categories
+    "wavetable_neuro", "preset_serum",
 ]
+
+# GALATCIA subfolder names → SampleLibrary category mapping.
+# Keys are subfolder names found under the GALATCIA Samples tree;
+# values must be members of CATEGORIES above.
+_EXTERNAL_CATEGORY_MAP: dict[str, str] = {
+    # Drum one-shots
+    "KICKS":               "kick",
+    "Snares":              "snare",
+    "Claps":               "clap",
+    "Closed":              "hat_closed",
+    "Open":                "hat_open",
+    # FX — Impacts
+    "Booms":               "fx_impact",
+    "Reverses":            "fx_transition",
+    # FX — Shepard tones
+    "Shepard Tones":       "fx_shepard",
+    # FX — Noise risers / downlifters
+    "Noise":               None,           # parent — children override
+    # FX — Tonal risers / downlifters
+    "Tonal":               None,           # parent — children override
+    # Drum loops
+    "Beat Loops":          "loop_beat",
+    "Build Ups":           "loop_buildup",
+    "Fill & Perc Loops":   "loop_perc",
+    "Hihat Loops":         "loop_hihat",
+    "Kick And Snare Loops": "loop_kick_snare",
+    # Neuro wavetables
+    "ERB NEURO WT":        "wavetable_neuro",
+}
+
+# Disambiguation map: when a file lives under BOTH a parent (Noise / Tonal)
+# and a child (Falling / Rising), the *child+parent* combo determines the
+# category.  Keys are (child_folder, parent_folder).
+_TONAL_NOISE_MAP: dict[tuple[str, str], str] = {
+    ("Falling", "Noise"): "fx_downlifter",
+    ("Rising",  "Noise"): "fx_riser",
+    ("Falling", "Tonal"): "fx_tonal_fall",
+    ("Rising",  "Tonal"): "fx_tonal_rise",
+}
 
 # Freesound.org API
 FREESOUND_API_BASE = "https://freesound.org/apiv2"
@@ -171,6 +217,9 @@ class SampleLibrary:
         self._ensure_dirs()
         # Load existing index
         self._load_index()
+        # Auto-scan external sample packs (e.g. GALATCIA) if present
+        if self.total_count == 0:
+            self._auto_scan_external()
 
     def _ensure_dirs(self):
         """Create category directories."""
@@ -194,6 +243,99 @@ class SampleLibrary:
         data = {cat: [s.to_dict() for s in samples]
                 for cat, samples in self._index.items()}
         self._index_path.write_text(json.dumps(data, indent=2))
+
+    def _auto_scan_external(self):
+        """Auto-discover GALATCIA (or similar) external sample packs."""
+        root = DEFAULT_EXTERNAL_ROOT
+        if not root.is_dir():
+            return
+        _log.info("Auto-scanning external sample pack: %s", root)
+        self.scan_external_dir(root)
+
+    def _resolve_category(self, filepath: Path) -> str | None:
+        """Determine the SampleLibrary category for *filepath*.
+
+        Uses the parent-folder walk plus the Tonal/Noise disambiguation
+        map so that ``FX/Noise/Rising`` and ``FX/Tonal/Rising`` land in
+        different categories.
+        """
+        parts = [p.name for p in filepath.parents]
+        # Check (child, parent) disambiguation first
+        for i in range(len(parts) - 1):
+            key = (parts[i], parts[i + 1])
+            if key in _TONAL_NOISE_MAP:
+                return _TONAL_NOISE_MAP[key]
+        # Fall through to the flat map
+        for folder in parts:
+            if folder in _EXTERNAL_CATEGORY_MAP:
+                cat = _EXTERNAL_CATEGORY_MAP[folder]
+                if cat is not None:
+                    return cat
+        return None
+
+    def scan_external_dir(self, root: Path) -> int:
+        """Walk *root* for .wav and .fxp files, index in-place.
+
+        .wav → drum one-shots, FX, loops, wavetables (by subfolder).
+        .fxp → Serum 2 presets (all mapped to ``preset_serum``).
+
+        Files are NOT copied — the index stores absolute paths pointing
+        at the original location so there is zero duplication.
+
+        Returns the number of new samples indexed.
+        """
+        root = Path(root)
+        added = 0
+        existing_paths: set[str] = set()
+        for samples in self._index.values():
+            for s in samples:
+                existing_paths.add(s.path)
+
+        # ── WAV samples (drums, FX, loops, wavetables) ──────────────
+        for wav in root.rglob("*.wav"):
+            if wav.name.startswith("._") or "__MACOSX" in str(wav):
+                continue
+            abs_path = str(wav.resolve())
+            if abs_path in existing_paths:
+                continue
+
+            category = self._resolve_category(wav)
+            if category is None or category not in self._index:
+                continue
+
+            meta = SampleMeta(
+                filename=wav.name,
+                category=category,
+                path=abs_path,
+                source="external",
+            )
+            self._index[category].append(meta)
+            existing_paths.add(abs_path)
+            added += 1
+
+        # ── FXP presets (Serum 2) ────────────────────────────────────
+        for fxp in root.rglob("*.fxp"):
+            if fxp.name.startswith("._") or "__MACOSX" in str(fxp):
+                continue
+            abs_path = str(fxp.resolve())
+            if abs_path in existing_paths:
+                continue
+
+            meta = SampleMeta(
+                filename=fxp.name,
+                category="preset_serum",
+                path=abs_path,
+                source="external",
+            )
+            self._index["preset_serum"].append(meta)
+            existing_paths.add(abs_path)
+            added += 1
+
+        if added:
+            self._save_index()
+            _log.info("Indexed %d external assets from %s (total: %d)",
+                      added, root, self.total_count)
+        return added
 
     # ── PROPERTIES ───────────────────────────────────────────────────────
 

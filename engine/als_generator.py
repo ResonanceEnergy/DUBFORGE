@@ -1010,6 +1010,163 @@ def _build_drum_group_device(
         _v(dg, f"ExcludeMacroFromRandomization.{i}", "false")
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# NATIVE ABLETON EFFECT DEVICE BUILDERS
+# ═══════════════════════════════════════════════════════════════════════════
+# Build inline Ableton-native audio effects (EQ Eight, Compressor, etc.)
+# following the Ableton Live 12 XML schema (12.0_12117).
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _build_eq8(devices_elem: ET.Element, ids: _IdCounter,
+               device_id: int = 0) -> None:
+    """Build an Ableton EQ Eight (Eq8) device with flat default settings."""
+    eq = ET.SubElement(devices_elem, "Eq8", Id=str(device_id))
+    _device_header(eq, ids)
+    _v(eq, "OverwriteProtectionNumber", "2816")
+
+    _v(eq, "Precision", "0")       # 0=Eco, 1=Mid, 2=High, 3=Ultra
+    _v(eq, "Mode", "0")           # 0=Stereo, 1=L/R, 2=M/S
+    _v(eq, "EditMode", "false")
+    _v(eq, "SelectedBand", "3")
+
+    # Default band frequencies for dubstep mixing
+    _FREQS = [40.0, 200.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 18000.0]
+    # Mode: 1=LowCut48, 2=LowShelf, 3=Bell, 5=HighShelf, 6=HighCut48
+    _MODES = [1, 2, 3, 3, 3, 3, 5, 6]
+    _ACTIVE = [False, True, True, True, True, True, True, False]
+
+    for i in range(8):
+        band = ET.SubElement(eq, f"Bands.{i}")
+        for ab in ("ParameterA", "ParameterB"):
+            param = ET.SubElement(band, ab)
+            _bool_param(param, "IsOn",
+                        str(_ACTIVE[i]).lower() if ab == "ParameterA" else "false",
+                        ids)
+            _float_param(param, "Mode", str(_MODES[i]), ids,
+                         min_val="0", max_val="6")
+            _float_param(param, "Freq", str(_FREQS[i]), ids,
+                         min_val="10", max_val="22000")
+            _float_param(param, "Gain", "0", ids, min_val="-15", max_val="15")
+            _float_param(param, "Q", "0.71", ids, min_val="0.1", max_val="18")
+
+    _v(eq, "SpectrumResolution", "1")
+    _float_param(eq, "Output", "0", ids, min_val="-12", max_val="12")
+    _v(eq, "Oversampling", "false")
+    _float_param(eq, "GlobalGain", "0", ids, min_val="-12", max_val="12")
+    _float_param(eq, "Scale", "1", ids, min_val="0", max_val="2")
+
+
+def _build_compressor(devices_elem: ET.Element, ids: _IdCounter,
+                      device_id: int = 0) -> None:
+    """Build an Ableton Compressor (Compressor2) device with sensible defaults."""
+    comp = ET.SubElement(devices_elem, "Compressor2", Id=str(device_id))
+    _device_header(comp, ids)
+    _v(comp, "OverwriteProtectionNumber", "2816")
+
+    _float_param(comp, "Threshold", "-20", ids, min_val="-40", max_val="0")
+    _float_param(comp, "Ratio", "4", ids, min_val="1", max_val="20")
+    _float_param(comp, "ExpansionRatio", "2", ids, min_val="1", max_val="10")
+    _float_param(comp, "Attack", "1", ids, min_val="0.01", max_val="1000")
+    _float_param(comp, "Release", "100", ids, min_val="1", max_val="3000")
+    _bool_param(comp, "AutoReleaseControlOnOff", "false", ids)
+    _float_param(comp, "Gain", "0", ids, min_val="-15", max_val="15")
+    _bool_param(comp, "GainCompensation", "false", ids)
+    _float_param(comp, "DryWet", "1", ids, min_val="0", max_val="1")
+    _v(comp, "Model", "0")          # 0=Peak, 1=RMS, 2=Expand
+    _v(comp, "LegacyModel", "0")
+    _float_param(comp, "Knee", "6", ids, min_val="0", max_val="12")
+    _float_param(comp, "LookAhead", "0", ids, min_val="0", max_val="20")
+
+    # SideChain defaults (no external side-chain)
+    sc = ET.SubElement(comp, "SideChain")
+    _on_switch(sc, ids, value="false")
+    _routing(sc, "RoutedFrom", "AudioIn/External/S0", "Ext. In", "1/2")
+    _float_param(sc, "DryWet", "1", ids, min_val="0", max_val="1")
+
+
+def _build_saturator(devices_elem: ET.Element, ids: _IdCounter,
+                     device_id: int = 0) -> None:
+    """Build an Ableton Saturator device."""
+    sat = ET.SubElement(devices_elem, "Saturator", Id=str(device_id))
+    _device_header(sat, ids)
+    _v(sat, "OverwriteProtectionNumber", "2816")
+
+    _v(sat, "Type", "0")           # 0=Analog Clip, 1=Soft Sine, 2=Medium Curve, 3=Hard Curve, 4=Sinoid, 5=Digi
+    _float_param(sat, "Drive", "0", ids, min_val="-12", max_val="24")
+    _float_param(sat, "Output", "0", ids, min_val="-12", max_val="12")
+    _float_param(sat, "DryWet", "1", ids, min_val="0", max_val="1")
+    _bool_param(sat, "SoftClip", "false", ids)
+    _float_param(sat, "WaveShaper", "0", ids, min_val="-1", max_val="1")
+    _float_param(sat, "Color", "0", ids, min_val="-1", max_val="1")
+    _float_param(sat, "Base", "50", ids, min_val="0", max_val="100")
+    _float_param(sat, "Frequency", "800", ids, min_val="20", max_val="20000")
+    _float_param(sat, "Width", "50", ids, min_val="0", max_val="100")
+    _float_param(sat, "Depth", "0", ids, min_val="-100", max_val="100")
+
+
+def _build_utility(devices_elem: ET.Element, ids: _IdCounter,
+                   device_id: int = 0) -> None:
+    """Build an Ableton Utility (StereoGain) device."""
+    ug = ET.SubElement(devices_elem, "StereoGain", Id=str(device_id))
+    _device_header(ug, ids)
+    _v(ug, "OverwriteProtectionNumber", "2816")
+
+    _float_param(ug, "Gain", "0", ids, min_val="-35", max_val="35")
+    _float_param(ug, "Balance", "0", ids, min_val="-1", max_val="1")
+    _bool_param(ug, "Mute", "false", ids)
+    _bool_param(ug, "PhaseInvertL", "false", ids)
+    _bool_param(ug, "PhaseInvertR", "false", ids)
+    _float_param(ug, "StereoWidth", "1", ids, min_val="0", max_val="4")
+    _bool_param(ug, "Mono", "false", ids)
+    _bool_param(ug, "BassMono", "false", ids)
+    _float_param(ug, "BassMonoFrequency", "120", ids, min_val="50", max_val="500")
+    _bool_param(ug, "DcFilter", "true", ids)
+
+
+def _build_auto_filter(devices_elem: ET.Element, ids: _IdCounter,
+                       device_id: int = 0) -> None:
+    """Build an Ableton Auto Filter device."""
+    filt = ET.SubElement(devices_elem, "AutoFilter", Id=str(device_id))
+    _device_header(filt, ids)
+    _v(filt, "OverwriteProtectionNumber", "2816")
+
+    _float_param(filt, "Frequency", "1000", ids, min_val="20", max_val="18000")
+    _float_param(filt, "Resonance", "0.5", ids, min_val="0", max_val="1.25")
+    _v(filt, "FilterType", "0")      # 0=LowPass, 1=HighPass, 2=BandPass, 3=Notch, 4=Morph
+    _v(filt, "Slope", "0")           # 0=12dB, 1=24dB
+    _v(filt, "CircuitLpHp", "0")     # 0=Clean, 1=OSR, 2=MS2, 3=SMP, 4=PRD
+    _v(filt, "CircuitBpNoMo", "0")
+    _float_param(filt, "LfoAmount", "0", ids, min_val="0", max_val="24")
+    _float_param(filt, "LfoRate", "5", ids, min_val="0.01", max_val="30")
+    _v(filt, "LfoQuantizeOn", "false")
+    _v(filt, "LfoQuantizeRate", "2")
+    _v(filt, "LfoSync", "0")
+    _v(filt, "LfoSyncedRate", "5")
+    _bool_param(filt, "LfoStereoMode", "false", ids)
+    _float_param(filt, "LfoOffset", "0", ids, min_val="-180", max_val="180")
+    _v(filt, "LfoWaveShape", "0")    # 0=Sine, 1=Square, 2=Triangle, 3=SawUp, 4=SawDown, 5=S&H
+    _float_param(filt, "EnvelopeAmount", "0", ids, min_val="0", max_val="24")
+    _float_param(filt, "EnvelopeAttack", "10", ids, min_val="0.1", max_val="1000")
+    _float_param(filt, "EnvelopeRelease", "100", ids, min_val="1", max_val="3000")
+    _float_param(filt, "DryWet", "1", ids, min_val="0", max_val="1")
+
+    # SideChain
+    sc = ET.SubElement(filt, "SideChain")
+    _on_switch(sc, ids, value="false")
+    _routing(sc, "RoutedFrom", "AudioIn/External/S0", "Ext. In", "1/2")
+
+
+# Map user-friendly FX names to native builder functions
+_NATIVE_DEVICE_BUILDERS: dict[str, Callable] = {
+    "EQ Eight": _build_eq8,
+    "Compressor": _build_compressor,
+    "Saturator": _build_saturator,
+    "Utility": _build_utility,
+    "Auto Filter": _build_auto_filter,
+}
+
+
 def _build_device_chain(dc: ET.Element, track: ALSTrack, ids: _IdCounter,
                         num_returns: int, num_scenes: int,
                         is_midi: bool = False,
@@ -1069,20 +1226,24 @@ def _build_device_chain(dc: ET.Element, track: ALSTrack, ids: _IdCounter,
         inner_dc = ET.SubElement(dc, "DeviceChain")
         devices_elem = ET.SubElement(inner_dc, "Devices")
 
-    # VST3 PluginDevice auto-loading — embed plugin references so
-    # Ableton instantiates instruments when the .als is opened.
+    # VST3 PluginDevice + native Ableton FX auto-loading — embed plugin
+    # and effect device references so Ableton instantiates them on open.
     if track_role != "return":
         # DrumGroupDevice — if track has drum_rack_pads, build a Drum Rack
         if track.drum_rack_pads:
             _build_drum_group_device(devices_elem, track.drum_rack_pads, ids)
 
         for dev_idx, dev_name in enumerate(track.device_names):
-            proc = track.preset_states.get(dev_name)
-            ctrl = track.controller_states.get(dev_name)
-            _build_vst3_plugin_device(devices_elem, dev_name, ids,
-                                      device_id=dev_idx,
-                                      processor_state=proc,
-                                      controller_state=ctrl)
+            if dev_name in _NATIVE_DEVICE_BUILDERS:
+                _NATIVE_DEVICE_BUILDERS[dev_name](devices_elem, ids,
+                                                  device_id=dev_idx)
+            else:
+                proc = track.preset_states.get(dev_name)
+                ctrl = track.controller_states.get(dev_name)
+                _build_vst3_plugin_device(devices_elem, dev_name, ids,
+                                          device_id=dev_idx,
+                                          processor_state=proc,
+                                          controller_state=ctrl)
         ET.SubElement(inner_dc, "SignalModulations")
 
     return events_elem

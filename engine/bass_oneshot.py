@@ -155,13 +155,22 @@ def _write_wav(signal: np.ndarray, path: str,
 
 def synthesize_sub_sine(preset: BassPreset,
                         sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Pure sine sub-bass — clean low-end foundation."""
+    """Sub-bass with harmonic overtone stack for body and presence.
+
+    4 harmonics with decaying amplitudes:
+      1x (fundamental) = 1.0
+      2x = 0.12  (octave, adds warmth)
+      3x = 0.06  (fifth above octave, adds body at ~130Hz)
+      4x = 0.03  (two octaves up, adds presence at ~175Hz)
+    """
     n = int(preset.duration_s * sample_rate)
     t = np.linspace(0, preset.duration_s, n, endpoint=False)
 
-    signal = np.sin(2 * math.pi * preset.frequency * t)
-    # Subtle 2nd harmonic for presence
-    signal += 0.15 * np.sin(2 * math.pi * preset.frequency * 2 * t)
+    f = preset.frequency
+    signal = np.sin(2 * math.pi * f * t)
+    signal += 0.12 * np.sin(2 * math.pi * f * 2 * t)
+    signal += 0.06 * np.sin(2 * math.pi * f * 3 * t)
+    signal += 0.03 * np.sin(2 * math.pi * f * 4 * t)
 
     return _apply_bass_envelope(signal, preset, sample_rate)
 

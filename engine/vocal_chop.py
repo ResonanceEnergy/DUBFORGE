@@ -42,12 +42,13 @@ _log = get_logger("dubforge.vocal_chop")
 # ═══════════════════════════════════════════════════════════════════════════
 
 # (F1, F2, F3) center frequencies and bandwidths for each vowel
+# Bandwidths widened for fuller body — prevents spectral holes between formants
 VOWEL_FORMANTS: dict[str, list[tuple[float, float]]] = {
-    "ah": [(730, 80), (1090, 90), (2440, 120)],    # /ɑ/ as in "father"
-    "oh": [(570, 70), (840, 80), (2410, 110)],      # /ɔ/ as in "bought"
-    "eh": [(530, 60), (1840, 100), (2480, 120)],    # /ɛ/ as in "bet"
-    "ee": [(270, 40), (2290, 110), (3010, 130)],    # /i/ as in "beet"
-    "oo": [(300, 45), (870, 60), (2240, 100)],      # /u/ as in "boot"
+    "ah": [(730, 160), (1090, 180), (2440, 220)],    # /ɑ/ as in "father"
+    "oh": [(570, 140), (840, 160), (2410, 200)],      # /ɔ/ as in "bought"
+    "eh": [(530, 130), (1840, 190), (2480, 220)],     # /ɛ/ as in "bet"
+    "ee": [(270, 90), (2290, 200), (3010, 240)],      # /i/ as in "beet"
+    "oo": [(300, 100), (870, 130), (2240, 190)],      # /u/ as in "boot"
 }
 
 # Fundamental frequencies for different pitches (MIDI note → Hz)

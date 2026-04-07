@@ -526,6 +526,25 @@ def build_preset(name: str) -> SerumPreset:
     return preset
 
 
+def build_song_preset(recipe_name: str, preset_name: str) -> SerumPreset:
+    """Build a preset from a recipe with a custom (song-specific) name.
+
+    Falls back to a minimal preset if factory presets are unavailable.
+    """
+    recipe = _PRESET_RECIPES.get(recipe_name)
+    if recipe is None:
+        raise KeyError(f"No recipe for preset: {recipe_name}")
+    try:
+        preset = clone_factory(recipe["base"], preset_name)
+    except FileNotFoundError:
+        # Factory presets not available on this platform — create minimal preset
+        preset = SerumPreset(name=preset_name)
+    preset.tags = recipe.get("tags", [])
+    for module, params in recipe.get("params", {}).items():
+        preset.set_params(module, params)
+    return preset
+
+
 def build_all_presets() -> dict[str, SerumPreset]:
     """Build all DUBFORGE presets. Returns {name: SerumPreset}."""
     result = {}

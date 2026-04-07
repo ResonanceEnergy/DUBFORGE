@@ -1,0 +1,372 @@
+# DUBFORGE — Track: FRACTAL DESCENT
+# Heavy neuro/tearout, G minor, 155 BPM
+# Character: Chaotic, aggressive, layered bass madness
+
+version: "1.0"
+template_name: FRACTAL_DESCENT
+
+global:
+  bpm: 155
+  time_sig: [4, 4]
+  key: G_minor
+  tuning_a4: 432
+  total_bars: 144
+  golden_ratio: 0.618
+  chord_progression:
+    - G2
+    - Bb2
+    - C3
+    - D3
+  humanize:
+    enabled: true
+    strength: 0.1
+    method: phi_sine
+
+arrangement:
+  - { name: INTRO,      type: intro,  bars: 5  }
+  - { name: BUILD_1,    type: build,  bars: 8  }
+  - { name: DROP_1,     type: drop,   bars: 21 }
+  - { name: BREAK_1,    type: break,  bars: 3  }
+  - { name: BUILD_2,    type: build,  bars: 5  }
+  - { name: DROP_2,     type: drop,   bars: 34 }
+  - { name: BREAK_2,    type: break,  bars: 5  }
+  - { name: BUILD_3,    type: build,  bars: 5  }
+  - { name: DROP_3,     type: drop,   bars: 21 }
+  - { name: BREAK_3,    type: break,  bars: 3  }
+  - { name: BUILD_4,    type: build,  bars: 5  }
+  - { name: DROP_4,     type: drop,   bars: 21 }
+  - { name: OUTRO,      type: outro,  bars: 8  }
+
+tracks:
+  DRUMS:
+    role: drums
+    color: 69
+    volume_db: 0.0
+    pan: 0.0
+    synth: null
+    pads:
+      - { note: 36, name: Kick,   choke: -1 }
+      - { note: 37, name: Rim,    choke: 2  }
+      - { note: 38, name: Snare,  choke: -1 }
+      - { note: 39, name: Clap,   choke: -1 }
+      - { note: 42, name: HH_Cl,  choke: 1  }
+      - { note: 46, name: HH_Op,  choke: 1  }
+      - { note: 49, name: Crash,  choke: -1 }
+      - { note: 51, name: Ride,   choke: -1 }
+      - { note: 56, name: Perc_1, choke: -1 }
+      - { note: 57, name: Perc_2, choke: -1 }
+      - { note: 75, name: Clav,   choke: -1 }
+
+  BASS:
+    role: bass
+    color: 16
+    volume_db: -2.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Neuro_Bass"
+    active_sections: [drop, vip]
+    automation:
+      - param: Filter_Cutoff
+        shape: lp_sweep
+        trigger: drop_start
+        closed: 0.1
+        open: 0.85
+
+  SUB:
+    role: sub
+    color: 17
+    volume_db: -5.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Depth_Sub"
+    active_sections: [drop, vip]
+    automation:
+      - param: Volume
+        shape: sidechain
+        trigger: drop
+        duck_depth: 0.4
+
+  GROWL:
+    role: growl
+    color: 60
+    volume_db: -2.5
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Tearout_Growl"
+    active_sections: [drop]
+    escalation: false
+    automation:
+      - param: Filter_Cutoff
+        shape: sawtooth
+        trigger: drop
+        min: 0.1
+        max: 0.9
+        cycles_per_bar: 3
+      - param: Macro1
+        shape: ramp
+        trigger: drop
+        start: 0.3
+        end: 0.95
+
+  WOBBLE:
+    role: wobble
+    color: 12
+    volume_db: -4.0
+    pan: 0.1
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Chaos_Wobble"
+    active_sections: [drop, vip]
+    automation:
+      - param: Filter_Cutoff
+        shape: sine
+        trigger: drop
+        min: 0.1
+        max: 0.95
+        cycles_per_bar: 4
+
+  RIDDIM:
+    role: riddim
+    color: 13
+    volume_db: -4.0
+    pan: -0.1
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Riddim_Fracture"
+    active_sections: [drop, vip]
+    riddim_variations: [triplet, stutter, bounce, quarter, minimal]
+    automation:
+      - param: Macro1
+        shape: sawtooth
+        trigger: drop
+        min: 0.05
+        max: 0.95
+        cycles_per_bar: 2
+
+  FORMANT:
+    role: formant
+    color: 14
+    volume_db: -4.5
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Demon_Vowel"
+    active_sections: [drop]
+    escalation: true
+    automation:
+      - param: Macro1
+        shape: sine
+        trigger: drop
+        min: 0.05
+        max: 0.95
+        cycles_per_bar: 0.5
+
+  LEAD:
+    role: lead
+    color: 25
+    volume_db: -4.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Razor_Lead"
+    active_sections: [drop, build]
+    send_a:
+      build: 0.25
+      drop: 0.5
+
+  COUNTER:
+    role: counter
+    color: 26
+    volume_db: -6.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Shard_Counter"
+    active_sections: [drop, build]
+    send_a:
+      drop: 0.4
+      build: 0.2
+
+  VOCAL_CHOP:
+    role: vocal_chop
+    color: 41
+    volume_db: -5.0
+    pan: 0.2
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Scream_Chop"
+    active_sections: [drop, vip]
+    send_b:
+      drop: 0.45
+
+  CHORDS:
+    role: chords
+    color: 45
+    volume_db: -6.5
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Dissonant_Reese"
+    active_sections: [drop, verse, bridge]
+    automation:
+      - param: Filter_Cutoff
+        shape: lp_sweep
+        trigger: drop_start
+        closed: 0.4
+        open: 0.9
+    send_a:
+      drop: 0.3
+
+  PAD:
+    role: pad
+    color: 46
+    volume_db: -10.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Dark_Matter_Pad"
+    active_sections: [intro, break, outro]
+    send_a:
+      intro: 0.7
+      break: 0.75
+      outro: 0.8
+
+  ARP:
+    role: arp
+    color: 50
+    volume_db: -8.0
+    pan: -0.3
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Glitch_Arp"
+    active_sections: [drop, vip]
+    send_b:
+      drop: 0.5
+
+  FX:
+    role: fx
+    color: 3
+    volume_db: -5.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Nuke_Impact"
+    active_sections: [drop, build]
+
+  RISER:
+    role: riser
+    color: 4
+    volume_db: -7.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "FRACTAL_DESCENT_Tension_Rise"
+    active_sections: [build]
+    automation:
+      - param: Filter_Cutoff
+        shape: lp_sweep
+        trigger: build
+        closed: 0.1
+        open: 1.0
+        curve: 0.4
+      - param: Volume
+        shape: ramp
+        trigger: build
+        start: 0.25
+        end: 1.0
+
+returns:
+  REVERB:
+    send_id: A
+    color: 57
+    volume_db: -7.0
+  DELAY:
+    send_id: B
+    color: 58
+    volume_db: -7.0
+
+drum_patterns:
+  intro:
+    density: sparse
+    kick: [0]
+    hh_cl: [0, 1, 2, 3]
+    base_velocity: 55
+  build:
+    density: accelerating
+    kick: [0, 2]
+    snare: [1, 3]
+    hh_cl: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
+    base_velocity: 90
+    snare_roll: true
+  drop:
+    density: full
+    kick: [0, 1, 2, 3]
+    snare: [1, 3]
+    hh_cl: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
+    hh_op: [0.75, 2.75]
+    perc_1: [0.5, 1.5, 2.5, 3.5]
+    base_velocity: 120
+  break:
+    density: minimal
+    kick: [0]
+    perc_1: [1.5, 3.5]
+    base_velocity: 60
+    snare_roll: true
+  bridge:
+    density: half
+    kick: [0, 2]
+    snare: [2]
+    hh_cl: [0, 1, 2, 3]
+    base_velocity: 75
+  outro:
+    density: decaying
+    kick: [0]
+    base_velocity: 45
+
+midi_rules:
+  bass:
+    pattern: root_per_chord
+    octave_offset: 0
+    default_velocity: 110
+    duration: 1.0
+  sub:
+    pattern: root_per_chord
+    octave_offset: -1
+    default_velocity: 90
+    duration: 3.0
+  growl:
+    pattern: root_per_chord
+    octave_offset: 0
+    default_velocity: 115
+    duration: 0.75
+  wobble:
+    pattern: root_per_chord
+    octave_offset: 0
+    default_velocity: 105
+    duration: 1.5
+  riddim:
+    pattern: rhythmic_chop
+    octave_offset: 0
+    default_velocity: 110
+  formant:
+    pattern: root_per_chord
+    octave_offset: 0
+    default_velocity: 100
+    duration: 1.5
+  lead:
+    pattern: ascending_phrase
+    notes: [G3, Bb3, C4, D4]
+    default_velocity: 100
+  counter:
+    pattern: descending_phrase
+    notes: [D4, C4, Bb3, G3]
+    default_velocity: 90
+  vocal_chop:
+    pattern: rhythmic_hits
+    default_velocity: 105
+  chords:
+    pattern: chord_voicing
+    default_velocity: 80
+  pad:
+    pattern: sustained_chord
+    default_velocity: 60
+    duration: 8.0
+  arp:
+    pattern: arpeggio
+    default_velocity: 90
+  fx:
+    pattern: transition_hit
+    default_velocity: 115
+  riser:
+    pattern: sustained_note
+    default_velocity: 90
+    duration: section_length

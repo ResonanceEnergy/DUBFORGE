@@ -61,6 +61,8 @@ class MasterSettings:
     compression_ratio: float = 3.0
     compression_attack_ms: float = 10.0
     compression_release_ms: float = 100.0
+    multiband_threshold_db: float = -12.0   # Multiband comp threshold (was hardcoded)
+    multiband_ratio: float = 3.0            # Multiband comp ratio (was hardcoded)
     stereo_width: float = 1.0            # 1.0 = unchanged, >1 = wider
     limiter_enabled: bool = True
 
@@ -225,10 +227,32 @@ def peaking_eq(audio: np.ndarray, freq: float, gain_db: float,
     return _biquad_filter(audio, b, a)
 
 
+def highpass(audio: np.ndarray, freq: float, q: float = 0.707,
+             sr: int = SAMPLE_RATE) -> np.ndarray:
+    """2nd-order Butterworth highpass biquad — removes sub rumble."""
+    w0 = 2 * np.pi * freq / sr
+    alpha = np.sin(w0) / (2 * q)
+    cos_w0 = np.cos(w0)
+    a0 = 1 + alpha
+    b = np.array([
+        ((1 + cos_w0) / 2) / a0,
+        -(1 + cos_w0) / a0,
+        ((1 + cos_w0) / 2) / a0,
+    ])
+    a = np.array([
+        1.0,
+        -2 * cos_w0 / a0,
+        (1 - alpha) / a0,
+    ])
+    return _biquad_filter(audio, b, a)
+
+
 def apply_eq(audio: np.ndarray, settings: MasterSettings,
              sr: int = SAMPLE_RATE) -> np.ndarray:
-    """Apply the full EQ chain."""
-    out = low_shelf(audio, settings.eq_low_shelf_freq, settings.eq_low_shelf_db, sr)
+    """Apply the full EQ chain: HPF → shelves → parametric."""
+    # Highpass at 45 Hz — F1=43.65Hz, this catches the fundamental
+    out = highpass(audio, 45.0, q=0.707, sr=sr)
+    out = low_shelf(out, settings.eq_low_shelf_freq, settings.eq_low_shelf_db, sr)
     out = high_shelf(out, settings.eq_high_shelf_freq, settings.eq_high_shelf_db, sr)
     out = peaking_eq(out, settings.eq_mid_freq, settings.eq_mid_boost_db, settings.eq_mid_q, sr)
     return out
@@ -278,7 +302,7 @@ def compress(audio: np.ndarray, settings: MasterSettings,
 def limit(audio: np.ndarray, ceiling_db: float = TRUE_PEAK_CEILING_DB,
           lookahead_ms: float = LOOKAHEAD_MS,
           sr: int = SAMPLE_RATE) -> np.ndarray:
-    """Brickwall true-peak limiter."""
+    """Brickwall true-peak limiter (vectorized)."""
     ceiling_lin = db_to_linear(ceiling_db)
     lookahead = int(lookahead_ms * sr / 1000)
 
@@ -287,13 +311,19 @@ def limit(audio: np.ndarray, ceiling_db: float = TRUE_PEAK_CEILING_DB,
     else:
         abs_audio = np.max(np.abs(audio), axis=1)
 
-    # Peak envelope with lookahead
-    gain = np.ones_like(abs_audio)
-    for i in range(len(abs_audio)):
-        window_end = min(i + lookahead, len(abs_audio))
-        peak = np.max(abs_audio[i:window_end])
-        if peak > ceiling_lin:
-            gain[i] = ceiling_lin / peak
+    # Vectorized peak envelope with lookahead (rolling max)
+    peak_env = np.copy(abs_audio)
+    for shift in range(1, lookahead):
+        shifted = np.empty_like(abs_audio)
+        shifted[:-shift] = abs_audio[shift:]
+        shifted[-shift:] = 0.0
+        np.maximum(peak_env, shifted, out=peak_env)
+
+    gain = np.where(
+        peak_env > ceiling_lin,
+        ceiling_lin / np.maximum(peak_env, 1e-10),
+        1.0,
+    )
 
     # Smooth gain (attack/release)
     smoothed = np.ones_like(gain)
@@ -382,13 +412,15 @@ def master(audio: np.ndarray, sr: int = SAMPLE_RATE,
             out[:, ch] = multiband_compress(
                 out[:, ch], sr,
                 low_xover=120.0, high_xover=4000.0,
-                threshold_db=-12.0, ratio=3.0
+                threshold_db=settings.multiband_threshold_db,
+                ratio=settings.multiband_ratio
             )
     else:
         out = multiband_compress(
             out, sr,
             low_xover=120.0, high_xover=4000.0,
-            threshold_db=-12.0, ratio=3.0
+            threshold_db=settings.multiband_threshold_db,
+            ratio=settings.multiband_ratio
         )
 
     # 3. Bus compression
@@ -472,16 +504,22 @@ def write_master_report(reports: list[MasterReport],
 # ═══════════════════════════════════════════════════════════════════════════
 
 def dubstep_master_settings() -> MasterSettings:
-    """Aggressive dubstep mastering preset."""
+    """Aggressive dubstep mastering preset.
+
+    EQ philosophy: sub should be CONTROLLED, not boosted.
+    Reference standard shows ~4% sub, ~21% bass, ~22% mid.
+    Low shelf is a gentle CUT to tame sub bleed.
+    Mid peaking adds presence that competes with bass.
+    """
     return MasterSettings(
         target_lufs=-10.0,
         ceiling_db=-0.3,
-        eq_low_shelf_db=2.0,       # Boost sub
+        eq_low_shelf_db=-2.5,      # Stronger sub taming
         eq_low_shelf_freq=80.0,
-        eq_high_shelf_db=1.5,      # Air
+        eq_high_shelf_db=2.5,      # More air + brightness
         eq_high_shelf_freq=10000.0,
-        eq_mid_boost_db=-1.0,      # Scoop mids slightly
-        eq_mid_freq=400.0,
+        eq_mid_boost_db=1.5,       # Moderate mid presence
+        eq_mid_freq=2500.0,        # Presence band
         eq_mid_q=0.8,
         compression_threshold_db=-8.0,
         compression_ratio=4.0,

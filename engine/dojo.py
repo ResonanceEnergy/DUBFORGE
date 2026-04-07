@@ -1327,6 +1327,56 @@ CREATIVE_PHILOSOPHY: dict = {
                                     "5 samples, 8 options max), STOP and commit.",
         },
     },
+    "three_brain_model": {
+        "title": "The Three-Brain Model of Creativity",
+        "source": "ill.Gates / Producer Dojo methodology",
+        "core_thesis": "The human creative psyche has three modes that must "
+                       "NEVER be allowed to overlap during a session. The Child "
+                       "creates, the Architect structures, the Critic polishes. "
+                       "Letting the Critic into the room while the Child is "
+                       "playing kills the flow state instantly.",
+        "brains": [
+            {
+                "name": "The Child",
+                "function": "Pure play, weird noises, no rules, experimentation",
+                "when": "Phase 1 — Jamming / Sound Design / Sketching",
+                "traits": ["Curiosity", "Fearlessness", "Spontaneity", "Joy"],
+                "enemies": ["EQ tweaking", "A/B comparisons", "Self-doubt",
+                            "Overthinking mix balance"],
+            },
+            {
+                "name": "The Architect",
+                "function": "Structure, arrangement, mathematical logic, song form",
+                "when": "Phase 2 — Arranging the song, section planning",
+                "traits": ["Logic", "Pattern recognition", "Energy mapping",
+                           "Narrative arc"],
+                "enemies": ["Sound design tangents", "Adding new elements",
+                            "Rewriting instead of structuring"],
+            },
+            {
+                "name": "The Critic",
+                "function": "Mixing, EQ, cleanup, deletion, polish",
+                "when": "Phase 3 — Mixing / Mastering / Final polish",
+                "traits": ["Precision", "Objectivity", "Subtraction",
+                           "Technical skill"],
+                "enemies": ["Adding new ideas", "Rewriting melodies",
+                            "Starting over instead of finishing"],
+            },
+        ],
+        "golden_rule": "NEVER let the Critic into the room while the Child "
+                       "is playing. If you start EQing a snare while writing "
+                       "a melody, the Child gets bored and leaves — and your "
+                       "flow state dies.",
+        "phi_integration": {
+            "session_split": f"Child: {round(1/PHI, 3)} of session (61.8%), "
+                            f"Architect: {round(1/PHI**2, 3)} (23.6%), "
+                            f"Critic: {round(1/PHI**3, 3)} (14.6%)",
+            "golden_transition": "Transition between brains at phi checkpoints "
+                                "of total session time — not abruptly.",
+            "brain_warmup": "Each brain needs Fibonacci minutes to activate: "
+                           "Child=3min, Architect=5min, Critic=8min warmup.",
+        },
+    },
     "dont_resist_whats_easy": {
         "title": "Don't Resist What's Easy",
         "source": "producerdojo.com/blog/don-t-resist-what-s-easy (February 10 2026)",
@@ -2035,16 +2085,16 @@ EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
                 "('nearly indistinguishable from SSL hardware'). "
                 "From ill.Gates' 'Invest in Stock! ...Devices.' blog (Jan 2026).",
     steps=[
-        "1. Learn Sampler deeply — it IS the 128 Rack engine",
+        "1. Learn Sampler deeply -- it IS the 128 Rack engine",
         "2. Master Operator for FM synthesis before reaching for Serum",
-        "3. Discover Meld, Drift, and Wavetable — three world-class synths you own",
+        "3. Discover Meld, Drift, and Wavetable -- three world-class synths you own",
         "4. Use Saturator Digital Clip mode for clean hard clipping",
-        "5. Embrace OTT preset — it's been the secret weapon for years",
+        "5. Embrace OTT preset -- it's been the secret weapon for years",
         "6. Add Erosion for fizzy, buzzy bass character ('defined whole genres')",
         "7. Explore Roar's routing options (serial/parallel/M-S/multiband)",
         "8. Use Glue Compressor on every bus (SSL quality)",
         "9. Try Echo's ducking and modulation features",
-        "10. Open the free Max for Live devices — untapped goldmine",
+        "10. Open the free Max for Live devices -- untapped goldmine",
     ],
     tools_required=["Ableton Live Suite", "Time and curiosity"],
     dubforge_integration="All DUBFORGE signal processing chains reference stock "
@@ -2054,6 +2104,367 @@ EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
                    "the next. Fibonacci learning order: Sampler first, then 1 more, "
                    "then 2 more, then 3 more, etc.",
 )))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Subtractive Arrangement (Fat Loop Method)",
+    year_introduced=2015,
+    category=TechniqueType.ARRANGEMENT.value,
+    description="Build arrangements by SUBTRACTING from a full loop, not by "
+                "building left-to-right. Create an 8-bar 'Fat Loop' where every "
+                "element plays at once (the climax). Duplicate across the timeline. "
+                "Then MUTE/DELETE parts to create sections. Much faster than "
+                "additive arrangement and guarantees the drop sounds full.",
+    steps=[
+        "1. Create an 8-bar loop with ALL elements playing (the 'Fat Loop')",
+        "2. This loop IS your drop -- every sound at full energy",
+        "3. Duplicate the Fat Loop across the full arrangement (e.g. 4 minutes)",
+        "4. Go to the intro: MUTE drums, bass, most elements -- leave only pads/atmos",
+        "5. Go to the build: unmute drums (half-time), add elements progressively",
+        "6. Leave the drop section intact (it's already full)",
+        "7. Go to the breakdown: mute everything except chords/lead/atmosphere",
+        "8. Second build: progressively unmute again",
+        "9. Second drop: full loop again but swap some bass sounds (VIP mentality)",
+        "10. Now you only need to design the 2-bar TRANSITIONS between sections",
+    ],
+    tools_required=["Ableton Live Arrangement View", "Clip duplication",
+                   "Mute/Solo tools", "Transition FX library"],
+    dubforge_integration="DUBFORGE RCO energy curve maps perfectly: start with "
+                        "energy=1.0 everywhere, then carve the curve by muting. "
+                        "Fibonacci bar counts for section lengths: 8+13+21+8+8+21+5.",
+    phi_enhancement="Fat Loop length: 8 bars (Fibonacci). Transition gaps: "
+                   "2 bars = Fibonacci. Muting pattern follows golden section: "
+                   "first unmuted element at bar total/Phi. Subtraction ratio: "
+                   "remove 1/phi of elements per energy level drop.",
+)))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Song Mapping (Ghost Track Technique)",
+    year_introduced=2012,
+    category=TechniqueType.ARRANGEMENT.value,
+    description="Reverse-engineer professional arrangements by dragging a "
+                "reference track into your project and marking every structural "
+                "event. Delete the reference audio but keep the markers. Build "
+                "your own song using that exact structural 'map.' Removes "
+                "'what comes next?' anxiety and lets you focus purely on sounds.",
+    steps=[
+        "1. Choose a professional track in a similar style to your target",
+        "2. Drag it into your DAW project on a reference audio track",
+        "3. Create Locator markers every time something changes:",
+        "   -- 'Hi-hats enter' / 'Sub drops out' / 'New FX layer' / 'Drums half-time'",
+        "4. Mark energy level at each marker (1-10 or low/med/high)",
+        "5. Note bar counts between markers (will likely be powers of 2 or Fibonacci)",
+        "6. Color-code markers by element type (drums, bass, melodic, FX)",
+        "7. DELETE the reference audio -- keep ONLY the markers",
+        "8. Build your own song using the marker skeleton as structure",
+        "9. Focus on sounds and emotion -- structure is already decided",
+        "10. After 5-10 maps, internalize the patterns and stop needing the reference",
+    ],
+    tools_required=["Professional reference track (WAV/MP3)",
+                   "Ableton Live Locator Markers", "Color coding system"],
+    dubforge_integration="DUBFORGE Reference Library + Reference Analyzer already "
+                        "extract ArrangementDNA (section detection, drop/build/breakdown "
+                        "labeling, tension curves). Use analyze results as automated "
+                        "Ghost Track data -- no manual marker placement needed.",
+    phi_enhancement="Golden Map: verify that the reference track's climax falls "
+                   "near total_bars/phi. If it does, the track has natural golden "
+                   "proportions. Use phi bar positions as marker anchors for your "
+                   "own arrangement.",
+)))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Frequency Slotting (Tetris Board Mix)",
+    year_introduced=2016,
+    category=TechniqueType.MIXING.value,
+    description="Visualize the mix as a Tetris board where frequency = rows and "
+                "time = columns. If two pieces overlap, the game ends (masking). "
+                "Every sound gets a 'home' frequency range. Enforce with surgical "
+                "EQ. High-pass EVERYTHING that isn't kick or sub up to 200-300 Hz "
+                "to keep the 'basement' surgically clean.",
+    steps=[
+        "1. Assign dominant frequency ranges to each element:",
+        "   -- Kick: 50-100 Hz, Sub: 30-60 Hz, Mid Bass: 144-233 Hz",
+        "   -- Snare: 200-500 Hz fundamental, Lead: 400-2000 Hz, Vocals: 1-4 kHz",
+        "2. High-pass EVERY non-kick non-sub element at 150-300 Hz",
+        "3. For each pair of overlapping elements, decide who 'owns' the range",
+        "4. Sidechain the subordinate element to the dominant one",
+        "5. Use narrow EQ cuts on subordinate, boosts on dominant",
+        "6. Check the Tetris board: no two dominant elements in same row at same time",
+        "7. If drop has sub + kick competing below 80 Hz, sidechain sub to kick",
+        "8. Use spectrum analyzer to visually verify slot separation",
+        "9. A/B with reference tracks -- frequency distribution should match",
+        "10. The cleaner the Tetris board, the louder the master can be pushed",
+    ],
+    tools_required=["EQ Eight", "Spectrum analyzer", "Sidechain Compressor",
+                   "Auto Filter (high-pass)", "Reference plugin"],
+    dubforge_integration="PSBS crossover frequencies (55/89/144/233/377 Hz) "
+                        "ARE the Tetris row boundaries -- every bass layer has "
+                        "a pre-assigned frequency slot. MixingDNA module measures "
+                        "mud_ratio (200-500 Hz) and harshness_ratio (2-5 kHz) "
+                        "to detect Tetris collisions.",
+    phi_enhancement="Frequency slots at phi ladder: 55, 89, 144, 233, 377, 610 Hz. "
+                   "Each slot width = previous_width * phi. "
+                   "EQ cut depth = 1/phi (0.618) of overlap energy. "
+                   "Sidechain ratio: phi:1 (1.618:1).",
+)))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Contrast is King",
+    year_introduced=2018,
+    category=TechniqueType.ARRANGEMENT.value,
+    description="Every perceived quality is relative to what came before. "
+                "You cannot have 'huge' without 'small' for reference. "
+                "Wide drops need narrow breakdowns. Heavy drops need thin "
+                "builds. Loud needs quiet. Every musical 'peak' is defined "
+                "by the 'valley' that precedes it.",
+    steps=[
+        "1. For wide drops: make the preceding section MONO (narrow breakdowns)",
+        "2. For huge drops: high-pass the breakdown heavily (thin before thick)",
+        "3. For loud drops: pull volume down in the build (quiet before loud)",
+        "4. For busy drops: strip the breakdown to 1-2 elements (sparse before dense)",
+        "5. For bright drops: darken the build with low-pass filtering",
+        "6. Create contrast checklist for every section transition:",
+        "   -- Width: narrow → wide",
+        "   -- Frequency: thin → full",
+        "   -- Volume: quiet → loud",
+        "   -- Density: sparse → dense",
+        "   -- Brightness: dark → bright",
+        "7. The greater the contrast, the greater the impact",
+        "8. Use silence (even 1-2 beats) before drops for maximum effect",
+        "9. Reverse the pattern for breakdowns: full → stripped",
+        "10. A/B your transitions against reference tracks for contrast ratio",
+    ],
+    tools_required=["Automation (volume, filter, width)", "Utility (stereo)",
+                   "Auto Filter", "Arrangement View"],
+    dubforge_integration="DUBFORGE ArrangementDNA already measures breakdown_depth_db "
+                        "and transition_sharpness. Higher contrast = higher quality "
+                        "score. RCO energy curve enforces valley-peak-valley pattern.",
+    phi_enhancement="Golden contrast ratio: drop energy = phi * breakdown energy. "
+                   "Width contrast: breakdown at 1/phi (0.382) stereo width, "
+                   "drop at 1.0. Volume contrast: breakdown at -phi*3 dB below drop. "
+                   "The phi ratio IS the ideal contrast -- too much feels jarring, "
+                   "too little feels flat. Phi hits the perceptual sweet spot.",
+)))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Pink Noise Mixing",
+    year_introduced=2014,
+    category=TechniqueType.MIXING.value,
+    description="A fast technique to get a balanced 'static mix' using pink noise "
+                "as a reference signal. Play pink noise at a fixed level, then bring "
+                "each track up until it is JUST audible over the noise. This creates "
+                "a mathematically balanced frequency distribution across the mix "
+                "because pink noise has equal energy per octave -- matching human "
+                "perception of loudness across the frequency spectrum.",
+    steps=[
+        "1. Insert a pink noise generator on a dedicated 'Reference' track",
+        "2. Set pink noise to a comfortable listening level (-18 to -12 dBFS)",
+        "3. Solo the pink noise + ONE track at a time",
+        "4. Bring the track fader up from -inf until it's JUST audible over the noise",
+        "5. Mark the fader position and move to the next track",
+        "6. Repeat for all tracks in the session",
+        "7. Un-solo everything -- you now have a balanced 'static mix'",
+        "8. Fine-tune from this baseline (much faster than starting from scratch)",
+        "9. Use as a starting point ONLY -- creative mixing decisions come after",
+        "10. Revisit pink noise check periodically to reset your ears",
+    ],
+    tools_required=["Pink noise generator (Test Tone in Ableton, or external)",
+                   "Volume faders", "Solo/Mute controls", "Fresh ears"],
+    dubforge_integration="DUBFORGE noise_generator module can produce pink noise "
+                        "for this technique. MixingDNA frequency_balance_score "
+                        "measures how close a mix is to pink noise distribution. "
+                        "Auto-mixer module can implement this algorithmically.",
+    phi_enhancement="Pink noise IS phi-friendly: equal energy per octave maps to "
+                   "PSBS phi-ladder frequency bands. Set initial sub mix at "
+                   "1/phi of pink noise level (the sub should be FELT, not heard "
+                   "over noise). Use as calibration before phi-frequency mixing.",
+)))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Low Volume Monitoring (Fletcher-Munson Discipline)",
+    year_introduced=2016,
+    category=TechniqueType.MIXING.value,
+    description="Mix at conversational volume -- low enough to talk over without "
+                "raising your voice. If the mix sounds powerful at low volume, it "
+                "will sound DEADLY on a club system. Mixing loud causes ear fatigue "
+                "(Fletcher-Munson effect) where perceived bass/treble boost at "
+                "high SPL makes you compensate by cutting them, resulting in a "
+                "thin, harsh mix when played at normal levels.",
+    steps=[
+        "1. Set monitoring to 'conversation level' (can talk without yelling)",
+        "2. If you can't hear the sub at low volume, it's in the wrong frequency range",
+        "3. If the snare disappears at low volume, it needs more mid-range body",
+        "4. Check the mix briefly at high volume for sub accuracy (max 30 seconds)",
+        "5. NEVER make EQ decisions at high volume -- Fletcher-Munson distorts perception",
+        "6. Take 10-minute ear breaks every 45-60 minutes (Fibonacci: 45min on, 8min off)",
+        "7. Check on headphones AND monitors -- different Fletcher-Munson curves",
+        "8. Check on phone speaker (worst case scenario = most honest translation test)",
+        "9. If it sounds good quiet, good on phones, and good loud -- it's done",
+        "10. Ear fatigue is cumulative over a session -- your first hour is your most accurate",
+    ],
+    tools_required=["SPL meter (or phone app)", "Multiple monitoring systems",
+                   "Timer for ear breaks", "Phone speaker for translation check"],
+    dubforge_integration="DUBFORGE reference_analyzer measures loudness consistency "
+                        "and streaming_loudness_penalty. Tracks mixed at low volume "
+                        "naturally translate better to streaming (-14 LUFS target). "
+                        "MasteringDNA limiting_transparency catches Fletcher-Munson "
+                        "compensation artifacts.",
+    phi_enhancement="Golden monitoring cycle: phi * 30 min = 48.5 min work, "
+                   "then break. Fibonacci ear-break schedule: 3 min break after "
+                   "first session, 5 min after second, 8 min after third. "
+                   "Low volume level: phi * -20 dBFS ≈ -32 dBFS at monitor.",
+)))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Organic Automation (Macro Performance Recording)",
+    year_introduced=2014,
+    category=TechniqueType.PERFORMANCE.value,
+    description="Instead of drawing automation curves with a mouse, PERFORM them "
+                "by recording knob movements in real time. Map 8 Macros to essential "
+                "'vibe' controls (Filter, Distortion, Space, Movement, Width, Pitch, "
+                "Decay, Drive) and record your physical performance. The tiny "
+                "imperfections in human knob movements create organic, living "
+                "automation that makes electronic music feel alive.",
+    steps=[
+        "1. Map 8 Macros to essential sound parameters:",
+        "   -- Knob 1: Filter Cutoff (most expressive control)",
+        "   -- Knob 2: Distortion / Saturation amount",
+        "   -- Knob 3: Space (Reverb send / Dry-Wet)",
+        "   -- Knob 4: Movement (LFO rate or Auto-pan)",
+        "   -- Knob 5: Stereo Width",
+        "   -- Knob 6: Pitch / Detune",
+        "   -- Knob 7: Decay / Release",
+        "   -- Knob 8: Drive / Grit intensity",
+        "2. Arm automation recording in Arrangement View",
+        "3. Play the arrangement and physically turn knobs in real time",
+        "4. Don't aim for perfection -- the imperfections ARE the point",
+        "5. Record multiple passes, overdubbing different parameters each time",
+        "6. The result: organic, breathing automation with human micro-variations",
+        "7. Quantize ONLY if absolutely necessary -- unquantized = more human",
+        "8. Use controller sensitivity settings for musical response curves",
+        "9. A/B against mouse-drawn automation -- performance feels more alive",
+        "10. This turns mixing from editing into PLAYING -- the DAW becomes an instrument",
+    ],
+    tools_required=["MIDI controller with knobs (Push, APC40, generic)",
+                   "Ableton automation recording mode",
+                   "Macro rack mapping"],
+    dubforge_integration="DUBFORGE automation_recorder module captures knob "
+                        "movements as automation data. Phi-curve response "
+                        "mapping on controller knobs for natural feel. "
+                        "The 8-macro bank maps to PSBS layer controls.",
+    phi_enhancement="Controller response curve: phi-exponential (value = input^phi) "
+                   "for natural sensitivity. Macro range: center (0.5) maps to "
+                   "phi sweet spot of each parameter. Recording quantization: "
+                   "Fibonacci subdivision (off / 1/3 / 1/5 / 1/8 / 1/13 note).",
+)))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Nighttime/Daytime Rule (Energy-Matched Scheduling)",
+    year_introduced=2018,
+    category=TechniqueType.WORKFLOW.value,
+    description="Match production tasks to your biological energy levels. "
+                "'Nighttime' (low energy periods) = prep work: sound design, "
+                "library organization, plugin updates, finger drumming practice. "
+                "'Daytime' (peak energy) = writing: song structure, creativity, "
+                "arrangement, the actual MUSIC. Treat writing like a job -- "
+                "do it when your brain is fresh, not after hours of prep.",
+    steps=[
+        "1. Identify your peak creative hours (usually 1-3 hours after waking)",
+        "2. PROTECT those hours -- no email, no social media, no prep work",
+        "3. Use peak hours exclusively for songwriting and arrangement",
+        "4. Schedule 'prep' work for low-energy periods:",
+        "   -- Sound design experiments",
+        "   -- Library organization and tagging",
+        "   -- Building 128 Racks from collected samples",
+        "   -- Plugin updates and template maintenance",
+        "   -- Finger drumming and controller practice",
+        "   -- Mixing revisions (separate from creation)",
+        "5. End each prep session with a 'ready to write' state",
+        "6. Morning routine: open DAW with template loaded, sounds ready",
+        "7. Don't browse presets during writing -- use what's already loaded",
+        "8. If energy drops mid-session, switch to prep mode -- don't force creativity",
+        "9. Track your energy patterns for a week to find YOUR optimal schedule",
+        "10. Standing desk during creation phase keeps energy high and body moving",
+    ],
+    tools_required=["Calendar/scheduler", "Pre-built templates",
+                   "Organized sample library", "Standing desk (recommended)"],
+    dubforge_integration="DUBFORGE 4-phase pipeline enforces this naturally: "
+                        "Phase 1 (Generation) and Phase 2 (Arrangement) are 'daytime' "
+                        "creative tasks. Phase 3 (Mixing) and Phase 4 (Mastering) are "
+                        "'nighttime' technical tasks. Never mix phases.",
+    phi_enhancement="Golden day split: phi hours of creation (peak hours), "
+                   "remaining hours for prep. For an 8-hour production day: "
+                   f"5 hours creation, 3 hours prep ({round(8/PHI, 1)} : "
+                   f"{round(8 - 8/PHI, 1)}). Peak energy at the golden hour: "
+                   "hour total/phi after waking.",
+)))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Ear Stamina Discipline",
+    year_introduced=2020,
+    category=TechniqueType.MIXING.value,
+    description="Technical mixing isn't just about knowledge -- it's about "
+                "biological limitations. Your ears fatigue, your perception shifts "
+                "with volume and duration, and your first hour of mixing is always "
+                "your most accurate. Respect the biology or your decisions degrade.",
+    steps=[
+        "1. Your first hour of mixing is your MOST accurate -- prioritize critical decisions",
+        "2. Ear fatigue is cumulative: 45 min on, 10 min off (minimum)",
+        "3. NEVER exceed 85 dB SPL for extended periods (hearing damage threshold)",
+        "4. Hearing sensitivity changes with volume (Fletcher-Munson curves):",
+        "   -- Loud: perceived bass/treble boost → you cut too much → thin mix",
+        "   -- Quiet: perceived bass/treble reduction → you boost too much → muddy mix",
+        "5. Solution: mix at conversation level, check at loud for 30-second bursts ONLY",
+        "6. Caffeine, alcohol, fatigue, and stress ALL alter frequency perception",
+        "7. After 3 hours of mixing, STOP -- your ears are lying to you",
+        "8. Sleep on it: next-day listening reveals issues invisible during the session",
+        "9. Keep notes of what sounds 'wrong' on day 2 -- those are real problems",
+        "10. Reference tracks RESET your ears -- A/B every 15-20 minutes to recalibrate",
+    ],
+    tools_required=["Timer (ear break forcing)", "SPL meter",
+                   "Reference tracks", "Next-day revision habit"],
+    dubforge_integration="DUBFORGE reference_library compare function serves as "
+                        "an automated 'ear reset' -- objective frequency and loudness "
+                        "comparison against the reference standard. No ear fatigue "
+                        "in the algorithm. QualityScore is time-invariant.",
+    phi_enhancement="Golden ear cycle: phi * 30 min ≈ 49 min work blocks. "
+                   "Fibonacci break schedule: 3, 5, 8, 13 min breaks (escalating). "
+                   "Reference check interval: every phi * 10 ≈ 16 min. "
+                   "Maximum session: Fibonacci 3 hours then STOP.",
+)))
+
+EXTENDED_DOJO_TECHNIQUES.append(asdict(DojoTechnique(
+    name="Commitment to Audio (Freeze + Flatten Discipline)",
+    year_introduced=2016,
+    category=TechniqueType.WORKFLOW.value,
+    description="Once a synth line is 'good,' convert it to audio immediately. "
+                "MIDI is fluid and invites endless tweaking. Audio is solid -- it "
+                "forces you to COMMIT to your choices and move to the next creative "
+                "decision. Freeze and Flatten is not just CPU management: it's "
+                "psychological warfare against perfectionism.",
+    steps=[
+        "1. Design your sound in MIDI/synth mode (Phase 1: Child brain)",
+        "2. When it sounds 'good enough' -- NOT perfect, just good -- STOP tweaking",
+        "3. In Ableton: Freeze the track (commits the sound, saves CPU)",
+        "4. Then: Flatten the track (converts frozen track to permanent audio)",
+        "5. The synth is now GONE -- you cannot tweak the oscillator settings anymore",
+        "6. This is INTENTIONAL -- the option to tweak was the enemy, not the sound",
+        "7. If you genuinely need to change something later: duplicate BEFORE flatten",
+        "8. Work with the audio: warp, chop, resample, arrange -- different toolset",
+        "9. By end of arrangement: ALL synth tracks should be flattened to audio",
+        "10. Mixing starts with audio stems ONLY -- no synths open, no temptation",
+    ],
+    tools_required=["Ableton Freeze + Flatten", "Self-discipline",
+                   "Project backup before flatten"],
+    dubforge_integration="DUBFORGE pipeline enforces this by design: Phase 1 outputs "
+                        "sound palette (presets + wavetables), Phase 2 outputs STEMS "
+                        "(audio). Each phase is a SEPARATE Ableton session. By Phase 3, "
+                        "all sounds are committed audio -- no synths to tweak.",
+    phi_enhancement="Golden commitment: decide in Fibonacci attempts (try 3 patches, "
+                   "pick the best, flatten). 5 max if first 3 don't work. NEVER "
+                   "audition more than 8 (Fibonacci limit). The first Fibonacci "
+                   "number of options usually contains the winner.",
+)))
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2085,7 +2496,91 @@ ILL_GATES_RULES: list[str] = [
     "21. Audio rate filter FM is a secret weapon for bass sounds.",
     f"22. A finished track teaches more than {round(PHI)} unfinished tracks with pristine mix buses.",
     "23. Being nice is important. Not a dick. — Dylan aka ill.Gates",
+    "24. Never let the Critic brain into the room while the Child is playing.",
+    "25. Contrast is King — wide needs narrow, huge needs thin, loud needs quiet.",
+    "26. Every mix is a Tetris board — overlapping frequencies = game over.",
+    "27. High-pass EVERYTHING that isn't kick or sub (200-300 Hz minimum).",
+    "28. Arrange by SUBTRACTING from a full loop, not building left to right.",
+    "29. Mix at conversation volume. If it bangs quiet, it kills loud.",
+    "30. Pink noise mixing for a fast balanced starting point — then refine.",
+    "31. Your first hour of mixing is your most accurate. Respect ear fatigue.",
+    "32. Freeze + Flatten is psychological warfare against perfectionism.",
+    "33. Perform automation with knobs, don't draw it — imperfections are life.",
+    "34. Do prep work (libraries, sound design) when energy is low. Write when fresh.",
 ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MIXING MENTAL MODELS — Dojo-derived frameworks for DUBFORGE integration
+# ═══════════════════════════════════════════════════════════════════════════
+
+MIXING_MENTAL_MODELS: dict = {
+    "frequency_slotting": {
+        "name": "Frequency Slotting (Tetris Board)",
+        "principle": "The mix is a Tetris board: frequency = rows, time = columns. "
+                     "Two pieces in the same slot = masking = game over.",
+        "default_slot_assignments": {
+            "kick_fundamental": {"low_hz": 50, "high_hz": 100,
+                                 "owner": "KICK", "priority": 1},
+            "sub_bass":         {"low_hz": 20, "high_hz": 80,
+                                 "owner": "SUB", "priority": 2},
+            "bass_body":        {"low_hz": 80, "high_hz": 250,
+                                 "owner": "BASS (MID)", "priority": 3},
+            "snare_body":       {"low_hz": 200, "high_hz": 500,
+                                 "owner": "SNARE", "priority": 4},
+            "vocal_lead":       {"low_hz": 1000, "high_hz": 4500,
+                                 "owner": "LEAD / VOCAL", "priority": 1},
+            "hi_hats":          {"low_hz": 6000, "high_hz": 16000,
+                                 "owner": "HATS / CYMBALS", "priority": 5},
+            "air":              {"low_hz": 10000, "high_hz": 20000,
+                                 "owner": "AIR / REVERB TAILS", "priority": 6},
+        },
+        "psbs_tetris_mapping": {
+            "SUB (20-89)":    "Bottom 2 rows -- mono, no competition allowed",
+            "LOW (89-144)":   "Bass foundation -- sidechain to kick",
+            "MID (144-233)":  "Growl territory -- the singer in drops",
+            "HIGH (233-377)": "Screech/harmonics -- ninja support in drops",
+            "CLICK (377-610)":"Transient definition -- cuts through everything",
+        },
+        "high_pass_rule": "HP everything not kick/sub at 150-300 Hz. "
+                          "This single rule fixes 80% of muddy mixes.",
+    },
+    "singer_band_model": {
+        "name": "Singer vs Band (Attention Routing)",
+        "principle": "Only ONE element is the 'singer' at any given moment. "
+                     "Everything else is the 'band' -- invisible ninja sounds.",
+        "singer_per_section": {
+            "intro": "PAD / ATMOSPHERE (gentle vocalist)",
+            "build": "RISER / ARP (building anticipation vocalist)",
+            "drop": "MID BASS / GROWL (the screaming vocalist)",
+            "breakdown": "LEAD / CHORDS (emotional vocalist)",
+            "outro": "PAD fading (departing vocalist)",
+        },
+        "attention_theft_checklist": [
+            "Louder than the singer? → Turn it down.",
+            "Brighter than the singer? → Low-pass it.",
+            "Dryer than the singer? → Add reverb to push it back.",
+            "Wider than the singer? → Narrow it.",
+            "Dominating 2-4.5 kHz? → EQ cut in that range.",
+        ],
+    },
+    "contrast_framework": {
+        "name": "Contrast is King",
+        "principle": "Every peak is defined by the valley before it. "
+                     "Maximize contrast at every section boundary.",
+        "contrast_dimensions": {
+            "width":      {"valley": "mono/narrow",  "peak": "wide stereo"},
+            "frequency":  {"valley": "thin/HP'd",    "peak": "full spectrum"},
+            "volume":     {"valley": "quiet",         "peak": "loud"},
+            "density":    {"valley": "sparse (1-2)",  "peak": "dense (all in)"},
+            "brightness": {"valley": "dark (LP'd)",   "peak": "bright/open"},
+            "rhythm":     {"valley": "half-time/none", "peak": "full beat"},
+        },
+        "golden_contrast_ratio": f"Drop energy = phi ({PHI:.3f}) x breakdown energy. "
+                                 f"Not 2x (too jarring), not 1.2x (too flat). "
+                                 f"Phi is the perceptual sweet spot.",
+    },
+}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2240,6 +2735,130 @@ def rate_output_quality(wav_path: str = "") -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# INTEGRATION ROADMAP — Module-to-Dojo mapping for wiring priority
+# Maps every unwired engine module to Approach phase, belt level, priority.
+# Generated from comprehensive dojo-guided audit (2025-07-22).
+# ═══════════════════════════════════════════════════════════════════════════
+
+INTEGRATION_ROADMAP: dict = {
+    "sprint_1_p0": {
+        "theme": "Render quality — the song sounds better immediately",
+        "dojo_rule": "#1 FINISH MUSIC — improve the existing render",
+        "modules": [
+            {"module": "tuning_system",         "phase": "SKETCH",       "belt": "GREEN",  "wire_point": "Phase 1 DNA — enforce 432Hz doctrine"},
+            {"module": "sub_bass",              "phase": "SKETCH",       "belt": "GREEN",  "wire_point": "Phase 2 bass — 5 sub types vs 1 inline"},
+            {"module": "chord_pad",             "phase": "SKETCH",       "belt": "GREEN",  "wire_point": "Phase 2 pads — proper chord voicings"},
+            {"module": "dc_remover",            "phase": "MIX",          "belt": "GREEN",  "wire_point": "Phase 2-3 per-stem — DC offset cleanup"},
+            {"module": "normalizer",            "phase": "MASTER",       "belt": "GREEN",  "wire_point": "Phase 4 pre-master — LUFS/PHI normalization"},
+            {"module": "frequency_analyzer",    "phase": "MIX",          "belt": "PURPLE", "wire_point": "Phase 3 — Tetris Board frequency data"},
+            {"module": "audio_analyzer",        "phase": "MIX",          "belt": "YELLOW", "wire_point": "Phase 3-4 QA — comprehensive mix stats"},
+            {"module": "key_detector",          "phase": "COLLECT",      "belt": "YELLOW", "wire_point": "Phase 1 DNA — key consistency validation"},
+            {"module": "phi_analyzer",          "phase": "MASTER",       "belt": "PURPLE", "wire_point": "Phase 4 final QA — phi coherence gate"},
+            {"module": "reference_library",     "phase": "MIX",          "belt": "BLUE",   "wire_point": "Phase 4 comparison — Song Mapping"},
+            {"module": "fibonacci_feedback",    "phase": "ALL",          "belt": "PURPLE", "wire_point": "Outer loop — 144-step self-correction"},
+            {"module": "arrangement_sequencer", "phase": "ARRANGE",      "belt": "BLUE",   "wire_point": "Phase 1 structure — dojo-aligned templates"},
+            {"module": "drum_pipeline",         "phase": "SKETCH",       "belt": "BLUE",   "wire_point": "Phase 2 drums — 6-stage pipeline"},
+            {"module": "midbass_pipeline",      "phase": "SKETCH",       "belt": "BLUE",   "wire_point": "Phase 2 bass — 6-stage pipeline"},
+        ],
+    },
+    "sprint_2_p1": {
+        "theme": "Professional pipeline depth",
+        "dojo_rule": "#2 Separate creation from revision",
+        "modules": [
+            {"module": "dither",                "phase": "MASTER",       "belt": "GREEN"},
+            {"module": "crossfade",             "phase": "ARRANGE",      "belt": "GREEN"},
+            {"module": "dynamics_processor",    "phase": "MIX",          "belt": "BLUE"},
+            {"module": "bus_router",            "phase": "MIX",          "belt": "BLUE"},
+            {"module": "signal_chain",          "phase": "MIX",          "belt": "BLUE"},
+            {"module": "stem_mixer",            "phase": "MIX",          "belt": "BLUE"},
+            {"module": "lead_pipeline",         "phase": "SKETCH",       "belt": "BLUE"},
+            {"module": "fx_pipeline",           "phase": "SKETCH",       "belt": "BLUE"},
+            {"module": "harmonic_gen",          "phase": "SOUND_DESIGN", "belt": "PURPLE"},
+            {"module": "spectral_gate",         "phase": "MIX",          "belt": "PURPLE"},
+            {"module": "ambient_texture",       "phase": "SKETCH",       "belt": "BLUE"},
+            {"module": "trance_arp",            "phase": "SKETCH",       "belt": "BLUE"},
+            {"module": "wave_folder",           "phase": "SOUND_DESIGN", "belt": "BLUE"},
+            {"module": "ring_mod",              "phase": "SOUND_DESIGN", "belt": "BLUE"},
+            {"module": "midi_export",           "phase": "RELEASE",      "belt": "GREEN"},
+            {"module": "markov_melody",         "phase": "SKETCH",       "belt": "BLUE"},
+            {"module": "memory",                "phase": "ALL",          "belt": "PURPLE"},
+            {"module": "session_logger",        "phase": "ALL",          "belt": "PURPLE"},
+            {"module": "lessons_learned",       "phase": "ALL",          "belt": "PURPLE"},
+            {"module": "evolution_engine",      "phase": "ALL",          "belt": "PURPLE"},
+            {"module": "audio_mmap",            "phase": "ALL",          "belt": "GREEN"},
+            {"module": "metadata",              "phase": "RELEASE",      "belt": "GREEN"},
+            {"module": "format_converter",      "phase": "RELEASE",      "belt": "GREEN"},
+            {"module": "bounce",                "phase": "RELEASE",      "belt": "GREEN"},
+        ],
+    },
+    "sprint_3_p2": {
+        "theme": "Everything the Black Belt needs",
+        "dojo_rule": "#4 Volume is the teacher",
+        "module_groups": [
+            "Serum 2 lifecycle (serum2 + serum2_preset + serum_blueprint + serum2_controller)",
+            "VIP + tags (vip_pack + tag_system + preset_mutator + preset_vcs)",
+            "Advanced analysis (pattern_recognizer + genre_detector + dubstep_taste_analyzer)",
+            "Arrangement (audio_splitter + audio_stitcher + clip_manager)",
+            "Evolution (genetic_evolver + preset_mutator + snapshot_manager)",
+            "Release assets (artwork_generator + watermark + waveform_display)",
+            "Templates (template_generator + ep_builder + macro_controller)",
+        ],
+    },
+    "sprint_4_p3": {
+        "theme": "Performance and ecosystem",
+        "dojo_rule": "#33 Perform automation with knobs",
+        "module_groups": [
+            "Ableton Live (ableton_bridge + link_sync + live_fx + osc_controller)",
+            "SUBPHONICS AI (subphonics + subphonics_server + chain_commands)",
+            "Autonomous (autonomous + grandmaster + ascension)",
+            "Live performance (scene_system + clip_launcher + looper + performance_recorder)",
+            "External (soundcloud_pipeline + production_pipeline + collaboration)",
+        ],
+    },
+    "workflow_chains": {
+        "collect":  ["sample_library", "sample_slicer", "tempo_detector", "tag_system", "wav_pool"],
+        "sketch":   ["tuning_system", "template_generator", "sub_bass", "chord_pad", "ambient_texture", "trance_arp"],
+        "arrange":  ["arrangement_sequencer", "crossfade", "drum_pipeline", "midbass_pipeline", "lead_pipeline", "fx_pipeline"],
+        "mix":      ["frequency_analyzer", "bus_router", "signal_chain", "dynamics_processor", "dc_remover", "stem_mixer", "normalizer"],
+        "master":   ["audio_analyzer", "phi_analyzer", "reference_library", "normalizer", "dither"],
+        "release":  ["metadata", "format_converter", "bounce", "midi_export", "watermark", "artwork_generator", "vip_pack", "sample_pack_builder"],
+        "learning": ["session_logger", "memory", "lessons_learned", "evolution_engine", "fibonacci_feedback"],
+    },
+    "alignment_opportunities": [
+        "Unified spectral analysis pass — frequency_analyzer + audio_analyzer + harmonic_analysis share one FFT",
+        "Pipeline base class — drum/midbass/lead/fx all share 6-stage architecture",
+        "Serum 2 lifecycle — model + generate + IO + control + distribute as one subsystem",
+        "Unified asset management — sample_library + wav_pool + tag_system + galatcia + preset_browser",
+        "Closed-loop learning — fibonacci_feedback + lessons_learned + memory + evolution_engine + session_logger",
+        "Complete RELEASE pipeline — bounce + format_converter + metadata + watermark + artwork + midi + sample_pack",
+    ],
+    "redundancy_map": {
+        "inline_sub_synthesis":      {"replacement": "sub_bass + sub_pipeline",     "lines_saved": 80},
+        "inline_pad_chords":         {"replacement": "chord_pad",                   "lines_saved": 40},
+        "inline_arp_gen":            {"replacement": "trance_arp",                  "lines_saved": 30},
+        "inline_dc_removal":         {"replacement": "dc_remover",                  "lines_saved": 15},
+        "inline_gain_norm":          {"replacement": "normalizer",                  "lines_saved": 20},
+        "inline_drum_render":        {"replacement": "drum_pipeline",               "lines_saved": 200},
+        "inline_bass_render":        {"replacement": "midbass_pipeline",            "lines_saved": 300},
+        "inline_lead_render":        {"replacement": "lead_pipeline",               "lines_saved": 150},
+        "inline_fx_render":          {"replacement": "fx_pipeline",                 "lines_saved": 100},
+        "inline_stem_sum":           {"replacement": "stem_mixer",                  "lines_saved": 50},
+        "raw_wav_io":                {"replacement": "audio_mmap",                  "lines_saved": 0, "note": "scattered, perf gain"},
+    },
+    "stats": {
+        "total_unwired": 131,
+        "functional": 104,
+        "partial": 24,
+        "stub": 2,
+        "missing": 1,
+        "sprint_1_count": 14,
+        "sprint_2_count": 24,
+        "estimated_forge_lines_replaced": 985,
+    },
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # MAIN — Generate all Dojo engine outputs
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -2370,6 +2989,12 @@ def main() -> None:
         json.dump(PRODUCERS_PATH, f, indent=2)
     print(f"  ✓ Producer's Path        → {pp_path}")
 
+    # 12) Integration Roadmap (dojo-guided module wiring plan)
+    roadmap_path = out / "dojo_integration_roadmap.json"
+    with open(roadmap_path, "w") as f:
+        json.dump(INTEGRATION_ROADMAP, f, indent=2)
+    print(f"  ✓ Integration Roadmap    → {roadmap_path}")
+
     # Stats
     print()
     print("  Producer Dojo Engine Stats (Enhanced):")
@@ -2388,7 +3013,8 @@ def main() -> None:
     print(f"    ill.Gates EPs:        {len(ARTIST_PROFILE['discography']['eps'])}")
     print(f"    Star students:        {len(ARTIST_PROFILE['star_students'])}")
     print(f"    Philosophy essays:    {len(CREATIVE_PHILOSOPHY)}")
-    print(f"    JSON outputs:         11")
+    print(f"    Roadmap modules:      {INTEGRATION_ROADMAP['stats']['total_unwired']} ({INTEGRATION_ROADMAP['stats']['functional']} functional)")
+    print(f"    JSON outputs:         12")
 
 
 if __name__ == "__main__":

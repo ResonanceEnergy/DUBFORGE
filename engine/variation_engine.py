@@ -525,13 +525,18 @@ class VariationEngine:
     8. Return complete SongDNA
     """
 
-    def __init__(self, artistic_variance: float = 0.15):
+    def __init__(self, artistic_variance: float = 0.15,
+                 reference_standard: dict | None = None):
         """Init with artistic variance level.
 
         artistic_variance: 0.0 = deterministic from name, 1.0 = heavy randomness
         Default 0.15 = "slightly artistic" — consistent character with subtle surprises
+
+        reference_standard: optional dict from ReferenceStandard.to_dict()
+            When provided, mix/master targets are grounded in real reference data.
         """
         self.artistic_variance = artistic_variance
+        self._ref = reference_standard or {}
 
     def forge_dna(self, blueprint: SongBlueprint) -> SongDNA:
         """The main entry point — blueprint → DNA."""
@@ -1226,20 +1231,58 @@ class VariationEngine:
         )
 
     def _build_mix_dna(self, params: dict, rng: random.Random) -> MixDNA:
-        """Derive mix/master personality."""
+        """Derive mix/master personality.
+
+        When reference_standard is available, targets are derived from
+        the 92-track aggregate standard (median values) rather than
+        hardcoded defaults. This grounds DUBFORGE output in the true
+        distribution of professional dubstep releases.
+
+        NOTE on stereo_width semantics:
+        - Reference standard 'stereo_width_median' is a MEASUREMENT
+          (0.0 = mono, 1.0 = fully uncorrelated stereo).
+        - MixDNA.stereo_width is a M/S MULTIPLIER for the mastering
+          chain (1.0 = no change, >1.0 = wider, <1.0 = narrower).
+        - Translation: measured_width→multiplier via inverse mapping.
+          A measured width of ~0.1 (tight correlation 0.9) in pro
+          mixes means the mastering widener should apply ~1.3–1.5x
+          to spread synthesized content that starts near-mono.
+        """
         energy = params.get("energy", 0.7)
         darkness = params.get("darkness", 0.5)
+        ref = self._ref
+
+        # ── LUFS target: reference median ± energy offset ──
+        lufs_center = ref.get("lufs_median", -10.0)
+        lufs_target = lufs_center + (1 - energy) * 1.5
+
+        # ── Stereo width: translate measured width → M/S multiplier ──
+        # Pro tracks measure ~0.10-0.20 width (high correlation).
+        # V2 used 1.5x → measured 0.398 (way too wide vs ref 0.107).
+        # Conservative: ~1.08-1.15 multiplier for tight, professional width.
+        ref_width_measure = ref.get("stereo_width_median", 0.15)
+        # Map: 0.05→1.06, 0.10→1.08, 0.15→1.10, 0.30→1.16
+        width_target = 1.03 + ref_width_measure * 0.5 + energy * 0.05
+
+        # ── Ceiling: reference true-peak headroom ──
+        ref_tp = ref.get("master_true_peak_median", -0.3)
+        ceiling = min(ref_tp, -0.2)  # never above -0.2
+
+        # ── EQ: reference-grounded — cut sub, boost presence ──
+        # Reference shows sub ~4%, but our synths generate ~50% sub
+        # Low shelf should be NEGATIVE (cut) not positive (boost)
+        eq_low = ref.get("mix_mud_ratio_median", 0.65)
+        low_boost = -0.5 - eq_low * 1.5  # more mud in ref → more cut
 
         return MixDNA(
-            target_lufs=self._art(-10.0 + (1 - energy) * 2.0, rng, -12.0, -8.0),
-            stereo_width=self._art(
-                params.get("stereo_width", 0.8 + energy * 0.2), rng, 0.6, 1.2),
+            target_lufs=self._art(lufs_target, rng, -12.0, -7.5),
+            stereo_width=self._art(width_target, rng, 1.02, 1.20),
             master_drive=self._art(0.2 + energy * 0.2, rng, 0.1, 0.5),
-            eq_low_boost=self._art(0.5 + darkness * 1.0, rng, -0.5, 2.0),
-            eq_high_boost=self._art(1.0 + (1 - darkness) * 1.0, rng, 0.5, 2.5),
+            eq_low_boost=self._art(low_boost, rng, -2.5, 0.5),
+            eq_high_boost=self._art(1.5 + (1 - darkness) * 1.0, rng, 1.0, 3.0),
             compression_ratio=self._art(2.0 + energy * 1.5, rng, 1.5, 4.0),
             sidechain_depth=self._art(0.5 + energy * 0.3, rng, 0.3, 0.9),
-            ceiling_db=self._art(-0.3, rng, -0.5, -0.2),
+            ceiling_db=self._art(ceiling, rng, -0.5, -0.2),
             eq_low_freq=self._art(70 + darkness * 15, rng, 60, 90),
             eq_high_freq=self._art(8000 + (1 - darkness) * 2000, rng, 6000, 11000),
             compression_threshold=self._art(-14 + energy * 3, rng, -18, -10),

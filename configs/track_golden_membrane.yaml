@@ -1,0 +1,393 @@
+# DUBFORGE — Track: GOLDEN MEMBRANE
+# Hybrid melodic/heavy, A minor, 145 BPM
+# Character: Emotional journey, phi-driven transitions, festival anthem
+
+version: "1.0"
+template_name: GOLDEN_MEMBRANE
+
+global:
+  bpm: 145
+  time_sig: [4, 4]
+  key: A_minor
+  tuning_a4: 432
+  total_bars: 144
+  golden_ratio: 0.618
+  chord_progression:
+    - A2
+    - F2
+    - C3
+    - G2
+  humanize:
+    enabled: true
+    strength: 0.16
+    method: phi_sine
+
+arrangement:
+  - { name: INTRO,      type: intro,   bars: 13 }
+  - { name: VERSE_1,    type: verse,   bars: 8  }
+  - { name: BUILD_1,    type: build,   bars: 5  }
+  - { name: DROP_1,     type: drop,    bars: 13 }
+  - { name: BREAK_1,    type: break,   bars: 8  }
+  - { name: VERSE_2,    type: verse,   bars: 8  }
+  - { name: BUILD_2,    type: build,   bars: 8  }
+  - { name: DROP_2,     type: drop,    bars: 21 }
+  - { name: BRIDGE,     type: bridge,  bars: 8  }
+  - { name: BUILD_3,    type: build,   bars: 5  }
+  - { name: DROP_3,     type: drop,    bars: 34 }
+  - { name: OUTRO,      type: outro,   bars: 13 }
+
+tracks:
+  DRUMS:
+    role: drums
+    color: 69
+    volume_db: -0.5
+    pan: 0.0
+    synth: null
+    pads:
+      - { note: 36, name: Kick,   choke: -1 }
+      - { note: 37, name: Rim,    choke: 2  }
+      - { note: 38, name: Snare,  choke: -1 }
+      - { note: 39, name: Clap,   choke: -1 }
+      - { note: 42, name: HH_Cl,  choke: 1  }
+      - { note: 46, name: HH_Op,  choke: 1  }
+      - { note: 49, name: Crash,  choke: -1 }
+      - { note: 51, name: Ride,   choke: -1 }
+      - { note: 56, name: Perc_1, choke: -1 }
+      - { note: 57, name: Perc_2, choke: -1 }
+      - { note: 75, name: Clav,   choke: -1 }
+
+  BASS:
+    role: bass
+    color: 16
+    volume_db: -3.5
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Warm_Sub"
+    active_sections: [drop, vip]
+    automation:
+      - param: Filter_Cutoff
+        shape: lp_sweep
+        trigger: drop_start
+        closed: 0.25
+        open: 0.75
+
+  SUB:
+    role: sub
+    color: 17
+    volume_db: -6.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Pulse_Sub"
+    active_sections: [drop, vip]
+    automation:
+      - param: Volume
+        shape: sidechain
+        trigger: drop
+        duck_depth: 0.3
+
+  GROWL:
+    role: growl
+    color: 60
+    volume_db: -4.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Prism_Growl"
+    active_sections: [drop]
+    escalation: true
+    automation:
+      - param: Filter_Cutoff
+        shape: sawtooth
+        trigger: drop
+        min: 0.15
+        max: 0.8
+        cycles_per_bar: 2
+      - param: Macro1
+        shape: ramp
+        trigger: drop
+        start: 0.2
+        end: 0.85
+
+  WOBBLE:
+    role: wobble
+    color: 12
+    volume_db: -5.0
+    pan: 0.1
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Flow_Wobble"
+    active_sections: [drop, vip]
+    automation:
+      - param: Filter_Cutoff
+        shape: sine
+        trigger: drop
+        min: 0.2
+        max: 0.85
+        cycles_per_bar: 2
+
+  RIDDIM:
+    role: riddim
+    color: 13
+    volume_db: -5.0
+    pan: -0.1
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Riddim_Phi"
+    active_sections: [drop, vip]
+    riddim_variations: [bounce, quarter, triplet, stutter, minimal]
+    automation:
+      - param: Macro1
+        shape: sawtooth
+        trigger: drop
+        min: 0.1
+        max: 0.9
+        cycles_per_bar: 1
+
+  FORMANT:
+    role: formant
+    color: 14
+    volume_db: -5.5
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Angel_Vowel"
+    active_sections: [drop]
+    escalation: true
+    automation:
+      - param: Macro1
+        shape: sine
+        trigger: drop
+        min: 0.1
+        max: 0.9
+        cycles_per_bar: 0.3
+
+  LEAD:
+    role: lead
+    color: 25
+    volume_db: -3.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Aria_Lead"
+    active_sections: [drop, build, verse, vip]
+    send_a:
+      intro: 0.0
+      verse: 0.5
+      build: 0.4
+      drop: 0.55
+      break: 0.0
+
+  COUNTER:
+    role: counter
+    color: 26
+    volume_db: -5.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Pluck_Answer"
+    active_sections: [drop, build, vip]
+    send_a:
+      drop: 0.5
+      build: 0.3
+
+  VOCAL_CHOP:
+    role: vocal_chop
+    color: 41
+    volume_db: -4.0
+    pan: 0.2
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Hymn_Chop"
+    active_sections: [drop, vip]
+    send_b:
+      drop: 0.5
+      vip: 0.55
+
+  CHORDS:
+    role: chords
+    color: 45
+    volume_db: -5.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Warm_Reese"
+    active_sections: [drop, verse, bridge]
+    automation:
+      - param: Filter_Cutoff
+        shape: lp_sweep
+        trigger: drop_start
+        closed: 0.35
+        open: 0.85
+    send_a:
+      drop: 0.4
+      verse: 0.55
+      bridge: 0.65
+
+  PAD:
+    role: pad
+    color: 46
+    volume_db: -7.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Heaven_Pad"
+    active_sections: [intro, verse, break, bridge, outro]
+    automation:
+      - param: Filter_Cutoff
+        shape: lp_sweep
+        trigger: intro
+        closed: 0.15
+        open: 0.7
+    send_a:
+      intro: 0.8
+      verse: 0.7
+      break: 0.8
+      bridge: 0.75
+      outro: 0.9
+
+  ARP:
+    role: arp
+    color: 50
+    volume_db: -7.0
+    pan: -0.25
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Cascade_Arp"
+    active_sections: [drop, bridge, vip]
+    send_b:
+      drop: 0.5
+      bridge: 0.6
+      vip: 0.5
+
+  FX:
+    role: fx
+    color: 3
+    volume_db: -6.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Quake_Impact"
+    active_sections: [drop, build]
+
+  RISER:
+    role: riser
+    color: 4
+    volume_db: -7.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "GOLDEN_MEMBRANE_Ascend_Rise"
+    active_sections: [build]
+    automation:
+      - param: Filter_Cutoff
+        shape: lp_sweep
+        trigger: build
+        closed: 0.1
+        open: 1.0
+        curve: 0.55
+      - param: Volume
+        shape: ramp
+        trigger: build
+        start: 0.2
+        end: 1.0
+
+returns:
+  REVERB:
+    send_id: A
+    color: 57
+    volume_db: -5.0
+  DELAY:
+    send_id: B
+    color: 58
+    volume_db: -5.0
+
+drum_patterns:
+  intro:
+    density: sparse
+    kick: [0]
+    hh_cl: [0, 1, 2, 3]
+    base_velocity: 55
+  build:
+    density: accelerating
+    kick: [0, 2]
+    snare: [1, 3]
+    hh_cl: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
+    base_velocity: 82
+    snare_roll: true
+  drop:
+    density: full
+    kick: [0, 1, 2, 3]
+    snare: [1, 3]
+    hh_cl: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
+    hh_op: [0.75, 2.75]
+    base_velocity: 108
+  break:
+    density: minimal
+    kick: [0]
+    perc_1: [1.5, 3.5]
+    base_velocity: 65
+    snare_roll: true
+  verse:
+    density: half
+    kick: [0, 2]
+    snare: [2]
+    hh_cl: [0, 1, 2, 3]
+    base_velocity: 72
+  bridge:
+    density: half
+    kick: [0, 2]
+    snare: [2]
+    hh_cl: [0, 1, 2, 3]
+    base_velocity: 70
+  outro:
+    density: decaying
+    kick: [0]
+    hh_cl: [0, 2]
+    base_velocity: 48
+
+midi_rules:
+  bass:
+    pattern: root_per_chord
+    octave_offset: 0
+    default_velocity: 100
+    duration: 1.5
+  sub:
+    pattern: root_per_chord
+    octave_offset: -1
+    default_velocity: 88
+    duration: 3.5
+  growl:
+    pattern: root_per_chord
+    octave_offset: 0
+    default_velocity: 105
+    duration: 1.0
+  wobble:
+    pattern: root_per_chord
+    octave_offset: 0
+    default_velocity: 98
+    duration: 2.0
+  riddim:
+    pattern: rhythmic_chop
+    octave_offset: 0
+    default_velocity: 100
+  formant:
+    pattern: root_per_chord
+    octave_offset: 0
+    default_velocity: 92
+    duration: 2.0
+  lead:
+    pattern: ascending_phrase
+    notes: [A3, C4, E4, F4]
+    default_velocity: 95
+  counter:
+    pattern: descending_phrase
+    notes: [F4, E4, C4, A3]
+    default_velocity: 82
+  vocal_chop:
+    pattern: rhythmic_hits
+    default_velocity: 98
+  chords:
+    pattern: chord_voicing
+    default_velocity: 78
+  pad:
+    pattern: sustained_chord
+    default_velocity: 68
+    duration: 8.0
+  arp:
+    pattern: arpeggio
+    default_velocity: 82
+  fx:
+    pattern: transition_hit
+    default_velocity: 108
+  riser:
+    pattern: sustained_note
+    default_velocity: 88
+    duration: section_length

@@ -585,6 +585,47 @@ def _section_matches_trigger(sec: dict, trigger: str) -> bool:
 # ALS PROJECT ASSEMBLY
 # ═══════════════════════════════════════════════════════════════════════════
 
+# Per-role FX chain — devices added AFTER the instrument (Serum 2/Drum Rack).
+# These are native Ableton effects plus Serum 2 FX (VST3) where appropriate.
+# Order matters: signal flows left-to-right through the chain.
+_ROLE_FX_CHAIN: dict[str, list[str]] = {
+    "drums":      ["EQ Eight", "Compressor", "Utility"],
+    "bass":       ["EQ Eight", "Saturator", "Compressor"],
+    "sub":        ["EQ Eight", "Utility"],
+    "growl":      ["EQ Eight", "Saturator", "Compressor"],
+    "wobble":     ["Auto Filter", "Saturator", "Compressor"],
+    "riddim":     ["EQ Eight", "Saturator", "Compressor"],
+    "formant":    ["EQ Eight", "Compressor"],
+    "lead":       ["EQ Eight", "Compressor", "Utility"],
+    "counter":    ["EQ Eight", "Compressor"],
+    "vocal_chop": ["EQ Eight", "Compressor", "Utility"],
+    "chords":     ["EQ Eight", "Compressor", "Utility"],
+    "pad":        ["EQ Eight", "Utility"],
+    "arp":        ["EQ Eight", "Compressor"],
+    "fx":         ["Auto Filter", "Utility"],
+    "riser":      ["EQ Eight", "Auto Filter", "Utility"],
+}
+
+# Per-role Serum 2 preset name — maps to _PRESET_RECIPES in serum2_preset.py.
+# Each track role gets a distinct preset tailored to its sonic character.
+_ROLE_PRESET_MAP: dict[str, str] = {
+    "bass":       "DUBFORGE_Fractal_Sub",
+    "sub":        "DUBFORGE_Deep_Sub",
+    "growl":      "DUBFORGE_Phi_Growl",
+    "wobble":     "DUBFORGE_Spectral_Tear",
+    "riddim":     "DUBFORGE_Riddim_Minimal",
+    "formant":    "DUBFORGE_Formant_Vowel",
+    "lead":       "DUBFORGE_Fibonacci_FM_Screech",
+    "counter":    "DUBFORGE_Counter_Pluck",
+    "vocal_chop": "DUBFORGE_Vocal_Fracture",
+    "chords":     "DUBFORGE_Golden_Reese",
+    "pad":        "DUBFORGE_Granular_Atmosphere",
+    "arp":        "DUBFORGE_Phi_Arp",
+    "fx":         "DUBFORGE_Weapon",
+    "riser":      "DUBFORGE_Riser_Sweep",
+}
+
+
 def build_project(cfg: dict) -> ALSProject:
     """Build complete ALSProject from config."""
     g = cfg["global"]
@@ -684,17 +725,33 @@ def build_project(cfg: dict) -> ALSProject:
             notes=notes,
         )
 
-        is_drums = tcfg.get("role") == "drums"
+        role = tcfg.get("role", track_name.lower())
+        is_drums = role == "drums"
         synth = tcfg.get("synth")
-        devices = [] if is_drums or not synth else [synth]
 
-        # Embed Serum 2 state
+        # Build device chain: instrument + role-specific FX
+        devices: list[str] = []
+        if not is_drums and synth:
+            devices.append(synth)
+        # Append native Ableton FX based on track role
+        fx_chain = _ROLE_FX_CHAIN.get(role, [])
+        devices.extend(fx_chain)
+
+        # Embed Serum 2 state for instrument tracks
         proc_states: dict[str, bytes] = {}
         ctrl_states: dict[str, bytes] = {}
-        if devices and proc_state:
+        if synth and not is_drums and proc_state:
             proc_states[synth] = proc_state
-        if devices and ctrl_state:
+        if synth and not is_drums and ctrl_state:
             ctrl_states[synth] = ctrl_state
+
+        # Log preset assignment per track
+        generic_preset = _ROLE_PRESET_MAP.get(role)
+        song_name = cfg.get("template_name", "DUBFORGE_BASE").replace(" ", "_").upper()
+        song_preset_name = f"{song_name}_{role.title()}" if generic_preset else None
+        if song_preset_name and not is_drums:
+            _log.info("  %s -> preset: %s | FX: %s",
+                      track_name, song_preset_name, fx_chain)
 
         als_tracks.append(ALSTrack(
             name=track_name,
@@ -805,12 +862,29 @@ def main():
     als_path = OUTPUT_DIR / "ableton" / f"{safe_name}.als"
     write_als(project, str(als_path))
 
+    # Generate per-track Serum 2 presets with song name
+    from engine.serum2_preset import build_song_preset
+    preset_dir = OUTPUT_DIR / "presets" / safe_name
+    preset_dir.mkdir(parents=True, exist_ok=True)
+    presets_written: list[Path] = []
+    for role, recipe_name in _ROLE_PRESET_MAP.items():
+        song_preset_name = f"{safe_name}_{role.title()}"
+        try:
+            preset = build_song_preset(recipe_name, song_preset_name)
+            p = preset.write(preset_dir / f"{song_preset_name}.SerumPreset")
+            presets_written.append(p)
+        except Exception as exc:
+            _log.warning("Skipping preset %s: %s", song_preset_name, exc)
+
     print(f"\n  Outputs:")
-    print(f"    ALS:  {als_path}")
+    print(f"    ALS:     {als_path}")
+    print(f"    Presets: {preset_dir}/ ({len(presets_written)} files)")
+    for p in presets_written:
+        print(f"             {p.name}")
     print()
     print("  Workflow:")
     print("    1. Open ALS in Ableton Live")
-    print("    2. Load Serum 2 presets on each track")
+    print("    2. Load matching presets from output/presets/ on each track")
     print("    3. Set Serum 2 global tune to -32 cents (432 Hz)")
     print("    4. Press play — full arrangement ready")
     print()

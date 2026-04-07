@@ -128,7 +128,7 @@ def resynth_subtractive(signal: np.ndarray, preset: ResynthPreset,
         fundamental = max(analysis["fundamental"], 20.0)
 
         # Keep only phi-related partials
-        for i in range(len(fft)):
+        for i in range(len(spectrum)):
             if freqs[i] < 20:
                 continue
             ratio = freqs[i] / fundamental

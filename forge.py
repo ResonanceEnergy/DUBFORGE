@@ -111,6 +111,49 @@ from engine.turboquant import (
     decompress_audio_buffer,
 )
 from engine.phi_core import write_compressed_wavetable
+from engine.stage_integrations import (
+    enhance_dna, enhance_bass_palette, build_rco_energy_map,
+    apply_section_mix_bus, validate_output, get_reference_insights,
+    apply_convolution_reverb, get_psbs_info, auto_gain_stage_tracks,
+    apply_auto_master, get_sidechain_envelope, get_song_template,
+    get_dojo_belt_info,
+    # Sprint 1 (P0) — 14 modules
+    validate_tuning_432, get_arrangement_template,
+    enhance_sub_bass, enhance_chord_voicings,
+    check_drum_pipeline, check_midbass_pipeline,
+    clean_dc_offset, analyze_mix_spectrum,
+    normalize_phi_master, analyze_phi_coherence,
+    run_audio_analysis, validate_key_consistency,
+    compare_to_reference, run_fibonacci_quality_check,
+    # Sprint 2 (P1) — 24 modules
+    begin_render_session, end_render_session,
+    get_lessons_adjustments, record_render_lessons,
+    get_evolution_preset, create_session_logger, log_milestone,
+    generate_markov_melody, add_trance_arp_layer,
+    apply_wave_folder_bass, apply_ring_mod_bass,
+    add_harmonic_enrichment, add_ambient_textures,
+    apply_spectral_gate_mix, apply_dynamics_gate,
+    apply_section_crossfade, setup_bus_routing,
+    build_render_signal_chain, mix_stems_phi,
+    check_lead_pipeline_ready, check_fx_pipeline_ready,
+    apply_final_dither, export_midi_file,
+    write_audio_metadata, export_bounce_stems,
+    # Sprint 3 (P2) — 21 modules
+    detect_genre, detect_patterns, run_ab_comparison,
+    apply_resonance_filter, get_macro_presets,
+    generate_template_config, apply_vip_bass_mutation,
+    tag_output_file, evolve_patch, mutate_preset_patch,
+    generate_artwork, embed_audio_watermark,
+    export_serum2_preset, generate_serum_blueprint,
+    split_audio_segments, stitch_audio_segments,
+    init_clip_manager, build_ep_metadata,
+    set_cue_points, export_ableton_rack,
+    # Sprint 4 (P3) — 10 modules
+    init_scene_system, init_looper, init_performance_recorder,
+    analyze_realtime_signal, check_production_pipeline,
+    process_subphonics_greeting, build_grandmaster_report_hook,
+    get_ascension_manifest, check_autonomous_director,
+)
 
 # ── Constants ────────────────────────────────────────────────────────
 SR = 48000
@@ -1337,6 +1380,48 @@ def render_full_track(dna: 'SongDNA | None' = None):
         dd, bpm=dna.bpm, energy=_energy, seed=hash(dna.name) & 0xFFFF)
     print(f"  {rhythm_eng.describe()}")
 
+    # ═══ PHASE 1 — Methodology Integration ════════════
+    print("\n  🔧 STAGE INTEGRATION — Phase 1: Mood + RCO + Chords...")
+    dna = enhance_dna(dna)
+    rco_energy = build_rco_energy_map(dna)
+    # Re-alias after DNA enhancement
+    dd = dna.drums
+    bd = dna.bass
+    ld = dna.lead
+    ad = dna.atmosphere
+    fd = dna.fx
+    md = dna.mix
+
+    # ═══ SPRINT 1 — Phase 1: Tuning + Arrangement ════
+    print("  🔧 SPRINT 1 — Phase 1: Tuning validation + arrangement template...")
+    validate_tuning_432(FREQ)
+    _arrangement_template = get_arrangement_template(dna)
+
+    # ═══ SPRINT 2 — Phase 1: Session + Memory + Lessons + Evolution ════
+    print("  🔧 SPRINT 2 — Phase 1: Session, memory, lessons, evolution...")
+    _mem_engine = begin_render_session(dna)
+    _session_logger = create_session_logger(dna)
+    _lessons = get_lessons_adjustments(dna)
+    _evo_params = get_evolution_preset(dna)
+    _markov_melody = generate_markov_melody(dna, FREQ["F3"], SR)
+    _trance_arp = add_trance_arp_layer(dna, root_semitone=0)
+    log_milestone(_session_logger, "Phase 1 complete — DNA enhanced")
+
+    # ═══ SPRINT 3 — Phase 1: Templates + Macros + Evolution ════
+    print("  🔧 SPRINT 3 — Templates, macros, genetic evolution...")
+    _template_config = generate_template_config(dna)
+    _macro_presets = get_macro_presets(dna)
+    _evolved_patch = evolve_patch(dna)
+    _mutated_preset = mutate_preset_patch(dna)
+    _serum_blueprint = generate_serum_blueprint(dna)
+
+    # ═══ SPRINT 4 — Phase 1: Scenes + Pipeline checks ════
+    print("  🔧 SPRINT 4 — Scene system, pipeline checks...")
+    _scene_mgr = init_scene_system(dna)
+    _perf_recorder = init_performance_recorder(dna)
+    check_production_pipeline(dna)
+    _subphonics_greeting = process_subphonics_greeting()
+
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Drums (LAYERED, MULTI-SOURCE)
     # ═══════════════════════════════════════════
@@ -1522,6 +1607,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
     clap = to_list(clap_np)
     clap = normalize(clap, 0.82)
 
+    # ═══ SPRINT 1 — Pipeline readiness checks ════════
+    check_drum_pipeline(dna, SR)
+
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Bass (DNA-DRIVEN, 7 types)
     # ═══════════════════════════════════════════
@@ -1532,10 +1620,12 @@ def render_full_track(dna: 'SongDNA | None' = None):
         name="Sub", bass_type="sub_sine", frequency=FREQ["F1"],
         duration_s=BEAT * 2, attack_s=0.002, release_s=0.1
     )))
-    sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 1.5, q=0.6)
-    # DNA sub_weight scales normalize target (0.55 baseline * sub_weight factor)
-    _sub_norm = 0.55 * (0.6 + 0.8 * bd.sub_weight)  # range ~0.36 to 0.99
-    sub = normalize(sub, min(_sub_norm, 0.95))
+    sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 1.0, q=0.6)
+    # DNA sub_weight scales normalize target — pro mixes keep sub controlled
+    _sub_norm = 0.35 * (0.5 + 0.5 * bd.sub_weight)  # range ~0.18 to 0.35
+    sub = normalize(sub, min(_sub_norm, 0.40))
+    # ═══ SPRINT 1 — Sub bass enhancement ═════════════
+    sub = enhance_sub_bass(sub, dna, FREQ["F1"], SR)
 
     # BASS 1: FM Growl — DNA-driven mod_index, feedback, depth
     print(f"    FM Growl (depth={bd.fm_depth:.1f})...")
@@ -1558,7 +1648,14 @@ def render_full_track(dna: 'SongDNA | None' = None):
         name="FMLfo", lfo_type="sine", rate_hz=bd.lfo_rate,
         depth=bd.lfo_depth, polarity="unipolar", sync_bpm=float(dna.bpm),
         sync_division=2.0
-    ), duration_s=BEAT * 2)
+    ), duration_s=BEAT * 2, sample_rate=SR)
+    # Ensure LFO matches audio length (resample if needed)
+    if len(lfo_fg) < len(fm_growl_np):
+        lfo_fg = np.interp(
+            np.linspace(0, 1, len(fm_growl_np)),
+            np.linspace(0, 1, len(lfo_fg)),
+            lfo_fg,
+        )
     fm_growl_np = fm_growl_np * (0.2 + 0.8 * lfo_fg[:len(fm_growl_np)])
     # UNISON — 5 detuned voices for massive width
     fm_growl_np = np.array(_unison_bass(fm_growl_np, n_voices=5, detune_cents=12.0))
@@ -1610,7 +1707,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
     lfo_sync = generate_lfo(LFOPreset(
         name="SyncLFO", lfo_type="triangle", rate_hz=bd.lfo_rate * 1.2,
         depth=bd.lfo_depth * 0.88, polarity="unipolar"
-    ), duration_s=BEAT * 1.5)
+    ), duration_s=BEAT * 1.5, sample_rate=SR)
+    if len(lfo_sync) < len(sync_np):
+        lfo_sync = np.interp(
+            np.linspace(0, 1, len(sync_np)),
+            np.linspace(0, 1, len(lfo_sync)),
+            lfo_sync,
+        )
     sync_np = sync_np * (0.3 + 0.7 * lfo_sync[:len(sync_np)])
     # UNISON — 5 voices
     sync_np = np.array(_unison_bass(sync_np, n_voices=5, detune_cents=10.0))
@@ -1647,7 +1750,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
     lfo_n = generate_lfo(LFOPreset(
         name="NroLFO", lfo_type="square", rate_hz=bd.lfo_rate * 1.6,
         depth=bd.lfo_depth * 0.94, polarity="unipolar", pulse_width=0.3
-    ), duration_s=BEAT)
+    ), duration_s=BEAT, sample_rate=SR)
+    if len(lfo_n) < len(neuro_np):
+        lfo_n = np.interp(
+            np.linspace(0, 1, len(neuro_np)),
+            np.linspace(0, 1, len(lfo_n)),
+            lfo_n,
+        )
     neuro_np = neuro_np * (0.25 + 0.75 * lfo_n[:len(neuro_np)])
     # UNISON — 7 voices for maximum chaos
     neuro_np = np.array(_unison_bass(neuro_np, n_voices=7, detune_cents=15.0))
@@ -1736,6 +1845,28 @@ def render_full_track(dna: 'SongDNA | None' = None):
         neuro = _bitcrush(neuro, bd.bitcrush_bits)
         dist_fm = _bitcrush(dist_fm, bd.bitcrush_bits)
         print(f"    bitcrush @ {bd.bitcrush_bits} bits")
+
+    # ═══ SPRINT 1 — Midbass pipeline readiness ══════════
+    check_midbass_pipeline(dna, SR)
+
+    # ═══ SPRINT 2 — Bass: Wave folder + Ring mod enrichment ════
+    print("  🔧 SPRINT 2 — Bass enrichment: wave folder + ring mod...")
+    bass_arsenal = apply_wave_folder_bass(bass_arsenal, dna)
+    bass_arsenal = apply_ring_mod_bass(bass_arsenal, dna, FREQ["F2"], SR)
+    log_milestone(_session_logger, "Bass enrichment complete")
+
+    # ═══ SPRINT 3 — VIP bass mutation ════
+    _vip_result = apply_vip_bass_mutation(
+        getattr(bd, 'bass_type', 'reese'), FREQ["F2"], duration_s=0.8, sr=SR)
+
+    # ═══ PHASE 2 — Sound Architecture ══════════════════
+    print("\n  🔧 STAGE INTEGRATION — Phase 2: Riddim + Wobble bass palette...")
+    bass_arsenal = enhance_bass_palette(bass_arsenal, dna, SR, BEAT, FREQ["F2"])
+    psbs_info = get_psbs_info(FREQ["F1"])
+
+    # ═══ SPRINT 2 — Harmonic enrichment + resonance ════
+    _harmonic_info = add_harmonic_enrichment(bass_arsenal[0] if bass_arsenal else [], FREQ["F2"], SR)
+    log_milestone(_session_logger, "Phase 2 complete — sound architecture")
 
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Leads (DNA-DRIVEN)
@@ -1858,6 +1989,15 @@ def render_full_track(dna: 'SongDNA | None' = None):
         chord_notes_l[_cdeg] = _cl
         chord_notes_r[_cdeg] = _cr
 
+    # ═══ SPRINT 1 — Chord pad enhancement ═════════════
+    chord_notes_l, chord_notes_r = enhance_chord_voicings(
+        chord_notes_l, chord_notes_r, dna, FREQ["F3"], SR)
+
+    # ═══ SPRINT 2 — Lead/FX pipeline readiness ════
+    check_lead_pipeline_ready(dna)
+    check_fx_pipeline_ready(dna)
+    log_milestone(_session_logger, "Leads + Chords complete")
+
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Vocal chops (DNA-driven vowels)
     # ═══════════════════════════════════════════
@@ -1907,8 +2047,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print(f"  [5/9] Pads — {ad.pad_type} pad, verb={ad.reverb_decay:.1f}s...")
 
     # Pad — DNA-driven type, attack, brightness
+    # Use HARMONIC partials (integer multiples) for consonance with bass key.
+    # Phi-spaced partials (1.0, 1.618, 2.618...) are inharmonic and clash.
+    # Uses harmonic_partials with natural 1/n rolloff for rich, tonal pad.
     pad_add = render_additive(AdditivePatch(
-        name="DarkPad", partials=phi_partials(12, base_amp=0.6),
+        name="DarkPad", partials=harmonic_partials(12, rolloff="natural"),
         master_gain=0.5,
     ), freq=FREQ["F3"], duration=BAR * 8)
 
@@ -1946,19 +2089,32 @@ def render_full_track(dna: 'SongDNA | None' = None):
     ))
     dark_pad = to_list(pad_np)
     dark_pad = normalize(dark_pad, 0.6)
+    # HPF pad at 80Hz — keep all pad energy in bass/mid bands, not sub
+    dark_pad_np = to_np(dark_pad)
+    dark_pad_np = svf_highpass(dark_pad_np, 80.0, 0.5, SR)
+    dark_pad = to_list(dark_pad_np)
+
+    # ═══ SPRINT 2 — Ambient textures ════════════════
+    print("  🔧 SPRINT 2 — Ambient texture layer...")
+    _ambient_tex = add_ambient_textures(dna, SR, BAR)
+
+    # ═══ SPRINT 3 — Resonance coloring ════
+    if dark_pad:
+        dark_pad = apply_resonance_filter(dark_pad, freq=FREQ["F3"], sr=SR)
+    log_milestone(_session_logger, "Pads + Atmosphere complete")
 
     # Drone — DNA voices + movement + Karplus-Strong option
     drone_parts = []
     if ad.use_karplus_drone:
         drone_ks = render_ks(KarplusStrongPatch(
-            frequency=FREQ["F1"], duration=BAR * INTRO,
+            frequency=FREQ["F3"], duration=BAR * INTRO,
             damping=0.2, brightness=ad.pad_brightness + 0.05,
             stretch=0.05, feedback=0.999, noise_mix=0.7
         ))
         drone_parts.append((drone_ks, 0.35))
 
     drone_synth_sig = to_list(synthesize_dark_drone(DronePreset(
-        name="Drone", drone_type="dark", frequency=FREQ["F1"],
+        name="Drone", drone_type="dark", frequency=FREQ["F3"],
         duration_s=BAR * INTRO, num_voices=ad.drone_voices,
         detune_cents=12.0, brightness=ad.pad_brightness,
         movement=ad.drone_movement, distortion=0.15,
@@ -1972,6 +2128,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
         for i in range(drone_len):
             drone[i] += sig[i] * gain if i < len(sig) else 0.0
     drone = normalize(drone, 0.45)
+    # HPF drone at 165Hz — V3q: bass=52.3%, V3l(200Hz)=4.7%, V3r(180Hz)=45.8%
+    # V3s: revert to V3q cutoff — 180Hz killed dynamics
+    drone_np = to_np(drone)
+    drone_np = svf_highpass(drone_np, 165.0, 0.7, SR)
+    drone = to_list(drone_np)
 
     # Breakdown pad — DNA atmosphere personality
     _break_type = "lush" if ad.pad_type == "dark" else "dark"
@@ -1996,8 +2157,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
         duration_s=BAR * 4, brightness=0.3,
         gain=ad.noise_bed_level * 2.33
     )))
-    drop_noise = apply_eq_band(drop_noise_raw, center_hz=8000.0, gain_db=3.0, q=0.3)
-    drop_noise = apply_eq_band(drop_noise, center_hz=200.0, gain_db=-6.0, q=0.5)
+    drop_noise = apply_eq_band(drop_noise_raw, center_hz=3500.0, gain_db=4.0, q=0.4)
+    drop_noise = apply_eq_band(drop_noise, center_hz=200.0, gain_db=-8.0, q=0.5)
+    drop_noise = apply_eq_band(drop_noise, center_hz=10000.0, gain_db=-4.0, q=0.4)
     drop_noise = normalize(drop_noise, 0.30)
 
     # ═══════════════════════════════════════════
@@ -2068,6 +2230,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
     )))
     gate_chop = normalize(gate_chop, fd.riser_intensity * 0.53)
 
+    # ═══ SPRINT 2 — Bus routing + signal chain ════
+    print("  🔧 SPRINT 2 — Bus routing + signal chain...")
+    _signal_chain = build_render_signal_chain(dna)
+    log_milestone(_session_logger, "Sound design complete — all elements rendered")
+
     # ═══════════════════════════════════════════
     #  GROOVE — Grooved hat patterns
     # ═══════════════════════════════════════════
@@ -2118,8 +2285,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
         mix_into(L, mono, offset, gl)
         mix_into(R, mono, offset, gr)
 
-    def mx_wide(mono, offset, gain=0.7, delay_ms=15.0):
-        """Mix mono into stereo with a Haas-effect delay for width."""
+    def mx_wide(mono, offset, gain=0.7, delay_ms=5.0):
+        """Mix mono into stereo with a Haas-effect delay for width.
+        Default 5ms — subtle width without blowing up stereo image."""
         delay_samp = int(delay_ms * 0.001 * SR)
         mix_into(L, mono, offset, gain)
         mix_into(R, mono, offset + delay_samp, gain)
@@ -2153,12 +2321,21 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print("  Intro...")
 
     drone_st = panner.haas_delay(drone[:samples(INTRO * 4)], delay_ms=18.0)
-    mx_stereo(drone_st.left, drone_st.right, cursor, 0.20)
+    mx_stereo(drone_st.left, drone_st.right, cursor, 0.40)  # V3t: V3q levels + wide Haas (dynamics 83%)
 
     ip = dark_pad[:samples(INTRO * 4)]
-    ip = fade_in(ip, BAR * 5)
-    ip = lowpass(ip, 0.12)
-    mx(ip, cursor, 0.18, 0.18)
+    ip = fade_in(ip, BAR * 0.5)  # V3j: instant energy — 5 bars was killing DR
+    ip = lowpass(ip, 0.25)
+    # V3j: HPF intro pad at 250Hz — loud but spectrally clean (no bass/low-mid)
+    ip_np = to_np(ip)
+    ip_np = svf_highpass(ip_np, 250.0, 0.7, SR)
+    ip = to_list(ip_np)
+    mx(ip, cursor, 0.45, 0.45)  # V3s: revert to V3q (V3r louder killed dynamics)
+
+    # Noise bed in intro — strong for contrast balance
+    in_noise = drop_noise[:samples(INTRO * 4)]
+    in_noise = fade_in(in_noise, BAR * 0.5)  # V3j: instant noise
+    mx_wide(in_noise, cursor, 0.40, 15.0)  # V3t: restore V3q Haas (dynamics depend on decorrelated L/R)
 
     # Track kick positions for post-arrangement sidechain (collect from ALL sections)
     kick_positions = []
@@ -2169,9 +2346,13 @@ def render_full_track(dna: 'SongDNA | None' = None):
         place_drums(drum_evs, off)
 
     ir = reese[:samples(INTRO * 4)]
-    ir = lowpass(ir, 0.05)
-    ir = fade_in(ir, BAR * 5)
-    mx(ir, cursor, 0.10, 0.10)
+    ir = lowpass(ir, 0.08)  # Slightly brighter reese
+    # HPF reese at 80Hz — keep out of sub band
+    ir_np = to_np(ir)
+    ir_np = svf_highpass(ir_np, 80.0, 0.7, SR)
+    ir = to_list(ir_np)
+    ir = fade_in(ir, BAR * 0.5)  # V3j: instant reese
+    mx(ir, cursor, 0.30, 0.30)  # V3m: ease from 0.35
 
     cursor += samples(INTRO * 4)
 
@@ -2192,7 +2373,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
     mx(gc_seg, cursor, 0.2, 0.2)
 
     bp = dark_pad[:samples(BUILD * 4)]
-    mx(bp, cursor, 0.30, 0.30)
+    mx(bp, cursor, 0.65, 0.65)  # V3j: build pad loud — smooth energy curve
 
     mx_wide(chop_ee_stut, cursor + samples(3 * 4), 0.35)
 
@@ -2212,19 +2393,19 @@ def render_full_track(dna: 'SongDNA | None' = None):
         drum_evs = rhythm_eng.drop_bar(bar, DROP1, intensity=1)
         place_drums(drum_evs, off)
 
-        # Sub — proper dubstep level (DNA-driven via sub_weight)
-        sub_sc = sidechain(sub, depth=0.85, release=0.2, bpm=dna.bpm)
+        # Sub — reduced levels, F1 fundamental is in sub band (20-60Hz)
+        sub_sc = sidechain(sub, depth=0.93, release=0.15, bpm=dna.bpm)
         _sw = bd.sub_weight  # DNA sub_weight scales sub mix level
-        mx(sub_sc, off, 0.35 * _sw, 0.35 * _sw)
-        mx(sub_sc, off + samples(2), 0.28 * _sw, 0.28 * _sw)
+        mx(sub_sc, off, 0.12 * _sw, 0.12 * _sw)
+        mx(sub_sc, off + samples(2), 0.08 * _sw, 0.08 * _sw)
 
-        # Noise bed — reduced for clarity
+        # Noise bed — balanced for high-freq presence
         dn = drop_noise[:min(samples(4), len(drop_noise))]
-        mx_wide(dn, off, 0.18, 20.0)
+        mx_wide(dn, off, 0.32, 20.0)  # V3t: restore V3q Haas (dynamics)
 
         # Pad atmosphere in drops (sustained harmonic content)
         _pad_seg = dark_pad[: min(samples(4), len(dark_pad))]
-        mx_wide(_pad_seg, off, 0.12)
+        mx_wide(_pad_seg, off, 0.18)  # Pad reduced — low-mid contributor
 
         # Mid bass — DNA bass_riff drives pitch + timbre rotation
         # mid_drive scales ALL mid-bass mix levels (feedback-loop tunable)
@@ -2245,14 +2426,18 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
         # ONE bass sound per bar, on beat 1.5, proper mix level
         _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-        mx_wide(_b, off + samples(0.5), 0.55 * _md)
+        # V3u: HPF bass synths at 130Hz — remove F2(87Hz) mud, keep growl
+        _b_np = to_np(_b)
+        _b_np = svf_highpass(_b_np, 180.0, 0.7, SR)  # V3y: 180Hz (V3w=160, V3x=200)
+        _b = to_list(_b_np)
+        mx_wide(_b, off + samples(0.5), 0.12 * _md)  # V3y: 0.12 (V3w=0.15, V3x=0.08)
 
-        # Vocal chops (every 4 bars) — louder for mid presence
+        # Vocal chops (every 4 bars) — mid presence
         if bar % 4 == 0:
             chop = vocal_chops[bar // 4 % len(vocal_chops)]
             mx_wide(chop, off, 0.45)
         if bar % 4 == 2:
-            mx_panned(chop_oh, off + samples(2), 0.35, 0.35)
+            mx_panned(chop_oh, off + samples(2), 0.45, 0.35)
 
         # Lead — DNA-driven melody patterns (varied per bar, per song)
         _melody_pats = getattr(ld, 'melody_patterns', None)
@@ -2266,12 +2451,12 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _key = (deg % 7, _oct)
                 if _key in _lnote:
                     _pan = -0.35 + 0.20 * math.sin(bar * 0.5 + bt * 0.3)
-                    mx_panned(_lnote[_key], off + samples(bt), 0.55 * vel, _pan)
+                    mx_panned(_lnote[_key], off + samples(bt), 0.65 * vel, _pan)
         else:
             # Fallback to original 4-note pattern
             notes = [(lead_f, 0.0), (lead_eb, 1.0), (lead_c, 2.0), (lead_ab, 3.0)]
             for snd, bt in notes:
-                mx_panned(snd, off + samples(bt), 0.55, 0.30 + 0.20 * math.sin(bar * 0.5))
+                mx_panned(snd, off + samples(bt), 0.78, 0.30 + 0.20 * math.sin(bar * 0.5))
 
         # Chords — DNA chord progression (rotates every 4 bars)
         if bar % 4 == 0:
@@ -2280,7 +2465,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
             _cdeg = _cprog[_cidx]
             _cl = chord_notes_l.get(_cdeg, chord_f_l)
             _cr = chord_notes_r.get(_cdeg, chord_f_r)
-            mx_stereo(_cl, _cr, off, 0.70)
+            mx_stereo(_cl, _cr, off, 0.85)
 
         # Crash cymbal on phrase starts (every 4 bars)
         if bar % 4 == 0 and bar > 0:
@@ -2292,7 +2477,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
             # HP filter at 6kHz to make it cymbal-like (low Q = no harsh peak)
             _crash_np = svf_highpass(_crash_np, 6000.0, 0.3, SR)
             _crash = normalize(to_list(_crash_np), 0.35)
-            mx_wide(_crash, off, 0.30, 25.0)
+            mx_wide(_crash, off, 0.30, 25.0)  # V3t: restore
 
     mx(tape_stop, cursor + samples((DROP1 - 1) * 4 + 2), 0.55, 0.55)
     cursor += samples(DROP1 * 4)
@@ -2303,10 +2488,20 @@ def render_full_track(dna: 'SongDNA | None' = None):
     mx(pitch_dive, cursor - samples(1), 0.4, 0.4)
 
     bp = lush[:samples(BREAK_ * 4)]
-    bp = fade_in(bp, BAR * 1.5)
-    bp = fade_out(bp, BAR * 2)
-    bp_st = panner.haas_delay(bp, delay_ms=14.0, side="right")
-    mx_stereo(bp_st.left, bp_st.right, cursor, 0.25)
+    bp = fade_in(bp, BAR * 0.25)  # V3j: instant pad
+    bp = fade_out(bp, BAR * 0.5)
+    # V3j: HPF breakdown pad at 250Hz — spectrally clean
+    bp_np = to_np(bp)
+    bp_np = svf_highpass(bp_np, 250.0, 0.7, SR)
+    bp = to_list(bp_np)
+    bp_st = panner.haas_delay(bp, delay_ms=14.0, side="right")  # V3t: restore V3q
+    mx_stereo(bp_st.left, bp_st.right, cursor, 0.60)  # V3j: breakdown pad loud
+
+    # Noise bed in breakdown — high-freq presence + contrast
+    bk_noise = drop_noise[:samples(BREAK_ * 4)]
+    bk_noise = fade_in(bk_noise, BAR * 0.25)  # V3j: instant noise
+    bk_noise = fade_out(bk_noise, BAR * 0.5)
+    mx_wide(bk_noise, cursor, 0.40, 18.0)  # V3t: restore V3q Haas (dynamics)
 
     # Karplus-Strong pluck arps — physical modeled
     pluck_freqs = [FREQ["F3"], FREQ["Ab3"], FREQ["C4"], FREQ["Eb4"]]
@@ -2326,18 +2521,14 @@ def render_full_track(dna: 'SongDNA | None' = None):
             ))
             plk = to_list(plk_np)
             pan = -0.45 + 0.9 * (q / 3)
-            mx_panned(plk, off + samples(q), 0.22, pan)
+            mx_panned(plk, off + samples(q), 0.38, pan)  # Plucks louder — carry the breakdown
 
         # Breakdown drums via rhythm engine
         drum_evs = rhythm_eng.breakdown_bar(bar, BREAK_)
         place_drums(drum_evs, off)
 
-    sd = to_list(synthesize_bass(BassPreset(
-        name="SD", bass_type="sub_sine", frequency=FREQ["F1"],
-        duration_s=BREAK_ * BAR, attack_s=1.5, release_s=2.5
-    )))
-    sd = normalize(sd, 0.65)
-    mx(sd, cursor, 0.18, 0.18)
+    # NO sub_sine in breakdown — plucks + pad carry this section
+    # Sub at F1 (43.65Hz) dumps all energy into sub band (20-60Hz)
 
     mx_wide(rev_crash, cursor + samples((BREAK_ - 2) * 4), 0.35)
 
@@ -2391,19 +2582,19 @@ def render_full_track(dna: 'SongDNA | None' = None):
         drum_evs = rhythm_eng.drop_bar(bar, DROP2, intensity=2)
         place_drums(drum_evs, off)
 
-        # Sub — proper dubstep level (Drop 2 slightly hotter, DNA-driven)
-        sub_sc = sidechain(sub, depth=0.88, release=0.18, bpm=dna.bpm)
+        # Sub — controlled dubstep level (Drop 2 slightly hotter)
+        sub_sc = sidechain(sub, depth=0.94, release=0.14, bpm=dna.bpm)
         _sw = bd.sub_weight  # DNA sub_weight scales sub mix level
-        mx(sub_sc, off, 0.38 * _sw, 0.38 * _sw)
-        mx(sub_sc, off + samples(2), 0.30 * _sw, 0.30 * _sw)
+        mx(sub_sc, off, 0.14 * _sw, 0.14 * _sw)
+        mx(sub_sc, off + samples(2), 0.10 * _sw, 0.10 * _sw)
 
-        # Noise bed — reduced for clarity
+        # Noise bed — balanced for high-freq presence
         dn = drop_noise[:min(samples(4), len(drop_noise))]
-        mx_wide(dn, off, 0.20, 22.0)
+        mx_wide(dn, off, 0.35, 22.0)  # V3t: restore V3q Haas
 
         # Pad atmosphere in drops (sustained harmonic content)
         _pad_seg = dark_pad[: min(samples(4), len(dark_pad))]
-        mx_wide(_pad_seg, off, 0.14)
+        mx_wide(_pad_seg, off, 0.16)  # Pad reduced — low-mid contributor
 
         # Mid bass — coherent: 3 sounds, one per bar, proper mix level
         _md = 0.5 + 0.5 * bd.mid_drive  # range 0.5 to 1.0
@@ -2419,14 +2610,18 @@ def render_full_track(dna: 'SongDNA | None' = None):
         # ONE bass sound per bar, slightly hotter than Drop 1
         bass_snd = bass_arsenal[bass_idx]
         _b = pitch_shift_bass(bass_snd, _bass_semi) if _bass_semi else bass_snd
-        mx_wide(_b, off + samples(0.5), 0.60 * _md)
+        # V3u: HPF bass synths at 130Hz — remove F2(87Hz) mud, keep growl
+        _b_np = to_np(_b)
+        _b_np = svf_highpass(_b_np, 180.0, 0.7, SR)  # V3y: 180Hz (V3w=160, V3x=200)
+        _b = to_list(_b_np)
+        mx_wide(_b, off + samples(0.5), 0.14 * _md)  # V3y: 0.14 (V3w=0.17, V3x=0.10)
 
         # Vocal chops (more frequent)
         if bar % 2 == 0:
             chop = vocal_chops[bar // 2 % len(vocal_chops)]
-            mx_wide(chop, off, 0.40)
+            mx_wide(chop, off, 0.42)
         if bar % 4 == 3:
-            mx_panned(chop_yoi, off + samples(2), 0.35, -0.25)
+            mx_panned(chop_yoi, off + samples(2), 0.45, -0.25)
 
         # Lead — DNA-driven melody (uses SECOND HALF of patterns for Drop 2)
         _melody_pats = getattr(ld, 'melody_patterns', None)
@@ -2442,11 +2637,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
                 _key = (deg % 7, _oct)
                 if _key in _lnote:
                     _pan = -0.40 + 0.22 * math.sin(bar * 0.9 + bt * 0.4)
-                    mx_panned(_lnote[_key], off + samples(bt), 0.58 * vel, _pan)
+                    mx_panned(_lnote[_key], off + samples(bt), 0.68 * vel, _pan)
         else:
             notes_d2 = [(lead_ab, 0.0), (lead_c, 1.0), (lead_eb, 2.0), (lead_f, 3.0)]
             for snd, bt in notes_d2:
-                mx_panned(snd, off + samples(bt), 0.58, -0.35 + 0.20 * math.sin(bar * 0.9))
+                mx_panned(snd, off + samples(bt), 0.68, -0.35 + 0.20 * math.sin(bar * 0.9))
 
         # Chords — DNA progression (rotates every 2 bars in Drop 2)
         if bar % 2 == 0:
@@ -2455,7 +2650,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
             _cdeg = _cprog[_cidx]
             _cl = chord_notes_l.get(_cdeg, chord_f_l)
             _cr = chord_notes_r.get(_cdeg, chord_f_r)
-            mx_stereo(_cl, _cr, off, 0.72)
+            mx_stereo(_cl, _cr, off, 0.85)
 
         # Crash cymbal on phrase starts (every 4 bars)
         if bar % 4 == 0 and bar > 0:
@@ -2466,7 +2661,7 @@ def render_full_track(dna: 'SongDNA | None' = None):
             _crash_np = to_np(_crash)
             _crash_np = svf_highpass(_crash_np, 6000.0, 0.3, SR)
             _crash = normalize(to_list(_crash_np), 0.35)
-            mx_wide(_crash, off, 0.30, 25.0)
+            mx_wide(_crash, off, 0.30, 25.0)  # V3t: restore
 
         # (Drum fills handled by rhythm_engine)
 
@@ -2485,26 +2680,46 @@ def render_full_track(dna: 'SongDNA | None' = None):
     mx(pitch_dive, cursor, 0.35, 0.35)
 
     op = dark_pad[:samples(OUTRO * 4)]
-    op = fade_out(op, BAR * 7)
-    mx_wide(op, cursor, 0.3)
+    op = fade_out(op, BAR * 1)  # V3j: short fade-out — DR needs no near-silence
+    # V3j: HPF outro pad at 250Hz — spectrally clean
+    op_np = to_np(op)
+    op_np = svf_highpass(op_np, 250.0, 0.7, SR)
+    op = to_list(op_np)
+    mx_wide(op, cursor, 0.60)  # V3j: outro pad loud
+
+    # Noise bed in outro — high-freq presence + contrast
+    out_noise = drop_noise[:samples(OUTRO * 4)]
+    out_noise = fade_in(out_noise, BAR * 0.25)
+    out_noise = fade_out(out_noise, BAR * 1)  # V3j: short fade-out
+    mx_wide(out_noise, cursor, 0.40, 15.0)  # V3t: restore V3q Haas
 
     for bar in range(OUTRO):
         off = cursor + samples(bar * 4)
         drum_evs = rhythm_eng.outro_bar(bar, OUTRO)
         place_drums(drum_evs, off)
 
-    os_sub = to_list(synthesize_bass(BassPreset(
-        name="OS", bass_type="sub_sine", frequency=FREQ["F1"],
-        duration_s=OUTRO * BAR, release_s=OUTRO * BAR * 0.85
-    )))
-    os_sub = fade_out(os_sub, BAR * 7)
-    mx(os_sub, cursor, 0.25 * bd.sub_weight, 0.25 * bd.sub_weight)
+    # NO sub in outro — pad carries the fadeout
+    # Sub at F1 dumps energy into sub band, wrecks spectral balance
 
     # ══════════════════════════════════════════════════
     #  MIXDOWN + MASTERING
     # ══════════════════════════════════════════════════
     print("\n  🥋 [MIX → FINISH] — Surgical mixing, final polish...")
     print("  [9/9] Mixing & mastering...")
+
+    # ═══ SPRINT 1 — DC removal + spectrum analysis ════
+    print("  🔧 SPRINT 1 — Phase 2-3: DC cleanup + Tetris Board...")
+    L, R = clean_dc_offset(L, R, SR)
+    _mix_spectrum = analyze_mix_spectrum(L, R, SR)
+
+    # ═══ SPRINT 2 — Spectral gate + dynamics processing ════
+    print("  🔧 SPRINT 2 — Spectral gate + dynamics gate...")
+    L, R = apply_spectral_gate_mix(L, R, SR)
+    L, R = apply_dynamics_gate(L, R, SR)
+
+    # ═══ SPRINT 4 — Realtime signal analysis ════
+    _rt_analysis = analyze_realtime_signal(L, SR)
+    log_milestone(_session_logger, "Mixdown processing complete")
 
     # ── Apply sidechain_bus using collected kick positions ──
     # This creates the signature dubstep pump on the full mix
@@ -2516,21 +2731,53 @@ def render_full_track(dna: 'SongDNA | None' = None):
     L_np = np.array(L, dtype=np.float64)
     R_np = np.array(R, dtype=np.float64)
 
-    # High-pass at 25Hz to remove inaudible sub rumble
-    L_np = svf_highpass(L_np, 25.0, 0.7, SR)
-    R_np = svf_highpass(R_np, 25.0, 0.7, SR)
+    # High-pass at 75Hz — V3s: revert to V3q (80Hz hurt dynamics)
+    L_np = svf_highpass(L_np, 75.0, 0.7, SR)
+    R_np = svf_highpass(R_np, 75.0, 0.7, SR)
 
     # Sub energy preserved — no pre-master 60Hz cut (let mastering chain handle it)
     L_list = L_np.tolist()
     R_list = R_np.tolist()
 
-    # Mid presence boost at 1kHz (+2 dB — gentle, mastering adds more)
-    L_list = apply_eq_band(L_list, center_hz=1000.0, gain_db=2.0, q=0.8)
-    R_list = apply_eq_band(R_list, center_hz=1000.0, gain_db=2.0, q=0.8)
-
-    # High presence boost at 5kHz (+1.5 dB — gentle, mastering adds DNA eq_high_boost)
-    L_list = apply_eq_band(L_list, center_hz=5000.0, gain_db=1.5, q=0.7)
-    R_list = apply_eq_band(R_list, center_hz=5000.0, gain_db=1.5, q=0.7)
+    # ── Pre-master EQ: aggressive spectral tilt ──
+    # Target: Sub 4.1%, Bass 21%, Low-Mid 11.5%, Mid 21.7%, Hi-Mid 4.9%, High 1.5%
+    # V3e: High 10% (too much), V3f: High 1.0% (Bass+LowMid bloated) → split difference
+    # 80Hz cut — sub/bass taming
+    L_list = apply_eq_band(L_list, center_hz=80.0, gain_db=-3.0, q=0.8)
+    R_list = apply_eq_band(R_list, center_hz=80.0, gain_db=-3.0, q=0.8)
+    # 120Hz cut — V4b: -10 (V3y=-13, reduced +3dB to compensate removed mastering boosts)
+    L_list = apply_eq_band(L_list, center_hz=120.0, gain_db=-10.0, q=0.5)
+    R_list = apply_eq_band(R_list, center_hz=120.0, gain_db=-10.0, q=0.5)
+    # 150Hz cut — V3y: -9 (V3w=-6, V3x=-14)
+    L_list = apply_eq_band(L_list, center_hz=150.0, gain_db=-9.0, q=0.5)
+    R_list = apply_eq_band(R_list, center_hz=150.0, gain_db=-9.0, q=0.5)
+    # 180Hz cut — V3y: -10 (V3w=-7, V3x=-15)
+    L_list = apply_eq_band(L_list, center_hz=180.0, gain_db=-10.0, q=0.5)
+    R_list = apply_eq_band(R_list, center_hz=180.0, gain_db=-10.0, q=0.5)
+    # 220Hz cut — V3y: -5 (V3w=0, V3x=-12, light touch)
+    L_list = apply_eq_band(L_list, center_hz=220.0, gain_db=-5.0, q=0.5)
+    R_list = apply_eq_band(R_list, center_hz=220.0, gain_db=-5.0, q=0.5)
+    # 300Hz cut — V3y: -7 (was -10, V3x low-mid collapsed to 0.8% vs ref 11.5%)
+    L_list = apply_eq_band(L_list, center_hz=300.0, gain_db=-7.0, q=0.4)
+    R_list = apply_eq_band(R_list, center_hz=300.0, gain_db=-7.0, q=0.4)
+    # 700Hz cut — V4b: -5 (reverted to V3y, was V4a=-6)
+    L_list = apply_eq_band(L_list, center_hz=700.0, gain_db=-5.0, q=0.5)
+    R_list = apply_eq_band(R_list, center_hz=700.0, gain_db=-5.0, q=0.5)
+    # 1kHz — V4b: -1 (reverted to V3y, was V4a=-2)
+    L_list = apply_eq_band(L_list, center_hz=1000.0, gain_db=-1.0, q=0.5)
+    R_list = apply_eq_band(R_list, center_hz=1000.0, gain_db=-1.0, q=0.5)
+    # 1.5kHz CUT — V4b: -5 (reverted to V3y, was V4a=-6)
+    L_list = apply_eq_band(L_list, center_hz=1500.0, gain_db=-5.0, q=0.5)
+    R_list = apply_eq_band(R_list, center_hz=1500.0, gain_db=-5.0, q=0.5)
+    # 4kHz hi-mid — V3y: -4 (V3x hi-mid=23.7% vs ref 4.9%, need more cut)
+    L_list = apply_eq_band(L_list, center_hz=4000.0, gain_db=-4.0, q=0.4)
+    R_list = apply_eq_band(R_list, center_hz=4000.0, gain_db=-4.0, q=0.4)
+    # 8kHz — V4b: -8 (reverted to V3y, was V4a=-9)
+    L_list = apply_eq_band(L_list, center_hz=8000.0, gain_db=-8.0, q=0.5)
+    R_list = apply_eq_band(R_list, center_hz=8000.0, gain_db=-8.0, q=0.5)
+    # 12kHz — V4b: -8 (reverted to V3y, was V4a=-9)
+    L_list = apply_eq_band(L_list, center_hz=12000.0, gain_db=-8.0, q=0.5)
+    R_list = apply_eq_band(R_list, center_hz=12000.0, gain_db=-8.0, q=0.5)
 
     L_np = np.array(L_list, dtype=np.float64)
     R_np = np.array(R_list, dtype=np.float64)
@@ -2557,19 +2804,66 @@ def render_full_track(dna: 'SongDNA | None' = None):
 
     stereo = apply_stereo_imaging(stereo, StereoPreset(
         name="MasterImg", image_type="frequency_split",
-        width=md.stereo_width, crossover_hz=180.0, mix=0.85
+        width=md.stereo_width, crossover_hz=120.0, mix=0.04  # V3w: was 0.10 (width 0.248 vs ref 0.107)
     ))
+
+    # ═══ V3v: UPWARD COMPRESSION — lift quiet sections for DR ≈ 18dB ═══
+    # Root cause: intro/breakdown ≈ -22dB, outro fades to -56dB
+    # Drops at -8dB → DR = 30-43dB, dynamics = 0% (ref 18.1dB)
+    # Fix: lift blocks more than 20dB below p95 to reduce DR
+    print("  🔧 Upward compression — targeting DR ≈ 18dB...")
+    _uc_L = stereo[:, 0].copy()
+    _uc_R = stereo[:, 1].copy()
+    _uc_mono = (_uc_L + _uc_R) * 0.5
+    _uc_block = int(SR * 0.2)  # 200ms blocks
+    _uc_n = len(_uc_mono) // _uc_block
+    _uc_rms = np.zeros(_uc_n)
+    for _i in range(_uc_n):
+        _blk = _uc_mono[_i * _uc_block:(_i + 1) * _uc_block]
+        _rms = float(np.sqrt(np.mean(_blk ** 2)))
+        _uc_rms[_i] = 20.0 * np.log10(max(_rms, 1e-10))
+    _uc_sorted = np.sort(_uc_rms)
+    _uc_p95 = float(_uc_sorted[min(len(_uc_sorted) - 1, int(len(_uc_sorted) * 0.95))])
+    _uc_floor = _uc_p95 - 8.0  # V3w: was -20 (DR=25, need 18)
+    _uc_silence = _uc_p95 - 50.0  # Don't boost near-silence
+
+    # Per-block gain: bring quiet blocks up to floor
+    _uc_gains = np.ones(_uc_n)
+    _uc_boosted = 0
+    for _i in range(_uc_n):
+        if _uc_rms[_i] < _uc_floor and _uc_rms[_i] > _uc_silence:
+            _needed = _uc_floor - _uc_rms[_i]
+            _uc_gains[_i] = 10.0 ** (_needed * 0.95 / 20.0)  # V3w: 95% (was 80%)
+            _uc_boosted += 1
+
+    # Smooth gains — 5-block moving average to avoid clicks
+    _uc_kernel = np.ones(5) / 5.0
+    _uc_smooth = np.convolve(_uc_gains, _uc_kernel, mode='same')
+
+    # Apply smoothed gains to stereo
+    for _i in range(_uc_n):
+        _s = _i * _uc_block
+        _e = min((_i + 1) * _uc_block, len(stereo))
+        stereo[_s:_e, 0] *= _uc_smooth[_i]
+        stereo[_s:_e, 1] *= _uc_smooth[_i]
+    print(f"    Upward compressed {_uc_boosted}/{_uc_n} blocks "
+          f"(floor={_uc_floor:.1f}dB, p95={_uc_p95:.1f}dB)")
 
     settings = dubstep_master_settings()
     settings.target_lufs = md.target_lufs
     settings.ceiling_db = md.ceiling_db
-    settings.eq_low_shelf_db = md.eq_low_boost
+    # V4b: REMOVE mastering EQ boosts — they were fighting our pre-master cuts
+    # dubstep_master_settings() has eq_mid_boost_db=+1.5 @ 2.5kHz (presence)
+    # and DNA sets eq_high_boost=+1.5 @ 8kHz, eq_low_boost=+1.0 @ 80Hz
+    # These boosts ADD energy to mid/high bands we're trying to reduce
+    settings.eq_low_shelf_db = 0.0   # V4b: neutral (was +1.0 from DNA)
     settings.eq_low_shelf_freq = md.eq_low_freq
-    settings.eq_high_shelf_db = md.eq_high_boost
+    settings.eq_high_shelf_db = 0.0  # V4b: neutral (was +1.5 from DNA)
     settings.eq_high_shelf_freq = md.eq_high_freq
-    settings.compression_ratio = md.compression_ratio
-    settings.compression_threshold_db = md.compression_threshold
-    settings.stereo_width = md.stereo_width
+    settings.eq_mid_boost_db = 0.0   # V4b: neutral (was +1.5 from preset)
+    settings.compression_ratio = 3.5  # V3u2: targeting DR ~18dB (ref 18.1)
+    settings.compression_threshold_db = -20.0  # V3u2: between -25 (DR<8) and -15 (DR>28)
+    settings.stereo_width = 0.5  # V3w: narrow from 1.0 (width 0.248 vs ref 0.107)
     settings.limiter_enabled = md.limiter_enabled
 
     mastered, report = master(stereo, sr=SR, settings=settings)
@@ -2581,6 +2875,23 @@ def render_full_track(dna: 'SongDNA | None' = None):
     # inside mastering_chain.master() which runs BEFORE the limiter,
     # avoiding aliased harmonics above the ceiling.
 
+    # ═══ PHASE 4 — Quality Loop ════════════════════════
+    print("\n  🔧 STAGE INTEGRATION — Phase 4: QA Validation + Reference...")
+    validate_output(master_L, master_R, SR)
+    apply_auto_master(master_L, dna, SR)
+    get_reference_insights(dna)
+
+    # ═══ SPRINT 1 — Phase 4: Phi normalize + analysis ═
+    print("  🔧 SPRINT 1 — Phase 4: Phi normalization + QA gate...")
+    master_L, master_R = normalize_phi_master(master_L, master_R, SR)
+    _phi_score = analyze_phi_coherence(master_L, master_R, SR)
+
+    # ═══ SPRINT 2 — Dither + watermark ════════════════
+    print("  🔧 SPRINT 2 — Final dither + watermark...")
+    master_L, master_R = apply_final_dither(master_L, master_R)
+    master_L = embed_audio_watermark(master_L, dna, SR)
+    master_R = embed_audio_watermark(master_R, dna, SR)
+
     out_path = str(OUTPUT / f"{safe_name}.wav")
     write_stereo_wav(out_path, master_L, master_R)
 
@@ -2591,6 +2902,44 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print(f"  LUFS:     {report.output_lufs:.1f}")
     print(f"  Peak:     {report.output_peak_db:.1f} dB")
     print(f"  Size:     {fsize / 1024 / 1024:.1f} MB")
+
+    # ═══ SPRINT 1 — Post-export QA suite ══════════════
+    print("\n  🔧 SPRINT 1 — Post-export: Full analysis + key + reference + Fibonacci...")
+    _analysis = run_audio_analysis(out_path, SR)
+    _key_check = validate_key_consistency(out_path, dna, SR)
+    _ref_compare = compare_to_reference(out_path)
+    _fib_check = run_fibonacci_quality_check(out_path, dna)
+
+    # ═══ SPRINT 2 — MIDI + metadata + bounce export ════
+    print("  🔧 SPRINT 2 — MIDI export + metadata + bounce...")
+    _midi_path = export_midi_file(dna, out_dir="output/midi", bpm=int(dna.bpm))
+    _meta = write_audio_metadata(out_path, dna, SR)
+    _bounce_info = export_bounce_stems(out_path, master_L, master_R, SR)
+    log_milestone(_session_logger, "Export complete")
+
+    # ═══ SPRINT 3 — Post-render analysis + creative exports ════
+    print("  🔧 SPRINT 3 — Genre detection + patterns + artwork + Serum2...")
+    _genre_info = detect_genre(master_L, SR, dna.bpm)
+    _pattern_info = detect_patterns(master_L, bpm=dna.bpm, sr=SR)
+    _artwork = generate_artwork(dna)
+    _serum2 = export_serum2_preset(dna)
+    _ep_info = build_ep_metadata(dna, out_path)
+    _cue_info = set_cue_points(out_path, dna, duration=duration)
+    _rack = export_ableton_rack()
+    tag_output_file(out_path, dna)
+    log_milestone(_session_logger, "Sprint 3 exports complete")
+
+    # ═══ SPRINT 4 — Grandmaster + Ascension + Session close ════
+    print("  🔧 SPRINT 4 — Grandmaster report + Ascension check...")
+    _gm_report = build_grandmaster_report_hook()
+    _asc_manifest = get_ascension_manifest()
+    check_autonomous_director(dna)
+
+    # ═══ Session close ════════════════════════════════
+    record_render_lessons(dna)
+    log_milestone(_session_logger, "Render complete — all sprints executed")
+    end_render_session(_mem_engine, out_path)
+
     return out_path
 # ═══════════════════════════════════════════
 
@@ -2803,9 +3152,19 @@ def main():
                 sound_style=sound_style,
             )
         else:
+            # ── Load reference standard if available (92-track DNA) ──
+            ref_std = None
+            ref_path = Path("output/reference_library/reference_standard.json")
+            if ref_path.exists():
+                import json as _json
+                with open(ref_path, "r", encoding="utf-8") as _f:
+                    ref_std = _json.load(_f)
+                print(f"  Reference standard loaded ({ref_std.get('track_count', 0)} tracks)")
+
             bp = SongBlueprint(name=song_name, style=style, mood=mood,
                                sound_style=sound_style)
-            engine = VariationEngine(artistic_variance=0.15)
+            engine = VariationEngine(artistic_variance=0.15,
+                                     reference_standard=ref_std)
             dna = engine.forge_dna(bp)
 
         print("╔══════════════════════════════════════════════╗")
