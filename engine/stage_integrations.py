@@ -2986,3 +2986,391 @@ def apply_pain_zone_eq(
     except Exception as exc:
         log.debug("apply_pain_zone_eq skipped: %s", exc)
         return (L, R)
+
+
+# ═══════════════════════════════════════════
+#  DOJO SPRINT 5 — BELT ENFORCEMENT
+#  Belt system gates module access, tracks
+#  real progression, per-track report cards
+# ═══════════════════════════════════════════
+
+# Belt order for comparison (index = belt rank)
+_BELT_ORDER = ["white", "yellow", "green", "blue", "purple", "brown", "black"]
+
+# Modules with belt requirements (from INTEGRATION_ROADMAP in dojo.py)
+_MODULE_BELT_GATES: dict = {
+    # Sprint 1 P0
+    "tuning_system": "green", "sub_bass": "green", "chord_pad": "green",
+    "dc_remover": "green", "normalizer": "green",
+    "frequency_analyzer": "purple", "audio_analyzer": "yellow",
+    "key_detector": "yellow", "phi_analyzer": "purple",
+    "reference_library": "blue", "fibonacci_feedback": "purple",
+    "arrangement_sequencer": "blue", "drum_pipeline": "blue",
+    "midbass_pipeline": "blue",
+    # Sprint 2 P1
+    "dither": "green", "crossfade": "green",
+    "dynamics_processor": "blue", "bus_router": "blue",
+    "signal_chain": "blue", "stem_mixer": "blue",
+    "lead_pipeline": "blue", "fx_pipeline": "blue",
+    "harmonic_gen": "purple", "spectral_gate": "purple",
+    "ambient_texture": "blue", "trance_arp": "blue",
+    "wave_folder": "blue", "ring_mod": "blue",
+    "midi_export": "green", "markov_melody": "blue",
+    "memory": "purple", "session_logger": "purple",
+    "lessons_learned": "purple", "evolution_engine": "purple",
+    "audio_mmap": "green", "metadata": "green",
+    "format_converter": "green", "bounce": "green",
+}
+
+
+def load_current_belt(mem_engine: Any = None) -> str:
+    """Load the current belt rank from memory.
+
+    Returns lowercase belt name (e.g. 'white', 'yellow').
+    """
+    try:
+        if mem_engine is not None:
+            status = mem_engine.get_growth_status()
+            belt_str = status.get("current_belt", "White Belt")
+            # Extract rank name: "White Belt" → "white"
+            return belt_str.split()[0].lower() if belt_str else "white"
+
+        from engine.memory import MemoryEngine
+        mem = MemoryEngine()
+        status = mem.get_growth_status()
+        belt_str = status.get("current_belt", "White Belt")
+        return belt_str.split()[0].lower() if belt_str else "white"
+    except Exception as exc:
+        log.debug("load_current_belt skipped: %s", exc)
+        return "white"
+
+
+def check_belt_gated_module(module_name: str, current_belt: str) -> dict:
+    """Check if a module is accessible at the current belt level.
+
+    Returns a dict with 'allowed' (bool), 'required_belt', 'current_belt',
+    and 'message' (warning if belt too low).
+    """
+    result: dict = {
+        "module": module_name,
+        "allowed": True,
+        "required_belt": "white",
+        "current_belt": current_belt,
+        "message": "",
+    }
+    try:
+        required = _MODULE_BELT_GATES.get(module_name, "white")
+        result["required_belt"] = required
+
+        current_idx = _BELT_ORDER.index(current_belt.lower())
+        required_idx = _BELT_ORDER.index(required.lower())
+
+        if current_idx < required_idx:
+            result["allowed"] = False
+            result["message"] = (
+                f"⚠ Belt gate: {module_name} requires "
+                f"{required.upper()} belt (you are {current_belt.upper()})"
+            )
+        return result
+    except Exception as exc:
+        log.debug("belt gate check skipped for %s: %s", module_name, exc)
+        return result
+
+
+def assess_belt_promotion(mem_engine: Any = None,
+                          gates_passed: int = 0,
+                          gates_total: int = 0) -> dict:
+    """Assess whether a belt promotion is earned.
+
+    Checks total completed tracks vs BELT_SYSTEM Fibonacci thresholds:
+      WHITE=1, YELLOW=3, GREEN=5, BLUE=8, PURPLE=13, BROWN=21, BLACK=34.
+
+    Also requires ≥50% quality gates passed to promote.
+
+    Returns dict with current_belt, eligible, next_belt, tracks_completed,
+    tracks_needed, promoted (bool).
+    """
+    result: dict = {
+        "current_belt": "white",
+        "eligible": False,
+        "next_belt": None,
+        "tracks_completed": 0,
+        "tracks_needed": 0,
+        "promoted": False,
+        "message": "",
+    }
+    try:
+        from engine.memory import MemoryEngine
+
+        if mem_engine is None:
+            mem_engine = MemoryEngine()
+
+        status = mem_engine.get_growth_status()
+        current_str = status.get("current_belt", "White Belt")
+        current_rank = current_str.split()[0].lower()
+        result["current_belt"] = current_rank
+
+        # Count completed tracks from session count
+        # (each render session = 1 completed track)
+        total_tracks = status.get("total_sessions", 0)
+        result["tracks_completed"] = total_tracks
+
+        # Fibonacci belt thresholds
+        belt_tracks = {
+            "white": 1, "yellow": 3, "green": 5,
+            "blue": 8, "purple": 13, "brown": 21, "black": 34,
+        }
+
+        current_idx = _BELT_ORDER.index(current_rank)
+        if current_idx >= len(_BELT_ORDER) - 1:
+            # Already BLACK — max rank
+            result["message"] = "🥋 BLACK BELT — Maximum rank achieved"
+            return result
+
+        next_belt = _BELT_ORDER[current_idx + 1]
+        result["next_belt"] = next_belt
+        tracks_needed = belt_tracks.get(next_belt, 999)
+        result["tracks_needed"] = tracks_needed
+
+        # Gate pass rate requirement (≥50% to promote)
+        gate_rate = (gates_passed / gates_total) if gates_total > 0 else 1.0
+
+        if total_tracks >= tracks_needed and gate_rate >= 0.5:
+            result["eligible"] = True
+            new_belt_name = f"{next_belt.capitalize()} Belt"
+            mem_engine.promote_belt(
+                new_belt_name,
+                f"Earned after {total_tracks} tracks, "
+                f"{gates_passed}/{gates_total} gates passed",
+            )
+            result["promoted"] = True
+            result["message"] = (
+                f"🥋 BELT PROMOTION: {current_rank.upper()} → "
+                f"{next_belt.upper()}! ({total_tracks} tracks completed)"
+            )
+        else:
+            remaining = max(0, tracks_needed - total_tracks)
+            result["message"] = (
+                f"Belt: {current_rank.upper()} → {next_belt.upper()} "
+                f"needs {remaining} more track(s) "
+                f"({total_tracks}/{tracks_needed})"
+            )
+
+        print(f"  ✓ belt_assessment: {result['message']}")
+        return result
+    except Exception as exc:
+        log.debug("assess_belt_promotion skipped: %s", exc)
+        return result
+
+
+def generate_report_card(dna: Any, out_path: str,
+                         L: list, R: list,
+                         sr: int = 48000,
+                         gate_results: list | None = None) -> dict:
+    """Generate a per-track report card scoring against quality targets.
+
+    Uses recipe_book quality targets to score the rendered track.
+    Returns dict with overall_score (0-100), grade (A-F), individual
+    target scores, and pass/fail for each metric.
+    """
+    report: dict = {
+        "overall_score": 0,
+        "grade": "F",
+        "targets": [],
+        "gates_passed": 0,
+        "gates_total": 0,
+        "strengths": [],
+        "weaknesses": [],
+    }
+    try:
+        import numpy as _np
+        from engine.recipe_book import RecipeBook
+
+        rb = RecipeBook()
+        targets = rb.get_quality_targets()
+
+        arr_L = _np.asarray(L, dtype=_np.float64)
+        arr_R = _np.asarray(R, dtype=_np.float64)
+        mono = (arr_L + arr_R) * 0.5
+
+        # ── Measure actual values ──
+        rms = float(_np.sqrt(_np.mean(mono ** 2)))
+        peak = float(_np.max(_np.abs(mono)))
+        # Estimate LUFS (simplified: RMS-based)
+        lufs_est = 20.0 * _np.log10(max(rms, 1e-10)) - 0.691
+        peak_db = 20.0 * _np.log10(max(peak, 1e-10))
+        duration = len(L) / sr
+
+        # Spectral band energies
+        fft_data = _np.abs(_np.fft.rfft(mono[:sr * 4]))  # first 4s
+        freqs = _np.fft.rfftfreq(min(len(mono), sr * 4), 1.0 / sr)
+        total_energy = float(_np.sum(fft_data ** 2)) + 1e-20
+
+        def band_pct(lo: float, hi: float) -> float:
+            mask = (freqs >= lo) & (freqs < hi)
+            return float(_np.sum(fft_data[mask] ** 2) / total_energy * 100)
+
+        sub_pct = band_pct(20, 80)
+        low_pct = band_pct(80, 300)
+        mid_pct = band_pct(300, 3000)
+        high_pct = band_pct(3000, 8000)
+        air_pct = band_pct(8000, 20000)
+
+        # Stereo width estimate
+        if len(arr_L) > 0:
+            corr = float(_np.corrcoef(arr_L[:sr * 2], arr_R[:sr * 2])[0, 1])
+            width = max(0.0, 1.0 - abs(corr))
+        else:
+            width = 0.0
+
+        # Dynamic range
+        block_size = sr // 4  # 250ms blocks
+        block_rms = []
+        for i in range(0, len(mono) - block_size, block_size):
+            chunk = mono[i:i + block_size]
+            blk = float(_np.sqrt(_np.mean(chunk ** 2)))
+            if blk > 1e-10:
+                block_rms.append(20 * _np.log10(blk))
+        dr = (max(block_rms) - min(block_rms)) if block_rms else 0.0
+
+        # Map measured values to target names
+        measured = {
+            "LUFS": lufs_est,
+            "True Peak": peak_db,
+            "Dynamic Range": dr,
+            "Sub %": sub_pct,
+            "Low %": low_pct,
+            "Mid %": mid_pct,
+            "High %": high_pct,
+            "Air %": air_pct,
+            "Stereo Width": width,
+            "Duration": duration,
+        }
+
+        # ── Score each target ──
+        scored = 0
+        passed = 0
+        total = 0
+
+        for t in targets:
+            name = t.name
+            if name not in measured:
+                continue
+            total += 1
+            val = measured[name]
+            t_min = t.target_min
+            t_max = t.target_max
+
+            in_range = t_min <= val <= t_max
+            if in_range:
+                score = 100
+                passed += 1
+                report["strengths"].append(f"{name}: {val:.1f} ✓")
+            else:
+                # Score based on how far out of range
+                if val < t_min:
+                    dist = (t_min - val) / max(abs(t_min), 1)
+                else:
+                    dist = (val - t_max) / max(abs(t_max), 1)
+                score = max(0, int(100 - dist * 100))
+                report["weaknesses"].append(
+                    f"{name}: {val:.1f} (target {t_min}–{t_max})")
+
+            report["targets"].append({
+                "name": name, "value": round(val, 2),
+                "min": t_min, "max": t_max,
+                "passed": in_range, "score": score,
+            })
+            scored += score
+
+        report["gates_passed"] = passed
+        report["gates_total"] = total
+        report["overall_score"] = int(scored / max(total, 1))
+
+        # Letter grade
+        s = report["overall_score"]
+        if s >= 90:
+            report["grade"] = "A"
+        elif s >= 80:
+            report["grade"] = "B"
+        elif s >= 70:
+            report["grade"] = "C"
+        elif s >= 60:
+            report["grade"] = "D"
+        else:
+            report["grade"] = "F"
+
+        # Append quality gate results if provided
+        if gate_results:
+            gp = sum(1 for g in gate_results if g.get("passed", False))
+            gt = len(gate_results)
+            report["gates_passed"] += gp
+            report["gates_total"] += gt
+
+        print(f"  ✓ report_card: {report['grade']} "
+              f"({report['overall_score']}/100) — "
+              f"{passed}/{total} targets in range")
+        return report
+    except Exception as exc:
+        log.debug("generate_report_card skipped: %s", exc)
+        return report
+
+
+def persist_belt_progress(mem_engine: Any,
+                          report_card: dict,
+                          belt_assessment: dict,
+                          dna: Any = None) -> dict:
+    """Persist belt progress and report card to cross-session memory.
+
+    Increments total_tracks in growth.json, saves the report card
+    as a memory event, and stores the belt assessment.
+    """
+    result: dict = {
+        "persisted": False,
+        "total_tracks": 0,
+        "belt": "white",
+    }
+    try:
+        if mem_engine is None:
+            return result
+
+        # Increment total_tracks in growth.json
+        from pathlib import Path
+        import json
+
+        growth_file = mem_engine.memory_dir / "growth.json"
+        if growth_file.exists():
+            with open(growth_file, "r") as f:
+                growth = json.load(f)
+        else:
+            growth = {"milestones": [], "current_belt": "White Belt",
+                      "total_tracks": 0}
+
+        growth["total_tracks"] = growth.get("total_tracks", 0) + 1
+        result["total_tracks"] = growth["total_tracks"]
+        result["belt"] = belt_assessment.get("current_belt", "white")
+
+        # Store report card summary in growth data
+        if "report_cards" not in growth:
+            growth["report_cards"] = []
+        growth["report_cards"].append({
+            "track": getattr(dna, "name", "untitled") if dna else "untitled",
+            "grade": report_card.get("grade", "?"),
+            "score": report_card.get("overall_score", 0),
+            "timestamp": __import__("time").strftime("%Y-%m-%dT%H:%M:%S"),
+        })
+        # Keep only last 50 report cards
+        growth["report_cards"] = growth["report_cards"][-50:]
+
+        with open(growth_file, "w") as f:
+            json.dump(growth, f, indent=2)
+
+        result["persisted"] = True
+        promoted = belt_assessment.get("promoted", False)
+        print(f"  ✓ belt_progress: track #{result['total_tracks']}"
+              f", belt={result['belt'].upper()}"
+              f"{' ★ PROMOTED!' if promoted else ''}")
+        return result
+    except Exception as exc:
+        log.debug("persist_belt_progress skipped: %s", exc)
+        return result

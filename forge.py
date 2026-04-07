@@ -167,6 +167,10 @@ from engine.stage_integrations import (
     singer_band_routing, pink_noise_gain_stage,
     check_frequency_collisions, get_mix_guidance,
     detect_harmonic_masking, apply_pain_zone_eq,
+    # Dojo Sprint 5 — BELT ENFORCEMENT
+    load_current_belt, check_belt_gated_module,
+    assess_belt_promotion, generate_report_card,
+    persist_belt_progress,
 )
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -1315,7 +1319,10 @@ def render_full_track(dna: 'SongDNA | None' = None):
     from engine.dojo import DojoSession, DojoPhase, DojoBrain, BeltRank
     from engine.recipe_book import select_recipe, check_quality_gate
 
-    _dojo = DojoSession(belt=BeltRank.WHITE, total_session_s=840.0)
+    # Sprint 5: Dynamic belt from cross-session memory
+    _current_belt_str = load_current_belt()
+    _belt_rank = getattr(BeltRank, _current_belt_str.upper(), BeltRank.WHITE)
+    _dojo = DojoSession(belt=_belt_rank, total_session_s=840.0)
     _dojo.begin_session()
     _recipe = select_recipe(
         style=getattr(dna, 'style', 'dubstep'),
@@ -3074,14 +3081,30 @@ def render_full_track(dna: 'SongDNA | None' = None):
     log_milestone(_session_logger, "Render complete — all sprints executed")
     end_render_session(_mem_engine, out_path)
 
-    # ═══ DOJO SESSION REPORT ═════════════════════════
+    # ═══ SPRINT 5 — Belt Enforcement ═════════════════
+    print("  🥋 SPRINT 5 — Belt assessment + report card...")
+    _report_card = generate_report_card(dna, out_path, L, R, sr)
     _session_report = _dojo.get_session_report()
     _gates_passed = _session_report["gates_passed"]
     _gates_total = _session_report["gates_total"]
+    _belt_assessment = assess_belt_promotion(
+        _mem_engine, _gates_passed, _gates_total)
+    _belt_persist = persist_belt_progress(
+        _mem_engine, _report_card, _belt_assessment, dna)
+
+    # ═══ DOJO SESSION REPORT ═════════════════════════
     print(f"\n  🥋 DOJO SESSION COMPLETE")
-    print(f"     Belt: {_session_report['belt']}")
+    print(f"     Belt: {_belt_assessment.get('current_belt', 'white').upper()}")
+    print(f"     Report Card: {_report_card['grade']} "
+          f"({_report_card['overall_score']}/100)")
     print(f"     Quality Gates: {_gates_passed}/{_gates_total} passed")
+    print(f"     Tracks Completed: "
+          f"{_belt_persist.get('total_tracks', '?')}")
     print(f"     Session Time: {_session_report['total_session_s']:.1f}s")
+    if _belt_assessment.get("promoted"):
+        print(f"     ★ {_belt_assessment['message']}")
+    elif _belt_assessment.get("next_belt"):
+        print(f"     → {_belt_assessment['message']}")
 
     return out_path
 # ═══════════════════════════════════════════
