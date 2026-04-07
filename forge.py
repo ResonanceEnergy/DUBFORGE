@@ -1291,8 +1291,16 @@ def _wavetable_to_audio(frames: list[np.ndarray], freq: float,
     return out
 
 
-def render_full_track(dna: 'SongDNA | None' = None):
-    """Render DNA-driven dubstep track — V6 full integration.
+def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
+    """MWP 10-Phase Render Pipeline — ill.GATES methodology.
+
+    Implements the Minimum Workable Pipeline:
+      ORACLE → COLLECT → RECIPES → SKETCH → ARRANGE →
+      DESIGN → MIX → MASTER → RELEASE → REFLECT
+
+    Each phase fires pre/post workflow hooks when workflow is provided.
+
+    Original V6 full integration.
 
     When dna is None, falls back to V5 defaults (F minor, 140 BPM).
     When dna is provided, EVERY synthesis parameter is driven by SongDNA:
@@ -1311,6 +1319,16 @@ def render_full_track(dna: 'SongDNA | None' = None):
       Prints ill.Gates Approach phase banners during production:
         [COLLECT] → [SKETCH] → [ARRANGE] → [MIX] → [FINISH]
     """
+    import types
+    ctx = types.SimpleNamespace(dna=dna, output_path=None)
+
+    # ═══ MWP PHASE 1: ORACLE ═════════════════════════
+    # Brain: ARCHITECT — understand DNA, analyze references
+    # Wired: song_dna, dojo, recipe_book, dsp_core
+    # Available: audio_analyzer, reference_analyzer, emulator, style_transfer
+    if workflow:
+        workflow._run_hooks("pre_oracle", ctx)
+
     # ═══ DNA SETUP ═══════════════════════════════════
     if dna is None:
         dna = _default_v5_dna()
@@ -1330,10 +1348,9 @@ def render_full_track(dna: 'SongDNA | None' = None):
         reference_dna=dna,
     )
 
-    # ═══ PHASE: ORACLE → COLLECT ══════════════════════
-    _dojo.begin_phase(DojoPhase.COLLECT)
-    print(_dojo.phase_banner(DojoPhase.COLLECT,
-          "Gathering sound palette, establishing DNA identity..."))
+    _dojo.begin_phase(DojoPhase.ORACLE)
+    print(_dojo.phase_banner(DojoPhase.ORACLE,
+          "Understanding DNA, analyzing references — ARCHITECT BRAIN..."))
 
     # Import DSP primitives needed throughout
     from engine.dsp_core import svf_highpass, svf_lowpass, multiband_compress
@@ -1428,6 +1445,29 @@ def render_full_track(dna: 'SongDNA | None' = None):
     fd = dna.fx
     md = dna.mix
 
+    # ── Pack ORACLE outputs ──
+    ctx.dna, ctx.BEAT, ctx.BAR, ctx.FREQ = dna, BEAT, BAR, FREQ
+    ctx.dd, ctx.bd, ctx.ld, ctx.ad, ctx.fd, ctx.md = dd, bd, ld, ad, fd, md
+    ctx.intervals, ctx._dojo, ctx.rco_energy = intervals, _dojo, rco_energy
+    ctx.sat, ctx.panner = sat, panner
+    ctx.groove_eng, ctx.rhythm_eng = groove_eng, rhythm_eng
+    ctx.INTRO, ctx.BUILD, ctx.DROP1 = INTRO, BUILD, DROP1
+    ctx.BREAK_, ctx.BUILD2, ctx.DROP2, ctx.OUTRO = BREAK_, BUILD2, DROP2, OUTRO
+    ctx.total_bars, ctx.total_s, ctx.safe_name = total_bars, total_s, safe_name
+    ctx.samples_fn, ctx.n_fn = samples, n
+    if workflow:
+        workflow._run_hooks("post_oracle", ctx)
+
+    # ═══ MWP PHASE 2: COLLECT ═════════════════════════
+    # Brain: CHILD — gather freely, no judgment
+    # Wired: stage_integrations (tuning, session, memory, lessons, sample_library)
+    # Available: sample_pack_builder, batch_processor, format_converter
+    _dojo.begin_phase(DojoPhase.COLLECT)
+    print(_dojo.phase_banner(DojoPhase.COLLECT,
+          "Gathering tools, samples, session state — CHILD BRAIN..."))
+    if workflow:
+        workflow._run_hooks("pre_collect", ctx)
+
     # ═══ SPRINT 1 — Phase 1: Tuning + Arrangement ════
     print("  🔧 SPRINT 1 — Phase 1: Tuning validation + arrangement template...")
     validate_tuning_432(FREQ)
@@ -1456,6 +1496,22 @@ def render_full_track(dna: 'SongDNA | None' = None):
     _tonal_colors = generate_tonal_palette(dna)
     log_milestone(_session_logger, "COLLECT complete — 128 Rack populated")
 
+    # ── Pack COLLECT outputs ──
+    ctx._mem_engine = _mem_engine
+    ctx._session_logger = _session_logger
+    if workflow:
+        workflow._run_hooks("post_collect", ctx)
+
+    # ═══ MWP PHASE 3: RECIPES ═════════════════════════
+    # Brain: ARCHITECT — templates, blueprints, variation planning
+    # Wired: template_engine, macro_presets, genetic_evolution, serum_blueprint
+    # Available: randomizer, preset_vcs, snapshot_manager, plugin_scaffold
+    _dojo.begin_phase(DojoPhase.RECIPES)
+    print(_dojo.phase_banner(DojoPhase.RECIPES,
+          "Planning templates, blueprints, variations — ARCHITECT BRAIN..."))
+    if workflow:
+        workflow._run_hooks("pre_recipes", ctx)
+
     # ═══ SPRINT 3 — Phase 1: Templates + Macros + Evolution ════
     print("  🔧 SPRINT 3 — Templates, macros, genetic evolution...")
     _template_config = generate_template_config(dna)
@@ -1471,13 +1527,25 @@ def render_full_track(dna: 'SongDNA | None' = None):
     check_production_pipeline(dna)
     _subphonics_greeting = process_subphonics_greeting()
 
+    if workflow:
+        workflow._run_hooks("post_recipes", ctx)
+
+    # ═══ MWP PHASE 4: SKETCH ═════════════════════════
+    # Brain: CHILD — raw sound design, first instincts
+    # Wired: perc_synth, bass_synth, fm_synth, additive_synth, noise_synth,
+    #         lead_synth, formant_synth, pad_synth, granular_synth, ks_synth,
+    #         supersaw, vocal_synth, transition_fx, growl_resample
+    # Available: phase_distortion, vector_synth, vocoder, vocal_tts,
+    #            spectral_morph, spectral_resynthesis, wavetable_morph,
+    #            envelope_generator
     # ═══════════════════════════════════════════
     #  SOUND DESIGN — Drums (LAYERED, MULTI-SOURCE)
     # ═══════════════════════════════════════════
-    # ═══ PHASE: SKETCH ════════════════════════════════
     _dojo.begin_phase(DojoPhase.SKETCH)
     print(_dojo.phase_banner(DojoPhase.SKETCH,
           "Designing sounds, first instincts — CHILD BRAIN, no judgment..."))
+    if workflow:
+        workflow._run_hooks("pre_sketch", ctx)
     print("  [1/9] Drums — layered synthesis...")
 
     # ── KICK ──────────────────────────────────────────
@@ -2326,10 +2394,29 @@ def render_full_track(dna: 'SongDNA | None' = None):
          "target_min": 8, "target_max": 50, "unit": "elements"},
     ])
 
+    # ── Pack SKETCH outputs ──
+    ctx.kick, ctx.snare, ctx.hat_c, ctx.hat_o, ctx.clap = kick, snare, hat_c, hat_o, clap
+    ctx.sub, ctx.bass_arsenal, ctx.bass_repeat = sub, bass_arsenal, bass_repeat
+    ctx.lead_notes, ctx.lead_notes_long = lead_notes, lead_notes_long
+    ctx.chord_notes_l, ctx.chord_notes_r = chord_notes_l, chord_notes_r
+    ctx.vocal_chops, ctx.dark_pad, ctx.drone = vocal_chops, dark_pad, drone
+    ctx.lush, ctx.drop_noise, ctx.reese = lush, drop_noise, reese
+    ctx.riser, ctx.boom, ctx.hit = riser, boom, hit
+    ctx.tape_stop, ctx.pitch_dive, ctx.rev_crash = tape_stop, pitch_dive, rev_crash
+    ctx.stutter, ctx.gate_chop, ctx.hat_pattern = stutter, gate_chop, hat_pattern
+    if workflow:
+        workflow._run_hooks("post_sketch", ctx)
+
+    # ═══ MWP PHASE 5: ARRANGE ════════════════════════
+    # Brain: ARCHITECT — structure, energy arc, section contrast
+    # Wired: rhythm_engine, groove_engine, panning_engine
+    # Available: clip_launcher, automation_recorder, tempo_sync
+    if workflow:
+        workflow._run_hooks("pre_arrange", ctx)
+
     # ═══════════════════════════════════════════
     #  ARRANGEMENT
     # ═══════════════════════════════════════════
-    # ═══ PHASE: ARRANGE ═══════════════════════════════
     _dojo.begin_phase(DojoPhase.ARRANGE)
     print(_dojo.phase_banner(DojoPhase.ARRANGE,
           "Structuring energy arc, section contrast — ARCHITECT BRAIN..."))
@@ -2798,10 +2885,34 @@ def render_full_track(dna: 'SongDNA | None' = None):
          "target_min": 120.0, "target_max": 360.0, "unit": "seconds"},
     ])
 
+    # ── Pack ARRANGE outputs ──
+    ctx.L, ctx.R, ctx.kick_positions = L, R, kick_positions
+    if workflow:
+        workflow._run_hooks("post_arrange", ctx)
+
+    # ═══ MWP PHASE 6: DESIGN ═════════════════════════
+    # Brain: ARCHITECT — effect design, automation, spatial processing
+    # Available: fx_rack, automation_recorder, clip_launcher, live_fx
+    # Available: render_pipeline, atmos_pipeline, sub_pipeline
+    _dojo.begin_phase(DojoPhase.DESIGN)
+    print(_dojo.phase_banner(DojoPhase.DESIGN,
+          "Effect design, automation — ARCHITECT BRAIN..."))
+    if workflow:
+        workflow._run_hooks("pre_design", ctx)
+    # TODO: Wire DESIGN modules — fx_rack, automation_recorder, live_fx
+    if workflow:
+        workflow._run_hooks("post_design", ctx)
+
+    # ═══ MWP PHASE 7: MIX ════════════════════════════
+    # Brain: CRITIC — surgical mixing, frequency balance
+    # Wired: eq_engine, compressor, stereo_imaging, saturation, dsp_core
+    # Available: multitrack_renderer, audio_buffer, audio_math
+    if workflow:
+        workflow._run_hooks("pre_mix", ctx)
+
     # ══════════════════════════════════════════════════
     #  MIXDOWN + MASTERING
     # ══════════════════════════════════════════════════
-    # ═══ PHASE: MIX ══════════════════════════════════
     _dojo.begin_phase(DojoPhase.MIX)
     print(_dojo.phase_banner(DojoPhase.MIX,
           "Surgical mixing, final polish — CRITIC BRAIN..."))
@@ -2967,7 +3078,17 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print(f"    Upward compressed {_uc_boosted}/{_uc_n} blocks "
           f"(floor={_uc_floor:.1f}dB, p95={_uc_p95:.1f}dB)")
 
-    # ═══ PHASE: MASTER ══════════════════════════════
+    # — end MIX, pack ctx —
+    ctx.stereo = stereo
+    if workflow:
+        workflow._run_hooks("post_mix", ctx)
+
+    # ═══ MWP PHASE 8: MASTER ══════════════════════════════
+    # Brain: CRITIC — final loudness, limiting, stereo
+    # Wired: mastering_chain, dsp_core
+    # Available: auto_master, audio_math
+    if workflow:
+        workflow._run_hooks("pre_master", ctx)
     _dojo.begin_phase(DojoPhase.MASTER)
     print(_dojo.phase_banner(DojoPhase.MASTER,
           "Final loudness, limiting, stereo — CRITIC BRAIN..."))
@@ -3034,6 +3155,21 @@ def render_full_track(dna: 'SongDNA | None' = None):
     print(f"  Peak:     {report.output_peak_db:.1f} dB")
     print(f"  Size:     {fsize / 1024 / 1024:.1f} MB")
 
+    # ── Pack MASTER outputs ──
+    ctx.master_L, ctx.master_R = master_L, master_R
+    ctx.output_path, ctx.out_path = out_path, out_path
+    ctx.duration, ctx.report = duration, report
+    if workflow:
+        workflow._run_hooks("post_master", ctx)
+
+    # ═══ MWP PHASE 9: RELEASE ════════════════════════
+    # Brain: ARCHITECT — export, metadata, artwork, presets
+    # Wired: audio_analysis, midi_export, artwork_generator, metadata
+    # Available: sample_pack_builder, preset_pack_builder, sample_pack_exporter
+    # Available: batch_renderer, format_converter
+    if workflow:
+        workflow._run_hooks("pre_release", ctx)
+
     # ═══ PHASE: RELEASE ══════════════════════════════
     _dojo.begin_phase(DojoPhase.RELEASE)
     print(_dojo.phase_banner(DojoPhase.RELEASE,
@@ -3071,6 +3207,16 @@ def render_full_track(dna: 'SongDNA | None' = None):
     _asc_manifest = get_ascension_manifest()
     check_autonomous_director(dna)
 
+    if workflow:
+        workflow._run_hooks("post_release", ctx)
+
+    # ═══ MWP PHASE 10: REFLECT ═══════════════════════
+    # Brain: CRITIC — lessons learned, belt assessment, evolution
+    # Wired: lessons_learned, belt (report_card, assess, persist)
+    # Available: collaboration, project_manager, session_persistence
+    if workflow:
+        workflow._run_hooks("pre_reflect", ctx)
+
     # ═══ PHASE: REFLECT ══════════════════════════════
     _dojo.begin_phase(DojoPhase.REFLECT)
     print(_dojo.phase_banner(DojoPhase.REFLECT,
@@ -3105,6 +3251,11 @@ def render_full_track(dna: 'SongDNA | None' = None):
         print(f"     ★ {_belt_assessment['message']}")
     elif _belt_assessment.get("next_belt"):
         print(f"     → {_belt_assessment['message']}")
+
+    ctx.output_path = out_path
+    if workflow:
+        workflow._run_hooks("post_reflect", ctx)
+        workflow.ctx = ctx
 
     return out_path
 # ═══════════════════════════════════════════
