@@ -163,6 +163,10 @@ from engine.stage_integrations import (
     build_fat_loop_map, compute_subtractive_map,
     extract_ghost_markers, measure_section_contrast,
     compute_arrangement_energy_curve,
+    # Dojo Sprint 4 — MIXING INTELLIGENCE
+    singer_band_routing, pink_noise_gain_stage,
+    check_frequency_collisions, get_mix_guidance,
+    detect_harmonic_masking, apply_pain_zone_eq,
 )
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -2806,9 +2810,27 @@ def render_full_track(dna: 'SongDNA | None' = None):
     L, R = apply_spectral_gate_mix(L, R, SR)
     L, R = apply_dynamics_gate(L, R, SR)
 
-    # ═══ SPRINT 4 — Realtime signal analysis ════
+    # ═══ SPRINT 4 (P3 legacy) — Realtime signal analysis ════
     _rt_analysis = analyze_realtime_signal(L, SR)
-    log_milestone(_session_logger, "Mixdown processing complete")
+
+    # ═══ DOJO SPRINT 4 — Mixing Intelligence ═══════════════
+    print("  🔨 DOJO SPRINT 4 — Singer/Band + Pink Noise + Collisions...")
+    _sketch_sigs = {}
+    for _snd_name in ['kick', 'snare', 'hat_c', 'hat_o', 'clap', 'sub',
+                      'fm_growl', 'growl_wt', 'dist_fm', 'sync_bass',
+                      'acid_bass', 'neuro_bass', 'formant_bass',
+                      'dark_pad', 'lush', 'drone', 'riser',
+                      'boom', 'hit', 'drop_noise']:
+        _snd = locals().get(_snd_name)
+        if _snd is not None:
+            _sketch_sigs[_snd_name] = _snd
+    _singer_route = singer_band_routing(dna, _subtract_map if '_subtract_map' in dir() else {}, _sketch_sigs)
+    _pink_gains = pink_noise_gain_stage(_sketch_sigs, SR)
+    _collisions = check_frequency_collisions(_sketch_sigs, SR)
+    _mix_guide = get_mix_guidance(dna, _sketch_sigs, _singer_route, SR)
+    _harmonic_mask = detect_harmonic_masking(L, R, SR)
+    L, R = apply_pain_zone_eq(L, R, SR)
+    log_milestone(_session_logger, "MIXING INTELLIGENCE complete — Singer/Band routed, pain zones enforced")
 
     # ── Apply sidechain_bus using collected kick positions ──
     # This creates the signature dubstep pump on the full mix

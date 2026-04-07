@@ -2515,3 +2515,474 @@ def compute_arrangement_energy_curve(
     except Exception as exc:
         log.debug("energy_curve computation skipped: %s", exc)
         return curve
+
+
+# ════════════════════════════════════════════════════════════════════
+#  DOJO SPRINT 4 — MIXING INTELLIGENCE
+#  Singer/Band routing, Pink Noise gain staging, Frequency collision
+#  detection, Mix guidance, Harmonic masking, Pain Zone enforcement
+# ════════════════════════════════════════════════════════════════════
+
+# ill.GATES concept: every mix has a SINGER (featured element) and a BAND
+# (supporting elements).  The Singer gets frequency priority; the Band
+# carves space around it.  Pink Noise reference = every octave at equal
+# perceived loudness (-3dB/octave slope in energy).
+
+_SINGER_CANDIDATES = {
+    "lead", "vocal", "fm_growl", "growl_wt", "dist_fm",
+    "sync_bass", "acid_bass", "neuro_bass", "formant_bass",
+}
+
+_BAND_CANDIDATES = {
+    "kick", "snare", "hat_c", "hat_o", "clap", "sub",
+    "dark_pad", "lush", "drone", "riser", "boom", "hit",
+    "drop_noise",
+}
+
+# Pain zones — frequencies that accumulate mud or harshness
+_PAIN_ZONES = {
+    "mud": (200, 500, -2.5),      # Hz low, Hz high, correction dB
+    "boxy": (400, 800, -1.5),
+    "honk": (800, 1500, -1.0),
+    "harsh": (2500, 5000, -2.0),
+    "brittle": (6000, 10000, -1.0),
+}
+
+
+def singer_band_routing(
+    dna, subtract_map: dict, element_signals: dict
+) -> dict:
+    """Classify elements as Singer (featured) vs Band (supporting).
+
+    Returns dict with 'singer' name, 'band' list, and per-element
+    routing hints (gain_offset_db, eq_scoop, stereo_hint).
+    """
+    result: dict = {
+        "singer": None,
+        "band": [],
+        "routes": {},
+    }
+    try:
+        # Pick singer: highest-energy element from Singer candidates
+        # that appears in the current sketch
+        best_singer = None
+        best_energy = -999.0
+        for name, sig in element_signals.items():
+            if name not in _SINGER_CANDIDATES:
+                continue
+            if sig is None:
+                continue
+            # Estimate RMS energy
+            if hasattr(sig, '__len__') and len(sig) > 0:
+                import numpy as _np
+                arr = _np.asarray(sig, dtype=_np.float64)
+                rms = float(_np.sqrt(_np.mean(arr ** 2)))
+                energy_db = 20 * _np.log10(max(rms, 1e-10))
+            else:
+                energy_db = -60.0
+            if energy_db > best_energy:
+                best_energy = energy_db
+                best_singer = name
+
+        if best_singer is None:
+            # Fallback: pick any non-drum with highest priority
+            for name in ("fm_growl", "sub", "acid_bass", "neuro_bass"):
+                if name in element_signals and element_signals[name] is not None:
+                    best_singer = name
+                    break
+        if best_singer is None:
+            best_singer = "sub"
+
+        result["singer"] = best_singer
+
+        # Band = everything else
+        band_names = [n for n in element_signals
+                      if n != best_singer and element_signals[n] is not None]
+        result["band"] = band_names
+
+        # Build routing hints
+        singer_range = _element_freq_range(best_singer)
+        for name in element_signals:
+            if element_signals[name] is None:
+                continue
+            route: dict = {
+                "role": "singer" if name == best_singer else "band",
+                "gain_offset_db": 0.0,
+                "eq_scoop": None,
+                "stereo_hint": "center",
+            }
+            if name == best_singer:
+                route["gain_offset_db"] = +1.5  # Boost the singer slightly
+                route["stereo_hint"] = "center"
+            else:
+                # Band element — check frequency overlap with singer
+                elem_range = _element_freq_range(name)
+                overlap = _freq_overlap_pct(singer_range, elem_range)
+                if overlap > 0.3:
+                    # Scoop center of overlap to make room for singer
+                    mid = (max(singer_range[0], elem_range[0])
+                           + min(singer_range[1], elem_range[1])) / 2
+                    route["eq_scoop"] = {
+                        "freq_hz": mid,
+                        "gain_db": -3.0 * overlap,
+                        "q": 1.5,
+                    }
+                    route["gain_offset_db"] = -1.0 * overlap
+                # Push wide elements to sides
+                if name in ("dark_pad", "lush", "drone", "hat_o"):
+                    route["stereo_hint"] = "wide"
+                elif name in ("kick", "sub", "snare"):
+                    route["stereo_hint"] = "center"
+                else:
+                    route["stereo_hint"] = "slight_wide"
+            result["routes"][name] = route
+
+        n_band = len(band_names)
+        print(f"  ✓ singer_band: singer={best_singer},"
+              f" band={n_band} elements")
+        return result
+    except Exception as exc:
+        log.debug("singer_band_routing skipped: %s", exc)
+        return result
+
+
+def _element_freq_range(name: str) -> tuple:
+    """Return approximate (low_hz, high_hz) for a named element."""
+    _ranges = {
+        "kick": (30, 200), "snare": (150, 5000), "hat_c": (5000, 18000),
+        "hat_o": (3000, 16000), "clap": (500, 8000), "sub": (20, 80),
+        "fm_growl": (80, 4000), "growl_wt": (80, 6000),
+        "dist_fm": (100, 8000), "sync_bass": (60, 3000),
+        "acid_bass": (60, 4000), "neuro_bass": (60, 5000),
+        "formant_bass": (80, 3000), "dark_pad": (200, 8000),
+        "lush": (300, 10000), "drone": (40, 2000),
+        "riser": (200, 16000), "boom": (30, 500),
+        "hit": (100, 12000), "drop_noise": (500, 16000),
+        "lead": (300, 6000), "vocal": (200, 4000),
+    }
+    return _ranges.get(name, (100, 5000))
+
+
+def _freq_overlap_pct(range_a: tuple, range_b: tuple) -> float:
+    """Return 0.0-1.0 overlap fraction between two freq ranges."""
+    lo = max(range_a[0], range_b[0])
+    hi = min(range_a[1], range_b[1])
+    if hi <= lo:
+        return 0.0
+    overlap = hi - lo
+    span = max(range_a[1] - range_a[0], range_b[1] - range_b[0], 1)
+    return min(overlap / span, 1.0)
+
+
+def pink_noise_gain_stage(
+    element_signals: dict, sr: int = 48000
+) -> dict:
+    """Gain-stage elements against a pink noise reference curve.
+
+    Pink noise = equal energy per octave → -3dB/octave slope.
+    Elements whose spectral centroid is higher get less gain
+    (pink noise is quieter at HF).
+
+    Returns dict[element_name] → {gain_db, centroid_hz, target_db}.
+    """
+    result: dict = {}
+    try:
+        import numpy as _np
+        from engine.frequency_analyzer import FrequencyAnalyzer
+        fa = FrequencyAnalyzer(sample_rate=sr)
+
+        # Pink noise reference: at 1kHz → 0dB, each octave up → -3dB
+        def _pink_target(centroid_hz: float) -> float:
+            if centroid_hz < 20:
+                return 0.0
+            octaves_above_1k = _np.log2(max(centroid_hz, 20) / 1000.0)
+            return -3.0 * octaves_above_1k  # Goes positive for <1kHz
+
+        gains_computed = 0
+        for name, sig in element_signals.items():
+            if sig is None:
+                result[name] = {"gain_db": 0.0, "centroid_hz": 0, "target_db": 0}
+                continue
+            arr = _np.asarray(sig if isinstance(sig, list)
+                              else list(sig)[:sr * 4],  # Max 4s sample
+                              dtype=_np.float64)
+            if len(arr) < 256:
+                result[name] = {"gain_db": 0.0, "centroid_hz": 0, "target_db": 0}
+                continue
+
+            # Measure spectral centroid
+            spec = fa.compute_spectrum(arr[:min(len(arr), sr * 2)].tolist())
+            centroid = fa.spectral_centroid(spec)
+
+            # Measure current RMS
+            rms = float(_np.sqrt(_np.mean(arr ** 2)))
+            current_db = 20 * _np.log10(max(rms, 1e-10))
+
+            target_db = _pink_target(centroid)
+            # Gain = how much to adjust toward pink reference
+            # Clamp to ±6dB to avoid destroying the mix
+            gain_db = max(-6.0, min(6.0, target_db - current_db))
+            # Scale to 30% influence (suggestion, not override)
+            gain_db *= 0.3
+
+            result[name] = {
+                "gain_db": round(gain_db, 2),
+                "centroid_hz": round(centroid, 1),
+                "target_db": round(target_db, 1),
+            }
+            gains_computed += 1
+
+        if gains_computed > 0:
+            avg_adj = sum(r["gain_db"] for r in result.values()) / max(len(result), 1)
+            print(f"  ✓ pink_noise_gain: {gains_computed} elements staged,"
+                  f" avg adjustment={avg_adj:+.1f}dB")
+        return result
+    except Exception as exc:
+        log.debug("pink_noise_gain_stage skipped: %s", exc)
+        return result
+
+
+def check_frequency_collisions(
+    element_signals: dict, sr: int = 48000
+) -> list:
+    """Detect frequency masking between element pairs.
+
+    Returns list of collision dicts: {pair, overlap_pct, collision_band,
+    severity, suggestion}.
+    """
+    collisions: list = []
+    try:
+        import numpy as _np
+        from engine.frequency_analyzer import FrequencyAnalyzer
+        fa = FrequencyAnalyzer(sample_rate=sr)
+
+        # Compute band energies for each element
+        element_bands: dict = {}
+        names = [n for n, s in element_signals.items() if s is not None]
+        for name in names:
+            sig = element_signals[name]
+            arr = _np.asarray(
+                sig if isinstance(sig, list) else list(sig)[:sr * 2],
+                dtype=_np.float64
+            )
+            if len(arr) < 256:
+                continue
+            spec = fa.compute_spectrum(arr[:min(len(arr), sr)].tolist())
+            bands = fa.get_band_energy(spec)
+            element_bands[name] = bands
+
+        # Pairwise collision check
+        checked = set()
+        for a in element_bands:
+            for b in element_bands:
+                if a >= b:
+                    continue
+                pair_key = (a, b)
+                if pair_key in checked:
+                    continue
+                checked.add(pair_key)
+
+                bands_a = element_bands[a]
+                bands_b = element_bands[b]
+
+                # Find bands where BOTH elements have significant energy
+                for band_name in bands_a:
+                    e_a = bands_a.get(band_name, 0)
+                    e_b = bands_b.get(band_name, 0)
+                    # Both above -30dB in this band = potential collision
+                    if e_a > -30 and e_b > -30:
+                        overlap_db = min(e_a, e_b)
+                        # Severity based on how close in energy they are
+                        diff = abs(e_a - e_b)
+                        if diff < 3:
+                            severity = "critical"
+                        elif diff < 6:
+                            severity = "warning"
+                        else:
+                            severity = "info"
+
+                        collisions.append({
+                            "pair": f"{a} × {b}",
+                            "band": band_name,
+                            "energy_a_db": round(e_a, 1),
+                            "energy_b_db": round(e_b, 1),
+                            "severity": severity,
+                            "suggestion": (
+                                f"EQ scoop {band_name} on "
+                                f"{'either' if diff < 3 else b if e_b < e_a else a}"
+                            ),
+                        })
+
+        n_crit = sum(1 for c in collisions if c["severity"] == "critical")
+        n_warn = sum(1 for c in collisions if c["severity"] == "warning")
+        print(f"  ✓ freq_collisions: {len(collisions)} detected"
+              f" ({n_crit} critical, {n_warn} warnings)")
+        return collisions
+    except Exception as exc:
+        log.debug("check_frequency_collisions skipped: %s", exc)
+        return collisions
+
+
+def get_mix_guidance(
+    dna, element_signals: dict, singer_route: dict, sr: int = 48000
+) -> dict:
+    """Get mix assistant guidance for the current mix state.
+
+    Wraps mix_assistant.analyze_mix() with element data built from
+    actual signals and singer/band routing.
+
+    Returns MixAnalysis as dict or empty dict on failure.
+    """
+    guidance: dict = {}
+    try:
+        import numpy as _np
+        from engine.mix_assistant import (
+            MixElement, analyze_mix, mix_analysis_text,
+        )
+
+        elements: list = []
+        for name, sig in element_signals.items():
+            if sig is None:
+                continue
+            arr = _np.asarray(
+                sig if isinstance(sig, list) else list(sig)[:sr * 2],
+                dtype=_np.float64
+            )
+            if len(arr) < 64:
+                continue
+            rms = float(_np.sqrt(_np.mean(arr ** 2)))
+            rms_db = 20 * _np.log10(max(rms, 1e-10))
+            peak = float(_np.max(_np.abs(arr)))
+            peak_db = 20 * _np.log10(max(peak, 1e-10))
+
+            freq_range = _element_freq_range(name)
+            route = singer_route.get("routes", {}).get(name, {})
+            stereo_w = 0.8 if route.get("stereo_hint") == "wide" else 0.3
+            pan = 0.0 if route.get("stereo_hint") == "center" else 0.3
+
+            elements.append(MixElement(
+                name=name,
+                element_type=name.split("_")[0] if "_" in name else name,
+                rms_db=rms_db,
+                peak_db=peak_db,
+                freq_range=freq_range,
+                stereo_width=stereo_w,
+                pan=pan,
+            ))
+
+        if elements:
+            analysis = analyze_mix(elements)
+            guidance = analysis.to_dict()
+            n_sug = len(guidance.get("suggestions", []))
+            score = guidance.get("overall_score", 0)
+            print(f"  ✓ mix_guidance: score={score:.0f}/100,"
+                  f" {n_sug} suggestions")
+        return guidance
+    except Exception as exc:
+        log.debug("get_mix_guidance skipped: %s", exc)
+        return guidance
+
+
+def detect_harmonic_masking(
+    L: list, R: list, sr: int = 48000
+) -> dict:
+    """Run harmonic roughness analysis on the stereo mix bus.
+
+    High roughness indicates masking / beating between partials.
+    Returns {roughness, n_partial_pairs, severity}.
+    """
+    result: dict = {"roughness": 0.0, "n_partial_pairs": 0, "severity": "ok"}
+    try:
+        import numpy as _np
+        from engine.harmonic_analysis import (
+            roughness_bank, run_analysis,
+        )
+
+        # Mix to mono for roughness check (L+R)/2
+        arr_l = _np.asarray(L[:min(len(L), sr * 2)], dtype=_np.float64)
+        arr_r = _np.asarray(R[:min(len(R), sr * 2)], dtype=_np.float64)
+        if len(arr_l) != len(arr_r):
+            min_len = min(len(arr_l), len(arr_r))
+            arr_l = arr_l[:min_len]
+            arr_r = arr_r[:min_len]
+        mono = (arr_l + arr_r) * 0.5
+
+        bank = roughness_bank()
+        # Use the "standard" preset (index 0)
+        preset = bank.presets[0]
+        raw = run_analysis(mono, preset, sr)
+
+        roughness = raw.get("total_roughness", 0.0)
+        n_pairs = len(raw.get("partial_pairs", []))
+
+        if roughness > 0.5:
+            severity = "critical"
+        elif roughness > 0.3:
+            severity = "warning"
+        else:
+            severity = "ok"
+
+        result = {
+            "roughness": round(roughness, 4),
+            "n_partial_pairs": n_pairs,
+            "severity": severity,
+        }
+        print(f"  ✓ harmonic_masking: roughness={roughness:.4f}"
+              f" ({severity}), {n_pairs} partial pairs")
+        return result
+    except Exception as exc:
+        log.debug("detect_harmonic_masking skipped: %s", exc)
+        return result
+
+
+def apply_pain_zone_eq(
+    L: list, R: list, sr: int = 48000
+) -> tuple:
+    """Apply Pain Zone enforcement EQ to the stereo bus.
+
+    Targets 5 problem frequency zones (mud, boxy, honk, harsh, brittle)
+    with gentle corrective cuts. Only cuts if energy in zone exceeds
+    a threshold (avoids cutting what isn't there).
+
+    Returns (L_processed, R_processed).
+    """
+    try:
+        import numpy as _np
+        from engine.intelligent_eq import (
+            apply_eq_band, analyze_spectrum,
+        )
+
+        # Analyze current spectrum to decide which pain zones need cutting
+        mono_sample = [(l + r) / 2 for l, r in
+                       zip(L[:min(len(L), sr * 2)],
+                           R[:min(len(R), sr * 2)])]
+        profile = analyze_spectrum(mono_sample, sr)
+        band_energy = {b.name: b.energy_db for b in profile.bands}
+
+        L_out = list(L)
+        R_out = list(R)
+        zones_cut = 0
+
+        for zone_name, (lo, hi, cut_db) in _PAIN_ZONES.items():
+            # Map pain zone to the closest analyzed band
+            center_hz = (lo + hi) / 2
+            # Check if this frequency region has excess energy
+            # Find the band that contains this zone
+            zone_energy = -60.0
+            for band in profile.bands:
+                if band.low_hz <= center_hz <= band.high_hz:
+                    zone_energy = band.energy_db
+                    break
+
+            # Only cut if energy is above -20dB (something's actually there)
+            if zone_energy > -20:
+                q = 1.5  # Moderate Q for surgical but not too narrow
+                L_out = apply_eq_band(L_out, center_hz, cut_db, q, sr)
+                R_out = apply_eq_band(R_out, center_hz, cut_db, q, sr)
+                zones_cut += 1
+
+        print(f"  ✓ pain_zone_eq: {zones_cut}/{len(_PAIN_ZONES)} zones corrected")
+        return (L_out, R_out)
+    except Exception as exc:
+        log.debug("apply_pain_zone_eq skipped: %s", exc)
+        return (L, R)
