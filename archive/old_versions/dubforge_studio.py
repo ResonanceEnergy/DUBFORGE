@@ -54,9 +54,9 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import matplotlib
+    import matplotlib  # type: ignore[import-not-found]
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt  # type: ignore[import-not-found]
     HAS_MPL = True
 except ImportError:
     HAS_MPL = False
@@ -74,6 +74,14 @@ from engine.arrangement_sequencer import (
     build_arrangement,
     golden_section_check,
 )
+from engine.session_template import (
+    build_dubstep_session,
+    get_template_requirements,
+    to_als_tracks,
+    TRACK_MODULES,
+    GAP_MODULE_TRACKS,
+)
+from typing import Optional
 from engine.audio_preview import render_preview, preview_to_dict
 from engine.batch_renderer import (
     ALL_BATCH_BANKS,
@@ -350,22 +358,17 @@ def handle_forge(
     except Exception:
         pass
 
-    # ALS project
+    # ALS project — uses canonical session template
     progress(0.7, desc="Generating Ableton Live Set...")
     als_dir = OUTPUT_ROOT / "ableton"
     als_dir.mkdir(parents=True, exist_ok=True)
     als_path = als_dir / f"{safe_name}_SESSION.als"
     try:
         actual_bpm_val = float(dna.bpm or bpm or 150)
-        tracks = [
-            ALSTrack(name="SUB BASS", color=1), ALSTrack(name="MID BASS", color=2),
-            ALSTrack(name="GROWL", color=3), ALSTrack(name="LEAD", color=4),
-            ALSTrack(name="CHORDS", color=5), ALSTrack(name="PAD", color=6),
-            ALSTrack(name="ARP", color=7), ALSTrack(name="FX", color=8),
-            ALSTrack(name="DRUMS", color=9), ALSTrack(name="RISER", color=10),
-        ]
-        scenes = [ALSScene(name=s) for s in ["INTRO", "BUILD", "DROP 1", "BREAK", "BUILD 2", "DROP 2", "OUTRO"]]
-        project = ALSProject(name=safe_name, bpm=actual_bpm_val, tracks=tracks, scenes=scenes)
+        layout = build_dubstep_session(bpm=actual_bpm_val)
+        als_tracks = to_als_tracks(layout)
+        scenes = [ALSScene(name=s.name) for s in layout.scenes]
+        project = ALSProject(name=safe_name, bpm=actual_bpm_val, tracks=als_tracks, scenes=scenes)
         write_als(project, str(als_path))
         generated_files.append(f"ableton/{als_path.name}")
     except Exception:
@@ -720,7 +723,7 @@ def handle_master_track(
             else:
                 signal = data
         elif isinstance(audio_file, str):
-            import soundfile as sf
+            import soundfile as sf  # type: ignore[import-not-found]
             signal, sr = sf.read(audio_file, dtype="float64")
         else:
             return "Unsupported audio format.", None
@@ -730,7 +733,7 @@ def handle_master_track(
         settings.target_lufs = target_lufs
         settings.ceiling_db = ceiling_db
 
-        mastered = master(signal, settings)
+        mastered, _report = master(signal, sr, settings)
 
         progress(0.8, desc="Writing master file...")
         master_dir = OUTPUT_ROOT / "masters"
@@ -755,6 +758,70 @@ def handle_master_track(
         return "\n".join(lines), str(master_path)
     except Exception as e:
         return f"Error mastering: {e}\n```\n{traceback.format_exc()}\n```", None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HANDLERS — SOUNDCLOUD
+# ═══════════════════════════════════════════════════════════════════════════
+
+def handle_soundcloud_analysis(
+    sources_text: str,
+    max_tracks: int = 20,
+    browser: str = "none",
+    run_stem_sep: bool = True,
+    gen_blueprints: bool = True,
+):
+    """Analyze one or more SoundCloud URLs. Yields markdown status progressively."""
+    urls = [u.strip() for u in sources_text.replace(",", " ").split() if u.strip()]
+    if not urls:
+        yield "❌ Please enter at least one SoundCloud URL"
+        return
+
+    cookie_browser: Optional[str] = None if browser == "none" else browser
+
+    if cookie_browser:
+        try:
+            from engine.soundcloud_pipeline import SUPPORTED_BROWSERS
+        except ImportError:
+            SUPPORTED_BROWSERS = ()
+        if cookie_browser not in SUPPORTED_BROWSERS:
+            yield (f"❌ Unknown browser '{cookie_browser}'. "
+                   f"Valid: chrome, firefox, edge, safari, brave, chromium")
+            return
+
+    stem_note = " (~2-4 min/track on CPU)" if run_stem_sep else ""
+    sources_list = "\n".join(f"  - `{u}`" for u in urls)
+    yield (
+        f"⏳ **Pipeline running...**{stem_note}\n\n"
+        f"**Sources ({len(urls)}):**\n{sources_list}\n\n"
+        f"Steps: Download → Stem separation → Feature analysis → Serum blueprints → Taste profile\n\n"
+        f"*Check the terminal for live demucs progress bars.*"
+    )
+
+    try:
+        from engine.soundcloud_pipeline import run_multi_pipeline
+        totals = run_multi_pipeline(
+            source_urls=urls,
+            max_tracks=int(max_tracks),
+            separate=run_stem_sep,
+            generate_blueprints=gen_blueprints,
+            cookies_from_browser=cookie_browser,
+        )
+        downloaded = totals.get("downloaded", 0)
+        analyzed = totals.get("analyzed", 0)
+        blueprints = totals.get("blueprints", 0)
+        report = totals.get("merged_report", "")
+        yield (
+            f"## ✅ Analysis Complete\n\n"
+            f"**Sources**: {len(urls)} | **Downloaded**: {downloaded} | "
+            f"**Analyzed**: {analyzed} | **Blueprints**: {blueprints}\n\n"
+            f"**Report**: `{report}`"
+        )
+    except ImportError as e:
+        yield (f"❌ Missing dependency: {e}\n\n"
+               f"Install with: `pip install yt-dlp librosa soundfile demucs`")
+    except Exception as e:
+        yield f"❌ Error: {e}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -900,7 +967,10 @@ def build_ui() -> gr.Blocks:
 
             # ─── TAB 6: ARRANGEMENT ──────────────────────────────────
             with gr.Tab("Arrangement", id="arrangement"):
-                gr.Markdown("### Arrangement Blueprint\nEnergy curve + RCO dynamics + golden section analysis.")
+                gr.Markdown("### Arrangement Blueprint\nEnergy curve + RCO dynamics + golden section analysis.\n\n"
+                            "**Session Template**: 19 tracks across 4 buses "
+                            "(DRUMS / BASS / MELODICS / FX) + 3 returns "
+                            "(Reverb / Delay / Parallel Comp)")
                 with gr.Row():
                     arr_type = gr.Dropdown(choices=ARRANGEMENT_OPTIONS, value="weapon", label="Template")
                     rco_preset = gr.Dropdown(choices=ENERGY_PRESETS, value="weapon", label="RCO Preset")
@@ -965,44 +1035,132 @@ def build_ui() -> gr.Blocks:
                     outputs=[master_result, master_output],
                 )
 
-            # ─── TAB 10: PIPELINE ────────────────────────────────────
+            # ─── TAB 10: SOUNDCLOUD ──────────────────────────────────
+            with gr.Tab("SoundCloud", id="soundcloud"):
+                gr.Markdown(
+                    "### Analyze SoundCloud Sources\n"
+                    "Paste one or more SoundCloud URLs — separate with "
+                    "spaces or new lines.\n\n"
+                    "| URL type | Example |\n"
+                    "|---|---|\n"
+                    "| Your likes | "
+                    "`https://soundcloud.com/you/likes` |\n"
+                    "| Artist tracks | "
+                    "`https://soundcloud.com/substandardbassmusic` |\n"
+                    "| Playlist / set | "
+                    "`https://soundcloud.com/user/sets/set-name` |\n"
+                )
+                with gr.Row():
+                    with gr.Column(scale=3):
+                        sc_urls = gr.Textbox(
+                            label="SoundCloud URLs (one per line)",
+                            placeholder=(
+                                "https://soundcloud.com/you/likes\n"
+                                "https://soundcloud.com/"
+                                "substandardbassmusic"
+                            ),
+                            lines=4,
+                        )
+                    with gr.Column(scale=1):
+                        sc_max = gr.Slider(
+                            minimum=1, maximum=100, value=20, step=1,
+                            label="Max Tracks per Source",
+                        )
+                        sc_browser = gr.Dropdown(
+                            choices=["none", "chrome", "firefox", "edge",
+                                     "safari", "brave", "chromium"],
+                            value="none",
+                            label="Cookie Auth Browser",
+                            info="Required for soundcloud.com/you/likes",
+                        )
+                with gr.Row():
+                    sc_stems = gr.Checkbox(
+                        value=True, label="Separate Stems (HT-Demucs)"
+                    )
+                    sc_blueprints = gr.Checkbox(
+                        value=True, label="Generate Serum Blueprints"
+                    )
+                sc_btn = gr.Button("Analyze Sources", variant="primary")
+                sc_output = gr.Markdown(label="Results")
+
+                sc_btn.click(
+                    fn=handle_soundcloud_analysis,
+                    inputs=[sc_urls, sc_max, sc_browser,
+                            sc_stems, sc_blueprints],
+                    outputs=[sc_output],
+                )
+
+            # ─── TAB 11: PIPELINE ────────────────────────────────────
             with gr.Tab("Pipeline", id="pipeline"):
+                _layout = build_dubstep_session()
+                _reqs = get_template_requirements(_layout)
+                _gap_mods = ', '.join(GAP_MODULE_TRACKS.keys())
                 gr.Markdown(f"""### DUBFORGE 4-Phase Production Pipeline
 
 ```
 INPUT: Song Idea (name, mood, key, BPM, style, energy)
          │
-   ┌─────▼───────────────────────────────────────────────┐
-   │  PHASE 1: GENERATION — "The Idea Sandbox"           │
-   │  Sound design + preset creation + MIDI export        │
-   │  OUTPUT: Sound palette (FXP, WAV, ADG, MIDI)        │
-   └─────┬───────────────────────────────────────────────┘
+   ┌─────▼───────────────────────────────────────────────────────────┐
+   │  PHASE 1: GENERATION                                           │
+   │  Stage 1: IDENTITY — DNA, palette intent, production recipe    │
+   │  Stage 1I: TEMPLATE BACKFLOW — session template requirements   │
+   │  Stage 2: STRUCTURE — arrangement, sections, energy curve      │
+   │  Stage 3: SYNTH FACTORY — wavetables, presets, Serum 2         │
+   │  Stage 4: DRUM FACTORY — drums, 128 Rack, loops, patterns      │
+   │  OUTPUT: Pre-loaded ALS + WAV stems + arrangement data         │
+   └─────┬───────────────────────────────────────────────────────────┘
          │
-   ┌─────▼───────────────────────────────────────────────┐
-   │  PHASE 2: ARRANGEMENT — "The Creation Session"      │
-   │  Full song structure in Ableton Live                  │
-   │  OUTPUT: Mix stems (24-bit WAV)                      │
-   └─────┬───────────────────────────────────────────────┘
+   ┌─────▼───────────────────────────────────────────────────────────┐
+   │  PHASE 2: ARRANGEMENT — Template-Routed + AbletonOSC           │
+   │  Phase 2 Setup: SessionTemplate → Bus Routing → Track Mapping  │
+   │  Section placement → automation → stem bounce                   │
+   │                                                                 │
+   │  DRUMS Bus ─── Kick │ Snare │ Hi-Hats │ Perc │ SC Trigger      │
+   │  BASS Bus ──── Sub │ Mid Bass │ Growl │ Riddim │ Formant        │
+   │  MELODICS ──── Lead │ Pad │ Arp │ Chords │ Vocal               │
+   │  FX Bus ────── Risers │ Impacts │ Transitions │ Atmos          │
+   │  RETURNS ───── Reverb │ Delay │ Parallel Comp                  │
+   │                                                                 │
+   │  OUTPUT: StemPack ({len(_layout.tracks)} tracks + {len(_layout.returns)} returns) + kick positions        │
+   └─────┬───────────────────────────────────────────────────────────┘
          │
-   ┌─────▼───────────────────────────────────────────────┐
-   │  PHASE 3: MIXING — "The Mix Session"                │
-   │  EQ, compression, spatial balance                    │
-   │  OUTPUT: Mixed stems (24-bit WAV)                    │
-   └─────┬───────────────────────────────────────────────┘
+   ┌─────▼───────────────────────────────────────────────────────────┐
+   │  PHASE 3: MIXING — AbletonOSC                                  │
+   │  Per-track EQ/comp/sidechain → bus grouping → master chain     │
+   │  OUTPUT: Mixed stereo WAV (frequency-balanced, gain-staged)    │
+   └─────┬───────────────────────────────────────────────────────────┘
          │
-   ┌─────▼───────────────────────────────────────────────┐
-   │  PHASE 4: MASTERING — "The Master Session"          │
-   │  Multiband dynamics, limiting, LUFS normalization    │
-   │  OUTPUT: Final WAV — DANCEFLOOR READY               │
-   └─────────────────────────────────────────────────────┘
+   ┌─────▼───────────────────────────────────────────────────────────┐
+   │  PHASE 4: MASTERING — AbletonOSC                               │
+   │  EQ → multiband → limiter → LUFS target via Ableton devices   │
+   │  OUTPUT: Final WAV (24-bit) — DANCEFLOOR READY                 │
+   └─────────────────────────────────────────────────────────────────┘
 ```
 
-### System Architecture
+### Session Template ({len(_layout.tracks)} tracks + {len(_layout.returns)} returns, {_reqs.total_bars} bars)
+| Bus | Tracks | Gain |
+|-----|--------|------|
+| DRUMS | Kick, Snare, Hi-Hats, Percussion, SC Trigger | 1.00 |
+| BASS | Sub, Mid Bass, Growl, Riddim, Formant | 0.90 |
+| MELODICS | Lead, Pad, Arp, Chords, Vocal | 0.75 |
+| FX | Risers, Impacts, Transitions, Atmos | 0.55 |
+| **Returns** | Reverb (0.35), Delay (0.30), Parallel Comp (0.25) | — |
+
+### Scenes (Subtronics arrangement)
+| Scene | Bars | Energy |
+|-------|------|--------|
+""" + '\n'.join(f'| {s.name} | {s.bars} | {s.energy:.1f} |' for s in _layout.scenes) + f"""
+
+### Gap Modules (Session 13)
+{_gap_mods}
+
+### System
 - **Python**: 3.14 | **NumPy**: Accelerate BLAS (ARM NEON)
 - **CPU**: {CPU_CORES['performance']}P + {CPU_CORES['efficiency']}E cores
-- **PHI** = {PHI:.10f}
-- **A4** = {A4_432} Hz
+- **PHI** = {PHI:.10f} | **A4** = {A4_432} Hz
 - **Fibonacci** = {FIBONACCI[:13]}
+- **Engine modules wired**: {len(TRACK_MODULES)} tracks
+- **Sidechain pairs**: {len(_reqs.sidechain_pairs)}
 """)
 
     return app
@@ -1032,7 +1190,6 @@ def main() -> None:
         server_port=args.port,
         share=args.share,
         inbrowser=not args.no_browser,
-        theme=gr.themes.Base(primary_hue="purple", neutral_hue="gray"),
         css=CUSTOM_CSS,
     )
 

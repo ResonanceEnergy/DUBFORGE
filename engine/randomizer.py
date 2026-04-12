@@ -9,6 +9,7 @@ weighted ranges, PHI-distributed randomness.
 import hashlib
 import math
 from dataclasses import dataclass, field
+from typing import Any
 
 from engine.config_loader import PHI
 @dataclass
@@ -81,7 +82,7 @@ class PRNG:
         base = self.next()
         return base ** (1 / PHI)
 
-    def choice(self, items: list) -> any:
+    def choice(self, items: list) -> Any:
         """Random choice from list."""
         if not items:
             return None

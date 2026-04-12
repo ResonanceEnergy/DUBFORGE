@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: basic
 """DUBFORGE — Full Production Pipeline.
 
 One command to generate everything:
@@ -14,12 +15,13 @@ Usage:
     python forge.py --serum      # wavetables only
     python forge.py --ableton    # .als project only
     python forge.py --track      # mixed track only
+    python forge.py --ref URL    # intake from URL → SongDNA → render
     python forge.py --live --song "NAME"   # LIVE: Ableton + Serum 2 via OSC
     python forge.py --live --song "NAME" --offline  # MIDI files only (no Ableton)
 
 Output tree:
     output/
-    ├── dubstep_track_v5.wav          Full mixed track
+    ├── <song_name>.wav                Full mixed track
     ├── wavetables/                   Serum 2 wavetables
     │   ├── DUBFORGE_GROWL_SAW.wav
     │   ├── DUBFORGE_GROWL_FM.wav
@@ -48,10 +50,13 @@ Output tree:
 import json
 import math
 import os
+import signal
+import subprocess
 import struct
 import sys
 import time
 import wave
+import webbrowser
 from pathlib import Path
 
 import numpy as np
@@ -114,7 +119,7 @@ from engine.turboquant import (
 )
 from engine.phi_core import write_compressed_wavetable
 from engine.stage_integrations import (
-    enhance_dna, enhance_bass_palette, build_rco_energy_map,
+    enhance_dna, enhance_bass_palette, build_energy_map,
     apply_section_mix_bus, validate_output, get_reference_insights,
     apply_convolution_reverb, get_psbs_info, auto_gain_stage_tracks,
     apply_auto_master, get_sidechain_envelope, get_song_template,
@@ -493,7 +498,7 @@ def _render_wavetable_worker(task: tuple[str, str, dict]) -> str:
     if name.startswith("GROWL"):
         source_fn = generate_saw_source if "SAW" in name else generate_fm_source
         src_kwargs = {"fm_ratio": PHI, "fm_depth": 3.0} if "FM" in name else {}
-        src = source_fn(**src_kwargs)
+        src = source_fn(**src_kwargs)  # type: ignore[arg-type]
         frames = growl_resample_pipeline(src, n_output_frames=256)
     elif name.startswith("NEURO"):
         frames = _gen_neuro_wavetable(style=style or "aggressive")
@@ -1347,8 +1352,132 @@ def _wavetable_to_audio(frames: list[np.ndarray], freq: float,
     return out
 
 
-def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
-    """MWP 10-Phase Render Pipeline — ill.GATES methodology.
+# ═══════════════════════════════════════════════════════════════
+#  PHASED PIPELINE — Phase 1 → 2 → 3 → 4
+#  Clean orchestrator that delegates to proper phase modules.
+# ═══════════════════════════════════════════════════════════════
+
+def render_phased_pipeline(dna: 'SongDNA | None' = None, *,
+                           yaml_path: str | None = None) -> str:
+    """Run the single-source pipeline orchestrator via tools/forge_runner.py.
+
+    This keeps CLI and UI on one orchestration implementation to prevent
+    phase drift (sentinels, gate behavior, and phase handoff logic).
+    """
+    import time as _time
+    t0 = _time.perf_counter()
+
+    print("╔══════════════════════════════════════════════════════╗")
+    print("║  DUBFORGE — PHASED PIPELINE (SOT via forge_runner)   ║")
+    print("║  Phase 1 → 2 → 3 → 4                                ║")
+    print("╚══════════════════════════════════════════════════════╝")
+
+    if dna is None and yaml_path is not None:
+        from engine.config_loader import load_config
+        _cfg = load_config(yaml_path)
+        payload = {
+            "name": _cfg.get("name", "untitled"),
+            "style": _cfg.get("style", "dubstep"),
+            "theme": _cfg.get("theme", ""),
+            "mood": _cfg.get("mood", ""),
+            "sound_style": _cfg.get("sound_style", ""),
+            "key": _cfg.get("key", "F"),
+            "scale": _cfg.get("scale", "minor"),
+            "bpm": int(_cfg.get("bpm", 140) or 140),
+            "arrangement": _cfg.get("arrangement", ""),
+            "tags": _cfg.get("tags", []),
+            "seed": int(_cfg.get("seed", 0) or 0),
+            "notes": _cfg.get("notes", ""),
+            "song_dna": None,
+        }
+    elif dna is None:
+        payload = {
+            "name": "untitled",
+            "style": "dubstep",
+            "theme": "",
+            "mood": "",
+            "sound_style": "",
+            "key": "F",
+            "scale": "minor",
+            "bpm": 140,
+            "arrangement": "",
+            "tags": [],
+            "seed": 0,
+            "notes": "",
+            "song_dna": None,
+        }
+    else:
+        payload = {
+            "name": dna.name,
+            "style": getattr(dna, "style", "dubstep"),
+            "theme": getattr(dna, "theme", ""),
+            "mood": getattr(dna, "mood", ""),
+            "sound_style": getattr(dna, "sound_style", ""),
+            "key": dna.key,
+            "scale": dna.scale,
+            "bpm": int(dna.bpm),
+            "arrangement": "",
+            "tags": getattr(dna, "tags", []),
+            "seed": int(getattr(dna, "seed", 0) or 0),
+            "notes": getattr(dna, "notes", ""),
+            "song_dna": dna.to_dict() if hasattr(dna, "to_dict") else None,
+        }
+
+    runner = Path(__file__).resolve().parent / "tools" / "forge_runner.py"
+    proc = subprocess.Popen(
+        [sys.executable, str(runner)],
+        cwd=str(Path(__file__).resolve().parent),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+
+    assert proc.stdin is not None
+    proc.stdin.write(json.dumps(payload, default=str) + "\n")
+    # Non-UI mode auto-approves all gates to run end-to-end.
+    proc.stdin.write("GO_PHASE2\nGO_PHASE3\nGO_PHASE4\n")
+    proc.stdin.flush()
+    proc.stdin.close()
+
+    out_path = ""
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        line = line.rstrip("\n")
+        print(line)
+        if line.startswith("__PHASE4_DONE__ "):
+            try:
+                p = json.loads(line[len("__PHASE4_DONE__ "):])
+                out_path = p.get("out_path", "")
+            except Exception:
+                pass
+        if line.startswith("__PHASE") and "_ERROR__ " in line:
+            proc.wait()
+            raise RuntimeError(f"Pipeline failed: {line}")
+
+    rc = proc.wait()
+    if rc != 0:
+        raise RuntimeError(f"forge_runner exited with code {rc}")
+    if not out_path:
+        raise RuntimeError("No __PHASE4_DONE__ output path received from forge_runner")
+
+    elapsed = _time.perf_counter() - t0
+    print("\n╔══════════════════════════════════════════════════════╗")
+    print(f"║  PIPELINE COMPLETE — {elapsed:.1f}s total")
+    print(f"║  Output: {out_path}")
+    print("╚══════════════════════════════════════════════════════╝")
+
+    return out_path
+
+
+class _SkipToArrange(Exception):
+    """Control flow: when phase_one bridge sets all variables, skip legacy phases."""
+
+
+def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None,
+                      use_phase_one: bool = False, yaml_path: str | None = None):
+    """MWP 10-Phase Render Pipeline — ill.GATES methodology (LEGACY).
 
     Implements the Minimum Workable Pipeline:
       ORACLE → COLLECT → RECIPES → SKETCH → ARRANGE →
@@ -1356,20 +1485,13 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
 
     Each phase fires pre/post workflow hooks when workflow is provided.
 
-    Original V6 full integration.
+    When use_phase_one=True, Phases 1–4 are replaced by the unified
+    engine.phase_one module (SongMandate pipeline). This produces all
+    ingredients (drums, bass, leads, atmosphere, FX, vocals, wavetables)
+    in one pass and feeds them directly into ARRANGE (Phase 5).
 
     When dna is None, falls back to V5 defaults (F minor, 140 BPM).
-    When dna is provided, EVERY synthesis parameter is driven by SongDNA:
-      - Key, scale, BPM from DNA
-      - Drum layer params from DrumDNA
-      - Bass types + processing from BassDNA
-      - Lead synthesis from LeadDNA
-      - Pad/atmosphere from AtmosphereDNA
-      - Transition FX from FxDNA
-      - Mix/master from MixDNA
-      - Arrangement sections from DNA arrangement
-      - Bass rotation order from DNA
-      - Vocal chop vowels from DNA
+    When dna is provided, EVERY synthesis parameter is driven by SongDNA.
 
     Dojo Integration:
       Prints ill.Gates Approach phase banners during production:
@@ -1378,1185 +1500,1439 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     import types
     ctx = types.SimpleNamespace(dna=dna, output_path=None)
 
-    # ═══ MWP PHASE 1: ORACLE ═════════════════════════
-    # Brain: ARCHITECT — understand DNA, analyze references
-    # Wired: song_dna, dojo, recipe_book, dsp_core
-    # Available: audio_analyzer, reference_analyzer, emulator, style_transfer
-    if workflow:
-        workflow._run_hooks("pre_oracle", ctx)
-
-    # ═══ DNA SETUP ═══════════════════════════════════
-    if dna is None:
-        dna = _default_v5_dna()
-
-    # ═══ DOJO SESSION — Governor (Sprint 1) ═══════════
-    from engine.dojo import DojoSession, DojoPhase, DojoBrain, BeltRank
-    from engine.recipe_book import select_recipe, check_quality_gate
-
-    # Sprint 5: Dynamic belt from cross-session memory
-    _current_belt_str = load_current_belt()
-    _belt_rank = getattr(BeltRank, _current_belt_str.upper(), BeltRank.WHITE)
-    _dojo = DojoSession(belt=_belt_rank, total_session_s=840.0)
-    _dojo.begin_session()
-    _recipe = select_recipe(
-        style=getattr(dna, 'style', 'dubstep'),
-        mood=getattr(dna, 'mood', ''),
-        reference_dna=dna,
-    )
-
-    _dojo.begin_phase(DojoPhase.ORACLE)
-    print(_dojo.phase_banner(DojoPhase.ORACLE,
-          "Understanding DNA, analyzing references — ARCHITECT BRAIN..."))
-
-    # Import DSP primitives needed throughout
-    from engine.dsp_core import svf_highpass, svf_lowpass, multiband_compress
-
-    # Shadow module-level timing constants with DNA values
-    BEAT = 60.0 / dna.bpm
-    BAR = BEAT * 4
-
-    def samples(beats: float) -> int:
-        return int(beats * BEAT * SR)
-
-    # Scale-degree frequency helper
-    intervals = SCALE_INTERVALS.get(dna.scale, [0, 2, 3, 5, 7, 8, 10])
-
-    def n(degree: int, octave: int) -> float:
-        """Scale degree → Hz. n(0,1)=root@oct1, n(2,3)=3rd@oct3."""
-        semi = intervals[degree % len(intervals)]
-        return dna.root_freq * (2.0 ** (octave - 1)) * (2.0 ** (semi / 12.0))
-
-    # Build FREQ lookup from DNA (shadows module-level FREQ)
-    # Maps same keys V5 code used → DNA-key frequencies
-    FREQ = {
-        "F1": n(0, 1), "F2": n(0, 2), "F3": n(0, 3), "F4": n(0, 4),
-        "G2": n(1, 2), "G3": n(1, 3), "G4": n(1, 4),
-        "Ab1": n(2, 1), "Ab2": n(2, 2), "Ab3": n(2, 3), "Ab4": n(2, 4),
-        "Bb1": n(3, 1), "Bb2": n(3, 2), "Bb3": n(3, 3),
-        "C2": n(4, 1), "C3": n(4, 2), "C4": n(4, 3),
-        "Db2": n(5, 1), "Db3": n(5, 2), "Db4": n(5, 3),
-        "Eb2": n(6, 1), "Eb3": n(6, 2), "Eb4": n(6, 3),
-    }
-
-    # Shorthand aliases for DNA sub-specifications
-    dd = dna.drums
-    bd = dna.bass
-    ld = dna.lead
-    ad = dna.atmosphere
-    fd = dna.fx
-    md = dna.mix
-
-    # Derive note names for vocal chops from DNA key
-    _root_idx = NOTES.index(dna.key) if dna.key in NOTES else 5
-    _fifth_idx = (_root_idx + intervals[4 % len(intervals)]) % 12
-    _root_note3 = f"{dna.key}3"
-    _fifth_note3 = f"{NOTES[_fifth_idx]}3"
-
-    # Extract arrangement section bars
-    sec_map = {s.name: s.bars for s in dna.arrangement}
-    INTRO = sec_map.get("intro", 8)
-    BUILD = sec_map.get("build", 4)
-    DROP1 = sec_map.get("drop1", sec_map.get("drop1b", 16))
-    BREAK_ = sec_map.get("break", 8)
-    BUILD2 = sec_map.get("build2", 4)
-    DROP2 = sec_map.get("drop2", sec_map.get("drop2b", 16))
-    OUTRO = sec_map.get("outro", 8)
-    # Recalculate total_bars from ONLY rendered sections (excludes verse1/drop1b etc)
-    total_bars = INTRO + BUILD + DROP1 + BREAK_ + BUILD2 + DROP2 + OUTRO
-    total_s = samples(total_bars * 4)
-
-    song_label = dna.name or "dubstep_track"
-    safe_name = song_label.lower().replace(" ", "_").replace("'", "")
-
-    # ── Phase Audit: per-phase output folders ──
-    _phase_base = _init_phase_audit(safe_name)
-    _phase_t0 = time.perf_counter()
-
-    print(f"\n═══ RENDERING: {dna.name} ═══")
-    print(f"  {dna.key} {dna.scale} @ {dna.bpm} BPM | {total_bars} bars | Mood: {dna.mood_name}")
-    print(f"  Bass: {' → '.join(dna.bass_rotation[:5])}")
-    print(f"  Arrangement: {' → '.join(s.name for s in dna.arrangement)}")
-    print(f"  Drums: kick@{dd.kick_pitch:.0f}Hz drive={dd.kick_drive:.2f} | snare@{dd.snare_pitch:.0f}Hz")
-    print(f"  Bass: FM depth={bd.fm_depth:.1f} dist={bd.distortion:.2f} | Lead: {ld.additive_partials}p {ld.additive_rolloff}")
-    print(f"  Mix: {md.target_lufs:.1f} LUFS target | ceiling={md.ceiling_db:.1f} dB")
-
-    sat = SaturationEngine(sample_rate=SR)
-    panner = PanningEngine(sample_rate=SR)
-    groove_eng = GrooveEngine(bpm=dna.bpm, sample_rate=SR)
-
-    # ── Rhythm Engine — pattern-driven drum placement ──
-    _energy = getattr(dna, 'energy', 0.7)
-    if hasattr(dna, 'mood') and isinstance(dna.mood, str):
-        if any(w in dna.mood.lower() for w in ('aggressive', 'rage', 'fury', 'war')):
-            _energy = max(_energy, 0.8)
-    rhythm_eng = RhythmEngine.from_drum_dna(
-        dd, bpm=dna.bpm, energy=_energy, seed=hash(dna.name) & 0xFFFF)
-    print(f"  {rhythm_eng.describe()}")
-
-    # ═══ PHASE 1 — Methodology Integration ════════════
-    print("\n  🔧 STAGE INTEGRATION — Phase 1: Mood + RCO + Chords...")
-    dna = enhance_dna(dna)
-    rco_energy = build_rco_energy_map(dna)
-    # Re-alias after DNA enhancement
-    dd = dna.drums
-    bd = dna.bass
-    ld = dna.lead
-    ad = dna.atmosphere
-    fd = dna.fx
-    md = dna.mix
-
-    # ── Pack ORACLE outputs ──
-    ctx.dna, ctx.BEAT, ctx.BAR, ctx.FREQ = dna, BEAT, BAR, FREQ
-    ctx.dd, ctx.bd, ctx.ld, ctx.ad, ctx.fd, ctx.md = dd, bd, ld, ad, fd, md
-    ctx.intervals, ctx._dojo, ctx.rco_energy = intervals, _dojo, rco_energy
-    ctx.sat, ctx.panner = sat, panner
-    ctx.groove_eng, ctx.rhythm_eng = groove_eng, rhythm_eng
-    ctx.INTRO, ctx.BUILD, ctx.DROP1 = INTRO, BUILD, DROP1
-    ctx.BREAK_, ctx.BUILD2, ctx.DROP2, ctx.OUTRO = BREAK_, BUILD2, DROP2, OUTRO
-    ctx.total_bars, ctx.total_s, ctx.safe_name = total_bars, total_s, safe_name
-    ctx.samples_fn, ctx.n_fn = samples, n
-    if workflow:
-        workflow._run_hooks("post_oracle", ctx)
-
-    # ── ORACLE audit ──
-    _oracle_dir = _phase_base / "01_ORACLE"
-    _write_audit_json(_oracle_dir, "dna.json", {
-        "name": dna.name, "key": dna.key, "scale": dna.scale,
-        "bpm": dna.bpm, "mood_name": dna.mood_name,
-        "bass_rotation": dna.bass_rotation[:5],
-        "arrangement": [{"name": s.name, "bars": s.bars} for s in dna.arrangement],
-        "drums": {"kick_pitch": dd.kick_pitch, "kick_drive": dd.kick_drive,
-                  "snare_pitch": dd.snare_pitch},
-        "bass": {"fm_depth": bd.fm_depth, "distortion": bd.distortion},
-        "lead": {"partials": ld.additive_partials, "rolloff": ld.additive_rolloff},
-        "mix": {"target_lufs": md.target_lufs, "ceiling_db": md.ceiling_db},
-    })
-    _write_audit_json(_oracle_dir, "render_config.json", {
-        "sr": SR, "bpm": dna.bpm, "beat_s": BEAT, "bar_s": BAR,
-        "total_bars": total_bars, "total_samples": total_s,
-        "sections": {"intro": INTRO, "build": BUILD, "drop1": DROP1,
-                     "break": BREAK_, "build2": BUILD2, "drop2": DROP2,
-                     "outro": OUTRO},
-        "rco_energy": {k: str(v) for k, v in rco_energy.items()}
-        if isinstance(rco_energy, dict) else str(rco_energy),
-    })
-    _emit_phase_log(_oracle_dir, "ORACLE", time.perf_counter() - _phase_t0)
-    _phase_t0 = time.perf_counter()
-
-    # ═══ MWP PHASE 2: COLLECT ═════════════════════════
-    # Brain: CHILD — gather freely, no judgment
-    # Wired: stage_integrations (tuning, session, memory, lessons, sample_library)
-    # Available: sample_pack_builder, batch_processor, format_converter
-    _dojo.begin_phase(DojoPhase.COLLECT)
-    print(_dojo.phase_banner(DojoPhase.COLLECT,
-          "Gathering tools, samples, session state — CHILD BRAIN..."))
-    if workflow:
-        workflow._run_hooks("pre_collect", ctx)
-
-    # ═══ SPRINT 1 — Phase 1: Tuning + Arrangement ════
-    print("  🔧 SPRINT 1 — Phase 1: Tuning validation + arrangement template...")
-    validate_tuning_432(FREQ)
-    _arrangement_template = get_arrangement_template(dna)
-
-    # ═══ SPRINT 2 — Phase 1: Session + Memory + Lessons + Evolution ════
-    print("  🔧 SPRINT 2 — Phase 1: Session, memory, lessons, evolution...")
-    _mem_engine = begin_render_session(dna)
-    _session_logger = create_session_logger(dna)
-    _lessons = get_lessons_adjustments(dna)
-    _evo_params = get_evolution_preset(dna)
-    _markov_melody = generate_markov_melody(dna, FREQ["F3"], SR)
-    _trance_arp = add_trance_arp_layer(dna, root_semitone=0)
-    log_milestone(_session_logger, "Phase 1 complete — DNA enhanced")
-
-    # ═══ DOJO SPRINT 2 — COLLECT: Sample Library + 128 Rack ════
-    print("  🔧 DOJO SPRINT 2 — COLLECT: Sample library, 128 Rack, palette...")
-    _sample_lib = init_sample_library(dna)
-    _galatcia = init_galatcia_catalog()
-    _curated_palette = curate_sound_palette(dna, _sample_lib, _galatcia)
-    _rack_128 = build_128_rack_from_palette(_curated_palette, dna)
-    _loop_slices = slice_loops_to_oneshots(_sample_lib, dna, sr=SR)
-    _wav_pool = init_wav_pool("output")
-    _preset_browser = init_preset_browser()
-    _ref_tempo_key = detect_reference_tempo_key(dna, sr=SR)
-    _tonal_colors = generate_tonal_palette(dna)
-    log_milestone(_session_logger, "COLLECT complete — 128 Rack populated")
-
-    # ── Pack COLLECT outputs ──
-    ctx._mem_engine = _mem_engine
-    ctx._session_logger = _session_logger
-    if workflow:
-        workflow._run_hooks("post_collect", ctx)
-
-    # ── COLLECT audit ──
-    _collect_dir = _phase_base / "02_COLLECT"
-    _write_audit_json(_collect_dir, "sample_inventory.json", {
-        "sample_library": str(_sample_lib) if _sample_lib else None,
-        "galatcia_catalog": str(_galatcia) if _galatcia else None,
-        "curated_palette": str(_curated_palette) if _curated_palette else None,
-        "rack_128_slots": len(_rack_128) if isinstance(_rack_128, (list, dict)) else str(_rack_128),
-        "loop_slices": len(_loop_slices) if isinstance(_loop_slices, (list, dict)) else str(_loop_slices),
-        "tonal_colors": str(_tonal_colors),
-        "ref_tempo_key": str(_ref_tempo_key),
-    })
-    _emit_phase_log(_collect_dir, "COLLECT", time.perf_counter() - _phase_t0)
-    _phase_t0 = time.perf_counter()
-
-    # ═══ MWP PHASE 3: RECIPES ═════════════════════════
-    # Brain: ARCHITECT — templates, blueprints, variation planning
-    # Wired: template_engine, macro_presets, genetic_evolution, serum_blueprint
-    # Available: randomizer, preset_vcs, snapshot_manager, plugin_scaffold
-    _dojo.begin_phase(DojoPhase.RECIPES)
-    print(_dojo.phase_banner(DojoPhase.RECIPES,
-          "Planning templates, blueprints, variations — ARCHITECT BRAIN..."))
-    if workflow:
-        workflow._run_hooks("pre_recipes", ctx)
-
-    # ═══ SPRINT 3 — Phase 1: Templates + Macros + Evolution ════
-    print("  🔧 SPRINT 3 — Templates, macros, genetic evolution...")
-    _template_config = generate_template_config(dna)
-    _macro_presets = get_macro_presets(dna)
-    _evolved_patch = evolve_patch(dna)
-    _mutated_preset = mutate_preset_patch(dna)
-    _serum_blueprint = generate_serum_blueprint(dna)
-
-    # ═══ SPRINT 4 — Phase 1: Scenes + Pipeline checks ════
-    print("  🔧 SPRINT 4 — Scene system, pipeline checks...")
-    _scene_mgr = init_scene_system(dna)
-    _perf_recorder = init_performance_recorder(dna)
-    check_production_pipeline(dna)
-    _subphonics_greeting = process_subphonics_greeting()
-
-    if workflow:
-        workflow._run_hooks("post_recipes", ctx)
-
-    # ── RECIPES audit ──
-    _recipes_dir = _phase_base / "03_RECIPES"
-    _write_audit_json(_recipes_dir, "recipes.json", {
-        "template_config": str(_template_config),
-        "macro_presets": str(_macro_presets),
-        "evolved_patch": str(_evolved_patch),
-        "mutated_preset": str(_mutated_preset),
-        "serum_blueprint": str(_serum_blueprint),
-    })
-    _emit_phase_log(_recipes_dir, "RECIPES", time.perf_counter() - _phase_t0)
-    _phase_t0 = time.perf_counter()
-
-    # ═══ MWP PHASE 4: SKETCH ═════════════════════════
-    # Brain: CHILD — raw sound design, first instincts
-    # Wired: perc_synth, bass_synth, fm_synth, additive_synth, noise_synth,
-    #         lead_synth, formant_synth, pad_synth, granular_synth, ks_synth,
-    #         supersaw, vocal_synth, transition_fx, growl_resample
-    # Available: phase_distortion, vector_synth, vocoder, vocal_tts,
-    #            spectral_morph, spectral_resynthesis, wavetable_morph,
-    #            envelope_generator
-    # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Drums (LAYERED, MULTI-SOURCE)
-    # ═══════════════════════════════════════════
-    _dojo.begin_phase(DojoPhase.SKETCH)
-    print(_dojo.phase_banner(DojoPhase.SKETCH,
-          "Designing sounds, first instincts — CHILD BRAIN, no judgment..."))
-    if workflow:
-        workflow._run_hooks("pre_sketch", ctx)
-    print("  [1/9] Drums — layered synthesis...")
-
-    # ── KICK ──────────────────────────────────────────
-    # Layer 1: Sub body — perc_synth kick with DNA-driven pitch sweep
-    kick_sub = to_list(synthesize_kick(PercPreset(
-        name="KSub", perc_type="kick", pitch=dd.kick_pitch, duration_s=0.6,
-        decay_s=0.45, tone_mix=0.95, brightness=0.1 + (1 - dd.kick_sub_weight) * 0.15,
-        distortion=dd.kick_drive * 0.36
-    )))
-
-    # Layer 2: FM body — DNA-driven mod_index and feedback
-    kick_fm_patch = FMPatch(
-        name="KickFM",
-        operators=[
-            FMOperator(freq_ratio=1.0, amplitude=1.0, mod_index=dd.kick_fm_depth,
-                       feedback=dd.kick_drive * 0.36, envelope=(0.001, 0.08, 0.0, 0.05)),
-            FMOperator(freq_ratio=2.0, amplitude=0.8, mod_index=dd.kick_fm_depth * 0.67,
-                       feedback=0.0, envelope=(0.001, 0.04, 0.0, 0.02)),
-        ],
-        algorithm=0, master_gain=0.85,
-    )
-    kick_fm = render_fm(kick_fm_patch, freq=dd.kick_pitch * 1.3, duration=0.3)
-
-    # Layer 3: Click transient — Karplus-Strong with very high freq, short
-    kick_click = render_ks(KarplusStrongPatch(
-        frequency=2500.0, duration=0.015, damping=0.8, brightness=0.95,
-        stretch=0.0, feedback=0.5, noise_mix=1.0
-    ))
-
-    # Layer 4: Brown noise sub rumble
-    kick_rumble = to_list(synthesize_noise(NoisePreset(
-        name="KRumble", noise_type="brown", duration_s=0.25,
-        brightness=0.1, gain=0.4, attack_s=0.001, release_s=0.2
-    )))
-
-    # Mix kick layers
-    kick_len = max(len(kick_sub), len(kick_fm), len(kick_click), len(kick_rumble))
-    kick = [0.0] * kick_len
-    for i in range(len(kick_sub)):
-        kick[i] += kick_sub[i] * 0.35
-    for i in range(len(kick_fm)):
-        kick[i] += kick_fm[i] * 0.35
-    for i in range(len(kick_click)):
-        kick[i] += kick_click[i] * 0.45
-    for i in range(len(kick_rumble)):
-        kick[i] += kick_rumble[i] * 0.2
-
-    # Process kick — DNA-driven intensity
-    kick = transient_shape(kick, attack_gain=dd.kick_attack, sustain_gain=0.6)
-    kick = compress(kick, CompressorSettings(
-        threshold_db=-4.0, ratio=10.0, attack_ms=0.2, release_ms=35.0, makeup_db=4.0
-    ))
-    kick = sat.saturate(kick, SatConfig(sat_type="tape", drive=dd.kick_drive, mix=0.5))
-    kick = apply_eq_band(kick, center_hz=dd.kick_pitch * 1.3, gain_db=4.0, q=0.5)   # sub weight
-    kick = apply_eq_band(kick, center_hz=3500.0, gain_db=4.0, q=1.2)  # click
-    kick = apply_eq_band(kick, center_hz=300.0, gain_db=-3.0, q=1.0)  # scoop mud
-    kick = normalize(kick, 0.98)
-
-    # ── SNARE ─────────────────────────────────────────
-    # Layer 1: Tonal body — DNA-driven pitch and mix
-    snare_body = to_list(synthesize_snare(PercPreset(
-        name="SBody", perc_type="snare", pitch=dd.snare_pitch, duration_s=0.3,
-        decay_s=0.15, tone_mix=dd.snare_noise_mix, brightness=0.5,
-        distortion=dd.snare_metallic * 0.67
-    )))
-
-    # Layer 2: Pink noise tail
-    snare_noise = to_list(synthesize_noise(NoisePreset(
-        name="SNoise", noise_type="pink", duration_s=0.25,
-        brightness=0.5 + dd.snare_noise_mix * 0.4, gain=0.7,
-        attack_s=0.001, release_s=0.18
-    )))
-
-    # Layer 3: Metallic Karplus ring — DNA metallic control
-    snare_ring = render_ks(KarplusStrongPatch(
-        frequency=dd.snare_pitch * 3.5, duration=0.12,
-        damping=0.4, brightness=dd.hat_brightness,
-        stretch=0.2 + dd.snare_metallic * 0.3,
-        feedback=0.5 + dd.snare_metallic * 0.3, noise_mix=0.8
-    ))
-
-    # Layer 4: White noise top (transient)
-    snare_top = to_list(synthesize_noise(NoisePreset(
-        name="STop", noise_type="white", duration_s=0.05,
-        brightness=0.95, gain=0.9, attack_s=0.0005, release_s=0.04
-    )))
-
-    # Mix snare layers
-    snr_len = max(len(snare_body), len(snare_noise), len(snare_ring), len(snare_top))
-    snare_dry = [0.0] * snr_len
-    for i in range(len(snare_body)):
-        snare_dry[i] += snare_body[i] * 0.45
-    for i in range(len(snare_noise)):
-        snare_dry[i] += snare_noise[i] * 0.35
-    for i in range(len(snare_ring)):
-        snare_dry[i] += snare_ring[i] * 0.2
-    for i in range(len(snare_top)):
-        snare_dry[i] += snare_top[i] * 0.3
-
-    # Process snare — parallel compression
-    snr_compressed = compress(snare_dry, CompressorSettings(
-        threshold_db=-12.0, ratio=8.0, attack_ms=0.3, release_ms=30.0, makeup_db=6.0
-    ))
-    # Blend dry + compressed (parallel compression)
-    snare_pc = [0.0] * len(snare_dry)
-    for i in range(len(snare_dry)):
-        snare_pc[i] = snare_dry[i] * 0.5 + (snr_compressed[i] if i < len(snr_compressed) else 0.0) * 0.5
-
-    snare_pc = transient_shape(snare_pc, attack_gain=1.5 + dd.snare_compression * 0.1, sustain_gain=0.55)
-    snare_pc = _ott_simulate(snare_pc, dd.snare_ott)
-    snare_pc = sat.saturate(snare_pc, SatConfig(sat_type="transistor", drive=dd.snare_metallic + 0.2, mix=0.35))
-    snare_pc = apply_eq_band(snare_pc, center_hz=dd.snare_pitch * 0.87, gain_db=2.5, q=1.0)  # body
-    snare_pc = apply_eq_band(snare_pc, center_hz=5000.0, gain_db=3.0, q=0.8)  # crack
-    # Plate reverb
-    snr_np = apply_reverb_delay(to_np(snare_pc), ReverbDelayPreset(
-        name="SnrPlate", effect_type="plate", decay_time=0.6,
-        pre_delay_ms=8.0, diffusion=0.85, damping=0.55, mix=0.2
-    ))
-    snare = to_list(snr_np)
-    snare = normalize(snare, 0.93)
-
-    # ── HATS — DNA-driven Karplus-Strong metallic ─────
-    hat_c_ks = render_ks(KarplusStrongPatch(
-        frequency=dd.hat_frequency, duration=0.06,
-        damping=0.85, brightness=dd.hat_brightness,
-        stretch=0.1 + dd.hat_metallic * 0.3,
-        feedback=0.2 + dd.hat_metallic * 0.3, noise_mix=0.9, pluck_position=0.3
-    ))
-    hat_c_perc = to_list(synthesize_hat(PercPreset(
-        name="HC", perc_type="hat", pitch=dd.hat_frequency * 1.19,
-        duration_s=0.04, decay_s=0.025, tone_mix=0.06,
-        brightness=dd.hat_brightness
-    )))
-    # Mix
-    hc_len = max(len(hat_c_ks), len(hat_c_perc))
-    hat_c = [0.0] * hc_len
-    for i in range(len(hat_c_ks)):
-        hat_c[i] += hat_c_ks[i] * 0.5
-    for i in range(len(hat_c_perc)):
-        hat_c[i] += hat_c_perc[i] * 0.5
-    hat_c = apply_eq_band(hat_c, center_hz=10000.0, gain_db=3.0, q=0.4)
-    hat_c = sat.saturate(hat_c, SatConfig(sat_type="tape", drive=0.3, mix=0.25))
-    hat_c = normalize(hat_c, 0.85)
-
-    # Open hat: longer Karplus + noise — DNA-driven
-    hat_o_ks = render_ks(KarplusStrongPatch(
-        frequency=dd.hat_frequency * 0.81, duration=0.25,
-        damping=0.3, brightness=dd.hat_brightness * 0.95,
-        stretch=0.08 + dd.hat_metallic * 0.2,
-        feedback=0.4 + dd.hat_metallic * 0.3, noise_mix=0.85
-    ))
-    hat_o_noise = to_list(synthesize_noise(NoisePreset(
-        name="HO", noise_type="white", duration_s=0.2,
-        brightness=dd.hat_brightness * 0.9, gain=0.5,
-        attack_s=0.001, release_s=0.15
-    )))
-    ho_len = max(len(hat_o_ks), len(hat_o_noise))
-    hat_o = [0.0] * ho_len
-    for i in range(len(hat_o_ks)):
-        hat_o[i] += hat_o_ks[i] * 0.55
-    for i in range(len(hat_o_noise)):
-        hat_o[i] += hat_o_noise[i] * 0.45
-    hat_o = normalize(hat_o, 0.78)
-
-    # ── CLAP — DNA-driven brightness + reverb ────────
-    clap = to_list(synthesize_clap(PercPreset(
-        name="CL", perc_type="clap", pitch=dd.snare_pitch * 1.09,
-        duration_s=0.3, decay_s=0.18, tone_mix=0.1,
-        brightness=dd.clap_brightness
-    )))
-    clap = compress(clap, CompressorSettings(
-        threshold_db=-8.0, ratio=5.0, attack_ms=0.3, release_ms=25.0, makeup_db=3.5
-    ))
-    clap = sat.harmonic_exciter(clap, amount=0.3, frequency=4000)
-    clap_np = apply_reverb_delay(to_np(clap), ReverbDelayPreset(
-        name="ClapVerb", effect_type="plate", decay_time=0.3 + dd.clap_reverb,
-        diffusion=0.7, damping=0.6, mix=dd.clap_reverb
-    ))
-    clap = to_list(clap_np)
-    clap = normalize(clap, 0.82)
-
-    # ═══ SPRINT 1 — Pipeline readiness checks ════════
-    check_drum_pipeline(dna, SR)
-
-    # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Bass (DNA-DRIVEN, 7 types)
-    # ═══════════════════════════════════════════
-    print(f"  [2/9] Bass — {bd.primary_type}/{bd.secondary_type}/{bd.tertiary_type}...")
-
-    # SUB — clean root sub with DNA sub_weight
-    sub = to_list(synthesize_bass(BassPreset(
-        name="Sub", bass_type="sub_sine", frequency=FREQ["F1"],
-        duration_s=BEAT * 2, attack_s=0.002, release_s=0.1
-    )))
-    sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 1.0, q=0.6)
-    # DNA sub_weight scales normalize target — pro mixes keep sub controlled
-    _sub_norm = 0.35 * (0.5 + 0.5 * bd.sub_weight)  # range ~0.18 to 0.35
-    sub = normalize(sub, min(_sub_norm, 0.40))
-    # ═══ SPRINT 1 — Sub bass enhancement ═════════════
-    sub = enhance_sub_bass(sub, dna, FREQ["F1"], SR)
-
-    # BASS 1: FM Growl — DNA-driven mod_index, feedback, depth
-    print(f"    FM Growl (depth={bd.fm_depth:.1f})...")
-    fm_growl_patch = FMPatch(
-        name="GrowlFM",
-        operators=[
-            FMOperator(freq_ratio=1.0, amplitude=1.0, mod_index=bd.fm_depth,
-                       feedback=bd.fm_feedback, envelope=(0.005, 0.08, 0.85, 0.15)),
-            FMOperator(freq_ratio=2.0, amplitude=0.9, mod_index=bd.fm_depth * 0.7,
-                       feedback=bd.fm_feedback * 0.58, envelope=(0.003, 0.1, 0.75, 0.12)),
-            FMOperator(freq_ratio=PHI, amplitude=0.5, mod_index=bd.fm_depth * 0.4,
-                       feedback=0.0, envelope=(0.001, 0.06, 0.55, 0.08)),
-        ],
-        algorithm=0, master_gain=0.8,
-    )
-    fm_growl_raw = render_fm(fm_growl_patch, freq=FREQ["F2"], duration=BEAT * 2)
-    fm_growl_np = to_np(fm_growl_raw)
-    # LFO wobble — DNA rate and depth
-    lfo_fg = generate_lfo(LFOPreset(
-        name="FMLfo", lfo_type="sine", rate_hz=bd.lfo_rate,
-        depth=bd.lfo_depth, polarity="unipolar", sync_bpm=float(dna.bpm),
-        sync_division=2.0
-    ), duration_s=BEAT * 2, sample_rate=SR)
-    # Ensure LFO matches audio length (resample if needed)
-    if len(lfo_fg) < len(fm_growl_np):
-        lfo_fg = np.interp(
-            np.linspace(0, 1, len(fm_growl_np)),
-            np.linspace(0, 1, len(lfo_fg)),
-            lfo_fg,
-        )
-    fm_growl_np = fm_growl_np * (0.2 + 0.8 * lfo_fg[:len(fm_growl_np)])
-    # UNISON — 5 detuned voices for massive width
-    fm_growl_np = np.array(_unison_bass(fm_growl_np, n_voices=5, detune_cents=12.0))
-    # STACKED DISTORTION — 3 serial stages (tube → tape → aggressive)
-    fm_growl_np = _stack_distortion(fm_growl_np, drive=bd.mid_drive * 2.0, stages=3)
-    fm_growl = to_list(fm_growl_np)
-    fm_growl = _ott_simulate(fm_growl, min(bd.ott_amount * 1.3, 1.0))
-    fm_growl = normalize(fm_growl, 0.65)
-
-    # BASS 2: Growl Resampler — DNA fm_depth drives wavetable character
-    print("    Growl Resampler wavetable...")
-    growl_source = generate_fm_source(size=WAVETABLE_SIZE, fm_ratio=PHI,
-                                       fm_depth=bd.fm_depth * 0.4)
-    growl_frames = growl_resample_pipeline(growl_source, n_output_frames=256)
-    growl_wt_np = _wavetable_to_audio(growl_frames, freq=FREQ["F2"],
-                                       duration_s=BEAT * 2, sr=SR)
-    # UNISON — 5 voices for Subtronics-tier width
-    growl_wt_np = np.array(_unison_bass(growl_wt_np, n_voices=5, detune_cents=10.0))
-    # STACKED DISTORTION — 3 stages
-    growl_wt_np = _stack_distortion(growl_wt_np, drive=bd.mid_drive * 2.0, stages=3)
-    growl_wt = to_list(growl_wt_np)
-    growl_wt = _ott_simulate(growl_wt, min(bd.ott_amount * 1.3, 1.0))
-    growl_wt = normalize(growl_wt, 0.62)
-
-    # BASS 3: Dist FM — DNA distortion + filter
-    print(f"    Dist FM (dist={bd.distortion:.2f})...")
-    dist_fm = to_list(synthesize_bass(BassPreset(
-        name="DistFM", bass_type="dist_fm", frequency=FREQ["F2"],
-        duration_s=BEAT, fm_ratio=2.5, fm_depth=bd.fm_depth * 0.4,
-        distortion=bd.distortion, filter_cutoff=bd.filter_cutoff
-    )))
-    dist_fm_np = to_np(dist_fm)
-    # UNISON — 5 voices
-    dist_fm_np = np.array(_unison_bass(dist_fm_np, n_voices=5, detune_cents=14.0))
-    # STACKED DISTORTION — 3 stages
-    dist_fm_np = _stack_distortion(dist_fm_np, drive=bd.mid_drive * 2.5, stages=3)
-    dist_fm = to_list(dist_fm_np)
-    dist_fm = _ott_simulate(dist_fm, min(bd.ott_amount * 1.3, 1.0))
-    dist_fm = normalize(dist_fm, 0.62)
-
-    # BASS 4: Sync bass — DNA lfo_rate drives sweep
-    print("    Sync bass...")
-    sync_bass = to_list(synthesize_bass(BassPreset(
-        name="Sync", bass_type="sync", frequency=FREQ["F2"],
-        duration_s=BEAT * 1.5, distortion=bd.distortion * 0.78,
-        filter_cutoff=bd.filter_cutoff
-    )))
-    sync_np = to_np(sync_bass)
-    lfo_sync = generate_lfo(LFOPreset(
-        name="SyncLFO", lfo_type="triangle", rate_hz=bd.lfo_rate * 1.2,
-        depth=bd.lfo_depth * 0.88, polarity="unipolar"
-    ), duration_s=BEAT * 1.5, sample_rate=SR)
-    if len(lfo_sync) < len(sync_np):
-        lfo_sync = np.interp(
-            np.linspace(0, 1, len(sync_np)),
-            np.linspace(0, 1, len(lfo_sync)),
-            lfo_sync,
-        )
-    sync_np = sync_np * (0.3 + 0.7 * lfo_sync[:len(sync_np)])
-    # UNISON — 5 voices
-    sync_np = np.array(_unison_bass(sync_np, n_voices=5, detune_cents=10.0))
-    # STACKED DISTORTION — 3 stages
-    sync_np = _stack_distortion(sync_np, drive=bd.mid_drive * 2.0, stages=3)
-    sync_bass = to_list(sync_np)
-    sync_bass = _ott_simulate(sync_bass, min(bd.ott_amount * 1.2, 1.0))
-    sync_bass = normalize(sync_bass, 0.60)
-
-    # BASS 5: Acid bass — DNA acid_resonance drives filter character
-    print(f"    Acid bass (res={bd.acid_resonance:.2f})...")
-    acid = to_list(synthesize_bass(BassPreset(
-        name="Acid", bass_type="acid", frequency=FREQ["F2"],
-        duration_s=BEAT * 2, distortion=bd.distortion * 0.72,
-        filter_cutoff=bd.filter_cutoff * 1.12
-    )))
-    acid_np = to_np(acid)
-    # UNISON — 5 voices
-    acid_np = np.array(_unison_bass(acid_np, n_voices=5, detune_cents=8.0))
-    # STACKED DISTORTION — 2 stages (acid needs to keep filter character)
-    acid_np = _stack_distortion(acid_np, drive=bd.mid_drive * 1.8, stages=2)
-    acid = to_list(acid_np)
-    acid = _ott_simulate(acid, min(bd.ott_amount * 1.1, 1.0))
-    acid = normalize(acid, 0.58)
-
-    # BASS 6: Neuro — DNA fm_depth + lfo_rate for phase distortion chaos
-    print(f"    Neuro bass (fm={bd.fm_depth:.1f})...")
-    neuro = to_list(synthesize_bass(BassPreset(
-        name="Neuro", bass_type="neuro", frequency=FREQ["F2"],
-        duration_s=BEAT, fm_ratio=3.0, fm_depth=bd.fm_depth * 0.6,
-        distortion=bd.distortion, filter_cutoff=bd.filter_cutoff * 0.88
-    )))
-    neuro_np = to_np(neuro)
-    lfo_n = generate_lfo(LFOPreset(
-        name="NroLFO", lfo_type="square", rate_hz=bd.lfo_rate * 1.6,
-        depth=bd.lfo_depth * 0.94, polarity="unipolar", pulse_width=0.3
-    ), duration_s=BEAT, sample_rate=SR)
-    if len(lfo_n) < len(neuro_np):
-        lfo_n = np.interp(
-            np.linspace(0, 1, len(neuro_np)),
-            np.linspace(0, 1, len(lfo_n)),
-            lfo_n,
-        )
-    neuro_np = neuro_np * (0.25 + 0.75 * lfo_n[:len(neuro_np)])
-    # UNISON — 7 voices for maximum chaos
-    neuro_np = np.array(_unison_bass(neuro_np, n_voices=7, detune_cents=15.0))
-    # STACKED DISTORTION — 3 stages, HARDEST of all bass types
-    neuro_np = _stack_distortion(neuro_np, drive=bd.mid_drive * 3.0, stages=3)
-    neuro = to_list(neuro_np)
-    neuro = _ott_simulate(neuro, min(bd.ott_amount * 1.4, 1.0))
-    neuro = normalize(neuro, 0.58)
-
-    # BASS 7: Formant "yoi" — DNA distortion + brightness
-    print("    Formant bass...")
-    formant_raw = synthesize_morph_formant(FormantPreset(
-        name="Yoi", formant_type="morph", frequency=FREQ["F2"],
-        duration_s=BEAT * 2, bandwidth=110.0,
-        brightness=0.5 + bd.filter_cutoff * 0.38,
-        distortion=bd.distortion * 0.44
-    ))
-    form_np = to_np(formant_raw)
-    # UNISON — 5 voices
-    form_np = np.array(_unison_bass(form_np, n_voices=5, detune_cents=10.0))
-    # STACKED DISTORTION — 3 stages
-    form_np = _stack_distortion(form_np, drive=bd.mid_drive * 2.0, stages=3)
-    formant = to_list(form_np)
-    formant = _ott_simulate(formant, min(bd.ott_amount * 1.2, 1.0))
-    formant = normalize(formant, 0.58)
-
-    # Pitch-dive variant — DNA pitch_dive_semi
-    dive_raw = to_list(fm_growl)
-    dive_np = to_np(dive_raw)
-    dive_np = apply_pitch_automation(dive_np, PitchAutoPreset(
-        name="BassDive", auto_type="dive", start_semitones=0.0,
-        end_semitones=-bd.pitch_dive_semi, duration_s=BEAT * 2,
-        curve_exp=3.0
-    ), base_freq=FREQ["F2"])
-    dive_bass = to_list(dive_np)
-    dive_bass = normalize(dive_bass, 0.85)
-
-    # Reese — detuned saws
-    reese = to_list(synthesize_bass(BassPreset(
-        name="Reese", bass_type="reese", frequency=FREQ["F2"],
-        duration_s=BAR, detune_cents=25.0, filter_cutoff=0.35,
-        attack_s=0.3, release_s=0.5
-    )))
-    reese = sat.warmth(reese, amount=0.5)
-    reese = normalize(reese, 0.72)
-
-    # Bass fills — DNA stutter_rate
-    bass_repeat = apply_beat_repeat(dist_fm, BeatRepeatPatch(
-        name="BassGlitch", grid="1/16", repeats=8, decay=0.15,
-        pitch_shift=-3.0, reverse_probability=fd.beat_repeat_probability,
-        gate=0.75
-    ), bpm=float(dna.bpm))
-    bass_repeat = normalize(bass_repeat, 0.7)
-
-    # Arsenal for rotation
-    bass_arsenal = [fm_growl, growl_wt, dist_fm, sync_bass, acid, neuro, formant]
-
-    # ── Cutting-edge: wavefold + bitcrush if DNA demands it ──
-    if bd.wavefold_thresh > 0.0 and bd.wavefold_thresh < 1.0:
-        def _wavefold(sig, thresh):
-            """Analog-style wavefolding — creates dense harmonics."""
-            out = list(sig)
-            inv_t = 1.0 / max(thresh, 0.01)
-            for i in range(len(out)):
-                x = out[i] * inv_t
-                # Triangle-fold: keeps within [-1, 1] while adding harmonics
-                x = 4 * abs((x / 4 + 0.25) % 1 - 0.5) - 1
-                out[i] = x * thresh
-            return out
-        bass_arsenal = [_wavefold(b, bd.wavefold_thresh) for b in bass_arsenal]
-        fm_growl = _wavefold(fm_growl, bd.wavefold_thresh)
-        neuro = _wavefold(neuro, bd.wavefold_thresh)
-        dist_fm = _wavefold(dist_fm, bd.wavefold_thresh)
-        print(f"    wavefold @ {bd.wavefold_thresh:.2f} thresh")
-
-    if bd.bitcrush_bits > 0:
-        def _bitcrush(sig, bits):
-            """Digital degradation — quantize to N bits."""
-            levels = 2 ** bits
-            out = list(sig)
-            for i in range(len(out)):
-                out[i] = round(out[i] * levels) / levels
-            return out
-        bass_arsenal = [_bitcrush(b, bd.bitcrush_bits) for b in bass_arsenal]
-        fm_growl = _bitcrush(fm_growl, bd.bitcrush_bits)
-        neuro = _bitcrush(neuro, bd.bitcrush_bits)
-        dist_fm = _bitcrush(dist_fm, bd.bitcrush_bits)
-        print(f"    bitcrush @ {bd.bitcrush_bits} bits")
-
-    # ═══ SPRINT 1 — Midbass pipeline readiness ══════════
-    check_midbass_pipeline(dna, SR)
-
-    # ═══ SPRINT 2 — Bass: Wave folder + Ring mod enrichment ════
-    print("  🔧 SPRINT 2 — Bass enrichment: wave folder + ring mod...")
-    bass_arsenal = apply_wave_folder_bass(bass_arsenal, dna)
-    bass_arsenal = apply_ring_mod_bass(bass_arsenal, dna, FREQ["F2"], SR)
-    log_milestone(_session_logger, "Bass enrichment complete")
-
-    # ═══ SPRINT 3 — VIP bass mutation ════
-    _vip_result = apply_vip_bass_mutation(
-        getattr(bd, 'bass_type', 'reese'), FREQ["F2"], duration_s=0.8, sr=SR)
-
-    # ═══ PHASE 2 — Sound Architecture ══════════════════
-    print("\n  🔧 STAGE INTEGRATION — Phase 2: Riddim + Wobble bass palette...")
-    bass_arsenal = enhance_bass_palette(bass_arsenal, dna, SR, BEAT, FREQ["F2"])
-    psbs_info = get_psbs_info(FREQ["F1"])
-
-    # ═══ SPRINT 2 — Harmonic enrichment + resonance ════
-    _harmonic_info = add_harmonic_enrichment(bass_arsenal[0] if bass_arsenal else [], FREQ["F2"], SR)
-    log_milestone(_session_logger, "Phase 2 complete — sound architecture")
-
-    # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Leads (DNA-DRIVEN)
-    # ═══════════════════════════════════════════
-    print(f"  [3/9] Leads — SCREECH + FM + {ld.additive_partials}p additive, unison...")
-
-    # Lead maker — UPGRADED: screech layer + FM + additive, 5-voice unison,
-    # SVF filter, stacked distortion. Sounds like Subtronics, not MIDI.
-    def make_lead(freq, dur):
-        ld_parts = []
-
-        # Layer 1: SCREECH — the main lead sound (bandlimited square → SVF → saturation)
-        screech_sig = synthesize_screech_lead(LeadPreset(
-            name="Screech", lead_type="screech", frequency=freq, duration_s=dur,
-            filter_cutoff=0.65 + ld.brightness * 0.3,
-            resonance=0.4, distortion=0.5 + ld.brightness * 0.3,
-            attack_s=0.003, decay_s=0.1, sustain=0.7, release_s=min(dur * 0.3, 0.15),
-        ))
-        ld_parts.append(("screech", screech_sig.tolist()))
-
-        # Layer 2: FM — metallic harmonics for bite
-        if ld.use_fm:
-            fm_ops = [
-                FMOperator(freq_ratio=1.0, amplitude=0.7, mod_index=ld.fm_depth * 1.5,
-                           feedback=0.2, envelope=(0.003, 0.1, 0.5, 0.15)),
-                FMOperator(freq_ratio=PHI, amplitude=0.4, mod_index=ld.fm_depth,
-                           feedback=0.0, envelope=(0.005, 0.08, 0.3, 0.1)),
-            ]
-            if ld.fm_operators >= 3:
-                fm_ops.append(FMOperator(
-                    freq_ratio=PHI * 2, amplitude=0.25, mod_index=ld.fm_depth * 0.5,
-                    feedback=0.08, envelope=(0.002, 0.06, 0.2, 0.08)))
-            fm_ld = render_fm(FMPatch(
-                name="LeadFM", operators=fm_ops,
-                algorithm=0, master_gain=0.5,
-            ), freq=freq, duration=dur)
-            ld_parts.append(("fm", fm_ld))
-
-        # Layer 3: Additive — harmonic body (optional, thins if too many layers)
-        if ld.use_additive:
-            add_patch = AdditivePatch(
-                name="Lead",
-                partials=harmonic_partials(ld.additive_partials, rolloff=ld.additive_rolloff),
-                master_gain=0.4,
+    # ═══════════════════════════════════════════════════════════════════
+    #  Phases 1–4: either phase_one bridge or legacy code
+    #  (exception-based skip: _SkipToArrange bypasses legacy phases)
+    # ═══════════════════════════════════════════════════════════════════
+    try:
+
+      # ═══════════════════════════════════════════════════════════════════
+      #  PHASE ONE BRIDGE — unified pipeline (optional)
+      # ═══════════════════════════════════════════════════════════════════
+      if use_phase_one:
+        from engine.phase_one import run_phase_one
+
+        _bp = None
+        if dna is None and yaml_path is None:
+            _bp = SongBlueprint(name="untitled", style="dubstep", bpm=140, key="F", scale="minor")
+        elif dna is None and yaml_path is not None:
+            _bp = None  # yaml_path will be used directly
+
+        mandate = run_phase_one(blueprint=_bp, dna=dna, yaml_path=yaml_path)
+        dna = mandate.dna
+
+        # ── Timing ──
+        BEAT = mandate.beat_s
+        BAR = mandate.bar_s
+
+        def samples(beats: float) -> int:
+            return int(beats * BEAT * SR)
+
+        intervals = SCALE_INTERVALS.get(dna.scale, [0, 2, 3, 5, 7, 8, 10])
+
+        def n(degree: int, octave: int) -> float:
+            semi = intervals[degree % len(intervals)]
+            return dna.root_freq * (2.0 ** (octave - 1)) * (2.0 ** (semi / 12.0))
+
+        FREQ = mandate.freq_table
+        # Add note-name aliases for ARRANGE compatibility
+        _note_aliases = {
+            "F1": n(0,1), "F2": n(0,2), "F3": n(0,3), "F4": n(0,4),
+            "G2": n(1,2), "G3": n(1,3), "G4": n(1,4),
+            "Ab1": n(2,1), "Ab2": n(2,2), "Ab3": n(2,3), "Ab4": n(2,4),
+            "Bb1": n(3,1), "Bb2": n(3,2), "Bb3": n(3,3),
+            "C2": n(4,1), "C3": n(4,2), "C4": n(4,3),
+            "Db2": n(5,1), "Db3": n(5,2), "Db4": n(5,3),
+            "Eb2": n(6,1), "Eb3": n(6,2), "Eb4": n(6,3),
+        }
+        FREQ.update(_note_aliases)
+
+        # ── DNA aliases ──
+        dd = dna.drums
+        bd = dna.bass
+        ld = dna.lead
+        ad = dna.atmosphere
+        fd = dna.fx
+        md = dna.mix
+
+        # ── Sections ──
+        sec_map = {s.name: s.bars for s in dna.arrangement}
+        INTRO = sec_map.get("intro", mandate.sections.get("intro", 8))
+        BUILD = sec_map.get("build", mandate.sections.get("build", 4))
+        DROP1 = sec_map.get("drop1", sec_map.get("drop", mandate.sections.get("drop", 16)))
+        BREAK_ = sec_map.get("break", mandate.sections.get("break", 8))
+        BUILD2 = sec_map.get("build2", BUILD)
+        DROP2 = sec_map.get("drop2", DROP1)
+        OUTRO = sec_map.get("outro", mandate.sections.get("outro", 8))
+        total_bars = INTRO + BUILD + DROP1 + BREAK_ + BUILD2 + DROP2 + OUTRO
+        total_s = samples(total_bars * 4)
+
+        song_label = dna.name or "dubstep_track"
+        safe_name = song_label.lower().replace(" ", "_").replace("'", "")
+
+        # ── Engines ──
+        from engine.dojo import DojoSession, DojoPhase, BeltRank
+        from engine.recipe_book import select_recipe, check_quality_gate
+        from engine.dsp_core import svf_highpass, svf_lowpass, multiband_compress
+
+        _current_belt_str = load_current_belt()
+        _belt_rank = getattr(BeltRank, _current_belt_str.upper(), BeltRank.WHITE)
+        _dojo = DojoSession(belt=_belt_rank, total_session_s=840.0)
+        _dojo.begin_session()
+
+        sat = SaturationEngine(sample_rate=SR)
+        panner = PanningEngine(sample_rate=SR)
+        groove_eng = GrooveEngine(bpm=dna.bpm, sample_rate=SR)
+
+        _energy = getattr(dna, 'energy', 0.7)
+        rhythm_eng = RhythmEngine.from_drum_dna(
+            dd, bpm=dna.bpm, energy=_energy, seed=hash(dna.name) & 0xFFFF)
+
+        energy_map = build_energy_map(dna)
+        _mem_engine = begin_render_session(dna)
+        _session_logger = create_session_logger(dna)
+
+        # ── Phase audit setup ──
+        _phase_base = _init_phase_audit(safe_name)
+        _phase_t0 = time.perf_counter()
+
+        # ── Convert mandate audio: np.ndarray → Python list ──
+        def _to_list(arr):
+            if arr is None:
+                return [0.0] * int(0.5 * SR)  # 0.5s silence fallback
+            if isinstance(arr, np.ndarray):
+                return arr.tolist()
+            return list(arr)
+
+        # ── Drums ──
+        kick = _to_list(mandate.drums.kick)
+        snare = _to_list(mandate.drums.snare)
+        hat_c = _to_list(mandate.drums.hat_closed)
+        hat_o = _to_list(mandate.drums.hat_open)
+        clap = _to_list(mandate.drums.clap)
+
+        # ── Sub + Reese ──
+        sub = _to_list(mandate.bass.sub)
+        reese = _to_list(mandate.bass.reese)
+
+        # ── Bass arsenal ──
+        _bass_rotation = mandate.bass.rotation_order or list(mandate.bass.sounds.keys())
+        bass_arsenal = []
+        for _bt in _bass_rotation:
+            _bs = mandate.bass.sounds.get(_bt)
+            if _bs is not None:
+                bass_arsenal.append(_to_list(_bs))
+        if not bass_arsenal:
+            bass_arsenal = [reese]
+
+        # Named bass variants for locals().get() in ARRANGE
+        fm_growl = bass_arsenal[0] if len(bass_arsenal) > 0 else reese
+        growl_wt = bass_arsenal[1] if len(bass_arsenal) > 1 else fm_growl
+        dist_fm = bass_arsenal[2] if len(bass_arsenal) > 2 else fm_growl
+        sync_bass = bass_arsenal[3] if len(bass_arsenal) > 3 else fm_growl
+        acid_bass = bass_arsenal[4] if len(bass_arsenal) > 4 else fm_growl
+        neuro_bass = bass_arsenal[5] if len(bass_arsenal) > 5 else fm_growl
+        formant_bass = bass_arsenal[6] if len(bass_arsenal) > 6 else fm_growl
+
+        bass_repeat = fm_growl  # Simple fallback — no beat_repeat processing in phase_one
+
+        # ── Leads → lead_notes dict ──
+        lead_notes = {}
+        lead_notes_long = {}
+        for _deg in range(7):
+            for _oct in [3, 4]:
+                _freq = n(_deg, _oct)
+                # Find closest pitch in mandate leads
+                _best_key = min(mandate.leads.screech.keys(),
+                                key=lambda f: abs(f - _freq),
+                                default=None)
+                if _best_key is not None:
+                    lead_notes[(_deg, _oct)] = _to_list(mandate.leads.screech[_best_key])
+                    lead_notes_long[(_deg, _oct)] = _to_list(mandate.leads.screech[_best_key])
+                elif mandate.leads.fm_lead:
+                    _fk = min(mandate.leads.fm_lead.keys(),
+                              key=lambda f: abs(f - _freq), default=None)
+                    if _fk is not None:
+                        lead_notes[(_deg, _oct)] = _to_list(mandate.leads.fm_lead[_fk])
+                        lead_notes_long[(_deg, _oct)] = _to_list(mandate.leads.fm_lead[_fk])
+
+        # Backwards-compat aliases
+        lead_f = lead_notes.get((0, 4), [0.0] * int(0.3 * SR))
+        lead_eb = lead_notes.get((6, 3), lead_f)
+        lead_c = lead_notes.get((4, 3), lead_f)
+        lead_ab = lead_notes.get((2, 4), lead_f)
+
+        # ── Chords ──
+        chord_notes_l = {}
+        chord_notes_r = {}
+        _chord_prog = getattr(ld, 'chord_progression', [0, 5, 2, 4])
+        for _cdeg in set(_chord_prog):
+            chord_notes_l[_cdeg] = _to_list(mandate.leads.chord_l) if mandate.leads.chord_l is not None else [0.0] * int(0.5 * SR)
+            chord_notes_r[_cdeg] = _to_list(mandate.leads.chord_r) if mandate.leads.chord_r is not None else [0.0] * int(0.5 * SR)
+
+        chord_f_l = _to_list(mandate.leads.chord_l)
+        chord_f_r = _to_list(mandate.leads.chord_r)
+        chord_ab_l = chord_f_l
+        chord_ab_r = chord_f_r
+        chord_c_l = chord_f_l
+        chord_c_r = chord_f_r
+
+        # ── Pads / Atmosphere ──
+        dark_pad = _to_list(mandate.atmosphere.dark_pad)
+        lush = _to_list(mandate.atmosphere.lush_pad)
+        drone = _to_list(mandate.atmosphere.drone)
+        drop_noise = _to_list(mandate.atmosphere.noise_bed)
+
+        # ── Transition FX ──
+        riser = _to_list(mandate.fx.riser)
+        boom = _to_list(mandate.fx.boom)
+        hit = _to_list(mandate.fx.hit)
+        tape_stop = _to_list(mandate.fx.tape_stop)
+        pitch_dive = _to_list(mandate.fx.pitch_dive)
+        rev_crash = _to_list(mandate.fx.rev_crash)
+        stutter = _to_list(mandate.fx.stutter)
+        gate_chop = _to_list(mandate.fx.gate_chop)
+
+        # ── Vocal chops ──
+        _vowel_list = mandate.vocals.vowels or ["ah", "oh", "ee", "oo"]
+        chop_ah = _to_list(mandate.vocals.chops.get(_vowel_list[0])) if len(_vowel_list) > 0 else [0.0] * int(0.2 * SR)
+        chop_oh = _to_list(mandate.vocals.chops.get(_vowel_list[1])) if len(_vowel_list) > 1 else chop_ah
+        chop_ee_stut = _to_list(mandate.vocals.chops.get(_vowel_list[2])) if len(_vowel_list) > 2 else chop_ah
+        chop_yoi = _to_list(mandate.vocals.chops.get(_vowel_list[3])) if len(_vowel_list) > 3 else chop_ah
+        vocal_chops = [chop_ah, chop_oh, chop_ee_stut, chop_yoi]
+
+        # ── Groove / Hat pattern ──
+        def make_hat_events_bar():
+            events = []
+            _hat_steps = getattr(dd, 'hat_density', 16)
+            for i in range(_hat_steps):
+                vel = 0.6 + 0.3 * ((i % 4) == 0)
+                if i % 4 == 2:
+                    vel *= 0.7
+                events.append(NoteEvent(
+                    time=i * (BAR / _hat_steps),
+                    duration=0.03, pitch=42, velocity=vel
+                ))
+            grooved = groove_eng.apply_groove(
+                events, GROOVE_TEMPLATES.get("dubstep_halftime")
             )
-            ld_parts.append(("add", render_additive(add_patch, freq=freq, duration=dur)))
+            grooved = groove_eng.humanize(grooved, timing_ms=5, velocity_pct=8)
+            return grooved
 
-        # Mix layers — screech dominates
-        weights = {"screech": 0.55, "fm": 0.30, "add": 0.15}
-        max_len = max(len(p[1]) for p in ld_parts) if ld_parts else 0
-        ld_sig = [0.0] * max_len
-        for lbl, sig in ld_parts:
-            g = weights.get(lbl, 0.3)
-            for i in range(len(sig)):
-                ld_sig[i] += sig[i] * g
+        hat_pattern = make_hat_events_bar()
 
-        # 5-voice UNISON for width
-        ld_sig_np = np.array(_unison_bass(ld_sig, n_voices=5, detune_cents=8.0))
-        ld_sig = ld_sig_np.tolist()
+        # ── Pack ctx for workflow hooks ──
+        ctx.dna = dna
+        ctx.BEAT, ctx.BAR, ctx.FREQ = BEAT, BAR, FREQ
+        ctx.dd, ctx.bd, ctx.ld, ctx.ad, ctx.fd, ctx.md = dd, bd, ld, ad, fd, md
+        ctx.intervals, ctx._dojo, ctx.energy_map = intervals, _dojo, energy_map
+        ctx.sat, ctx.panner = sat, panner
+        ctx.groove_eng, ctx.rhythm_eng = groove_eng, rhythm_eng
+        ctx.INTRO, ctx.BUILD, ctx.DROP1 = INTRO, BUILD, DROP1
+        ctx.BREAK_, ctx.BUILD2, ctx.DROP2, ctx.OUTRO = BREAK_, BUILD2, DROP2, OUTRO
+        ctx.total_bars, ctx.total_s, ctx.safe_name = total_bars, total_s, safe_name
+        ctx.samples_fn, ctx.n_fn = samples, n
+        ctx.kick, ctx.snare, ctx.hat_c, ctx.hat_o, ctx.clap = kick, snare, hat_c, hat_o, clap
+        ctx.sub, ctx.bass_arsenal, ctx.bass_repeat = sub, bass_arsenal, bass_repeat
+        ctx.lead_notes, ctx.lead_notes_long = lead_notes, lead_notes_long
+        ctx.chord_notes_l, ctx.chord_notes_r = chord_notes_l, chord_notes_r
+        ctx.vocal_chops, ctx.dark_pad, ctx.drone = vocal_chops, dark_pad, drone
+        ctx.lush, ctx.drop_noise, ctx.reese = lush, drop_noise, reese
+        ctx.riser, ctx.boom, ctx.hit = riser, boom, hit
+        ctx.tape_stop, ctx.pitch_dive, ctx.rev_crash = tape_stop, pitch_dive, rev_crash
+        ctx.stutter, ctx.gate_chop, ctx.hat_pattern = stutter, gate_chop, hat_pattern
+        ctx._mem_engine = _mem_engine
+        ctx._session_logger = _session_logger
 
-        # Stacked distortion (2 stages — not as hard as bass)
-        ld_sig = _stack_distortion(ld_sig, drive=ld.brightness * 1.5, stages=2)
+        print(f"\n═══ PHASE 1 BRIDGE ACTIVE — {sum(mandate.rack_128.zone_counts.values())}/128 rack slots ═══")
+        print(f"    Skipping legacy Phases 1–4, jumping to ARRANGE...")
 
-        # Process — DNA-driven OTT and brightness
-        ld_sig = _ott_simulate(ld_sig, min(ld.ott_amount * 1.2, 1.0))
-        ld_sig = sat.harmonic_exciter(ld_sig, amount=ld.brightness * 0.7, frequency=4000)
-        ld_np = apply_reverb_delay(to_np(ld_sig), ReverbDelayPreset(
-            name="LdVerb", effect_type="plate", decay_time=ld.reverb_decay,
-            diffusion=0.75, damping=0.5, mix=0.18
-        ))
-        return to_list(ld_np)
+        raise _SkipToArrange()
 
-    # Pre-render leads for ALL 7 scale degrees × 2 octaves (oct 3 & 4)
-    # so DNA melody_patterns can reference any scale degree
-    lead_notes = {}  # {(degree, octave): audio_list}
-    for _deg in range(7):
-        for _oct in [3, 4]:
-            _freq = n(_deg, _oct)
-            lead_notes[(_deg, _oct)] = make_lead(_freq, BEAT * 0.5)
-    # Also pre-render longer variants for held notes
-    lead_notes_long = {}
-    for _deg in range(7):
-        for _oct in [3, 4]:
-            _freq = n(_deg, _oct)
-            lead_notes_long[(_deg, _oct)] = make_lead(_freq, BEAT * 1.0)
-    # Backwards-compat aliases
-    lead_f = lead_notes[(0, 4)]
-    lead_eb = lead_notes[(6, 3)]
-    lead_c = lead_notes[(4, 3)]
-    lead_ab = lead_notes[(2, 4)]
+    # ─── END use_phase_one bridge ─────────────────────────
 
-    # Pre-render chord stabs for all chord progression degrees
-    chord_notes_l = {}
-    chord_notes_r = {}
-
-    # Supersaw chord stabs — DNA-driven voices + detune
-    def make_chord(freq, dur=BEAT * 0.75):
-        cl, cr = render_supersaw(SupersawPatch(
-            name="Chord", n_voices=ld.supersaw_voices,
-            detune_cents=ld.supersaw_detune, mix=0.8,
-            stereo_width=0.9, cutoff_hz=ld.supersaw_cutoff,
-            resonance=0.38, attack=0.003, decay=0.12,
-            sustain=0.55, release=0.22, master_gain=0.72
-        ), freq=freq, duration=dur)
-        cl_np = apply_reverb_delay(to_np(cl), ReverbDelayPreset(
-            name="ChVerb", effect_type="room", decay_time=ld.reverb_decay * 0.8,
-            diffusion=0.6, damping=0.6, mix=0.12
-        ))
-        return to_list(cl_np), cr
-
-    chord_f_l, chord_f_r = make_chord(FREQ["F3"])
-    chord_ab_l, chord_ab_r = make_chord(FREQ["Ab3"])
-    chord_c_l, chord_c_r = make_chord(FREQ["C3"])
-
-    # Pre-render chords for all progression degrees
-    _chord_prog = getattr(ld, 'chord_progression', [0, 5, 2, 4])
-    for _cdeg in set(_chord_prog):
-        _cfreq = n(_cdeg, 3)
-        _cl, _cr = make_chord(_cfreq)
-        chord_notes_l[_cdeg] = _cl
-        chord_notes_r[_cdeg] = _cr
-
-    # ═══ SPRINT 1 — Chord pad enhancement ═════════════
-    chord_notes_l, chord_notes_r = enhance_chord_voicings(
-        chord_notes_l, chord_notes_r, dna, FREQ["F3"], SR)
-
-    # ═══ SPRINT 2 — Lead/FX pipeline readiness ════
-    check_lead_pipeline_ready(dna)
-    check_fx_pipeline_ready(dna)
-    log_milestone(_session_logger, "Leads + Chords complete")
-
-    # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Vocal chops (DNA-driven vowels)
-    # ═══════════════════════════════════════════
-    print(f"  [4/9] Vocal chops — {' '.join(dna.chop_vowels[:4])}...")
-
-    # Map DNA vowels to chops
-    _vowel_list = dna.chop_vowels if dna.chop_vowels else ["ah", "oh", "ee", "oo"]
-
-    chop_ah = to_list(synthesize_chop(VocalChop(
-        name=_vowel_list[0], vowel=_vowel_list[0], note=_root_note3,
-        duration_s=0.2, distortion=fd.vocal_chop_distortion, stutter_count=0
-    )))
-    chop_ah = _ott_simulate(chop_ah, 0.3)
-    chop_ah = normalize(chop_ah, 0.72)
-
-    chop_oh = to_list(synthesize_chop(VocalChop(
-        name=_vowel_list[1], vowel=_vowel_list[1], note=_fifth_note3,
-        duration_s=0.15, distortion=fd.vocal_chop_distortion * 0.86,
-        stutter_count=0
-    )))
-    chop_oh = normalize(chop_oh, 0.68)
-
-    chop_ee_stut = to_list(synthesize_chop(VocalChop(
-        name="stutter", vowel=_vowel_list[2] if len(_vowel_list) > 2 else "ee",
-        note=_root_note3, duration_s=0.4,
-        distortion=fd.vocal_chop_distortion * 1.14, stutter_count=4
-    )))
-    chop_ee_stut = normalize(chop_ee_stut, 0.72)
-
-    _yoi_vowel = _vowel_list[3] if len(_vowel_list) > 3 else "oo"
-    chop_yoi = to_list(synthesize_chop(VocalChop(
-        name="yoi", vowel=_yoi_vowel, note=_root_note3,
-        duration_s=0.3, formant_shift=3.0,
-        distortion=fd.vocal_chop_distortion, stutter_count=2
-    )))
-    chop_yoi_np = apply_reverb_delay(to_np(chop_yoi), ReverbDelayPreset(
-        name="ChopVerb", effect_type="plate", decay_time=0.3, mix=0.15
-    ))
-    chop_yoi = to_list(chop_yoi_np)
-    chop_yoi = normalize(chop_yoi, 0.72)
-
-    vocal_chops = [chop_ah, chop_oh, chop_ee_stut, chop_yoi]
-
-    # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Pads & atmosphere (DNA-driven)
-    # ═══════════════════════════════════════════
-    print(f"  [5/9] Pads — {ad.pad_type} pad, verb={ad.reverb_decay:.1f}s...")
-
-    # Pad — DNA-driven type, attack, brightness
-    # Use HARMONIC partials (integer multiples) for consonance with bass key.
-    # Phi-spaced partials (1.0, 1.618, 2.618...) are inharmonic and clash.
-    # Uses harmonic_partials with natural 1/n rolloff for rich, tonal pad.
-    pad_add = render_additive(AdditivePatch(
-        name="DarkPad", partials=harmonic_partials(12, rolloff="natural"),
-        master_gain=0.5,
-    ), freq=FREQ["F3"], duration=BAR * 8)
-
-    _pad_synth = synthesize_dark_pad if ad.pad_type == "dark" else synthesize_lush_pad
-    dark_pad_raw = to_list(_pad_synth(PadPreset(
-        name="DP", pad_type=ad.pad_type, frequency=FREQ["F3"],
-        duration_s=BAR * 8, detune_cents=18.0,
-        filter_cutoff=ad.pad_brightness + 0.05,
-        attack_s=ad.pad_attack, release_s=ad.pad_attack * 1.5,
-        brightness=ad.pad_brightness
-    )))
-
-    gran_tex = to_list(synthesize_cloud(GranularPreset(
-        name="Tex", grain_type="cloud", frequency=FREQ["F3"],
-        duration_s=BAR * 8, grain_size_ms=90.0,
-        grain_density=ad.granular_density,
-        pitch_spread=5.0, brightness=ad.pad_brightness + 0.05,
-        reverb_amount=0.5
-    )))
-
-    # Mix — DNA stereo_width drives the blend
-    pad_len = min(len(dark_pad_raw), len(gran_tex), len(pad_add))
-    dark_pad = [0.0] * pad_len
-    for i in range(pad_len):
-        dark_pad[i] = dark_pad_raw[i] * 0.4 + gran_tex[i] * 0.3 + pad_add[i] * 0.3
-
-    _pad_verb_type = "shimmer" if ad.shimmer > 0.3 else "hall"
-    pad_np = apply_reverb_delay(to_np(dark_pad), ReverbDelayPreset(
-        name="PadShim", effect_type=_pad_verb_type,
-        decay_time=ad.reverb_decay,
-        pre_delay_ms=35.0, diffusion=0.9, damping=0.35,
-        shimmer_pitch=12.0 if ad.shimmer > 0.3 else 0.0,
-        shimmer_feedback=ad.shimmer if ad.shimmer > 0.3 else 0.0,
-        mix=0.35
-    ))
-    dark_pad = to_list(pad_np)
-    dark_pad = normalize(dark_pad, 0.6)
-    # HPF pad at 80Hz — keep all pad energy in bass/mid bands, not sub
-    dark_pad_np = to_np(dark_pad)
-    dark_pad_np = svf_highpass(dark_pad_np, 80.0, 0.5, SR)
-    dark_pad = to_list(dark_pad_np)
-
-    # ═══ SPRINT 2 — Ambient textures ════════════════
-    print("  🔧 SPRINT 2 — Ambient texture layer...")
-    _ambient_tex = add_ambient_textures(dna, SR, BAR)
-
-    # ═══ SPRINT 3 — Resonance coloring ════
-    if dark_pad:
-        dark_pad = apply_resonance_filter(dark_pad, freq=FREQ["F3"], sr=SR)
-    log_milestone(_session_logger, "Pads + Atmosphere complete")
-
-    # Drone — DNA voices + movement + Karplus-Strong option
-    drone_parts = []
-    if ad.use_karplus_drone:
-        drone_ks = render_ks(KarplusStrongPatch(
-            frequency=FREQ["F3"], duration=BAR * INTRO,
-            damping=0.2, brightness=ad.pad_brightness + 0.05,
-            stretch=0.05, feedback=0.999, noise_mix=0.7
-        ))
-        drone_parts.append((drone_ks, 0.35))
-
-    drone_synth_sig = to_list(synthesize_dark_drone(DronePreset(
-        name="Drone", drone_type="dark", frequency=FREQ["F3"],
-        duration_s=BAR * INTRO, num_voices=ad.drone_voices,
-        detune_cents=12.0, brightness=ad.pad_brightness,
-        movement=ad.drone_movement, distortion=0.15,
-        reverb_amount=0.55
-    )))
-    drone_parts.append((drone_synth_sig, 0.65 if ad.use_karplus_drone else 1.0))
-
-    drone_len = min(len(p[0]) for p in drone_parts)
-    drone = [0.0] * drone_len
-    for sig, gain in drone_parts:
-        for i in range(drone_len):
-            drone[i] += sig[i] * gain if i < len(sig) else 0.0
-    drone = normalize(drone, 0.45)
-    # HPF drone at 165Hz — V3q: bass=52.3%, V3l(200Hz)=4.7%, V3r(180Hz)=45.8%
-    # V3s: revert to V3q cutoff — 180Hz killed dynamics
-    drone_np = to_np(drone)
-    drone_np = svf_highpass(drone_np, 165.0, 0.7, SR)
-    drone = to_list(drone_np)
-
-    # Breakdown pad — DNA atmosphere personality
-    _break_type = "lush" if ad.pad_type == "dark" else "dark"
-    _break_synth = synthesize_lush_pad if _break_type == "lush" else synthesize_dark_pad
-    lush = to_list(_break_synth(PadPreset(
-        name="LP", pad_type=_break_type, frequency=FREQ["Ab3"],
-        duration_s=BAR * BREAK_, filter_cutoff=ad.pad_brightness + 0.3,
-        brightness=ad.pad_brightness + 0.3,
-        attack_s=ad.pad_attack * 0.25, release_s=ad.pad_attack
-    )))
-    lush_np = apply_reverb_delay(to_np(lush), ReverbDelayPreset(
-        name="LushVerb", effect_type="hall",
-        decay_time=ad.reverb_decay * 0.8,
-        diffusion=0.88, damping=0.35, mix=0.3
-    ))
-    lush = to_list(lush_np)
-    lush = normalize(lush, 0.55)
-
-    # Noise bed — DNA type and level
-    drop_noise_raw = to_list(synthesize_noise(NoisePreset(
-        name="DropNoise", noise_type=ad.noise_bed_type,
-        duration_s=BAR * 4, brightness=0.3,
-        gain=ad.noise_bed_level * 2.33
-    )))
-    drop_noise = apply_eq_band(drop_noise_raw, center_hz=3500.0, gain_db=4.0, q=0.4)
-    drop_noise = apply_eq_band(drop_noise, center_hz=200.0, gain_db=-8.0, q=0.5)
-    drop_noise = apply_eq_band(drop_noise, center_hz=10000.0, gain_db=-4.0, q=0.4)
-    drop_noise = normalize(drop_noise, 0.30)
-
-    # ═══════════════════════════════════════════
-    #  SOUND DESIGN — Transition FX (DNA-driven)
-    # ═══════════════════════════════════════════
-    print(f"  [6/9] Transition FX — riser {fd.riser_start_freq:.0f}→{fd.riser_end_freq:.0f}Hz...")
-
-    _riser_bars = max(BUILD, BUILD2, 8)
-    riser = to_list(synthesize_noise_sweep(RiserPreset(
-        name="Riser", riser_type="noise_sweep", duration_s=BAR * _riser_bars,
-        start_freq=fd.riser_start_freq, end_freq=fd.riser_end_freq,
-        brightness=0.8, intensity=fd.riser_intensity, reverb_amount=0.3
-    )))
-    riser = normalize(riser, fd.riser_intensity * 0.88)
-
-    boom = to_list(synthesize_sub_boom(ImpactPreset(
-        name="Boom", impact_type="sub_boom", duration_s=fd.boom_decay + 0.5,
-        frequency=FREQ["F1"], decay_s=fd.boom_decay,
-        intensity=fd.impact_intensity
-    )))
-    boom = compress(boom, CompressorSettings(
-        threshold_db=-4.0, ratio=10.0, attack_ms=0.3, release_ms=80.0, makeup_db=4.0
-    ))
-    boom = normalize(boom, fd.impact_intensity * 1.02)
-
-    hit = to_list(synthesize_cinematic_hit(ImpactPreset(
-        name="Hit", impact_type="cinematic_hit", duration_s=2.0,
-        frequency=FREQ["F1"] * 2, decay_s=1.5,
-        intensity=fd.impact_intensity
-    )))
-    hit_np = apply_reverb_delay(to_np(hit), ReverbDelayPreset(
-        name="HitVerb", effect_type="plate", decay_time=1.2,
-        diffusion=0.8, mix=0.22
-    ))
-    hit = to_list(hit_np)
-    hit = normalize(hit, fd.impact_intensity * 0.92)
-
-    tape_stop = to_list(synthesize_transition(TransitionPreset(
-        name="TapeStop", fx_type="tape_stop", duration_s=0.8,
-        start_freq=fd.riser_start_freq * 2, end_freq=30.0, brightness=0.6
-    )))
-    tape_stop = normalize(tape_stop, fd.impact_intensity * 0.68)
-
-    pitch_dive = to_list(synthesize_transition(TransitionPreset(
-        name="Dive", fx_type="pitch_dive", duration_s=1.5,
-        start_freq=fd.riser_start_freq * 3.33, end_freq=25.0,
-        brightness=0.5, reverb_amount=0.2
-    )))
-    pitch_dive = normalize(pitch_dive, fd.impact_intensity * 0.63)
-
-    rev_crash = to_list(synthesize_transition(TransitionPreset(
-        name="RevCrash", fx_type="reverse_crash", duration_s=2.0,
-        brightness=fd.riser_intensity * 0.82, reverb_amount=0.3
-    )))
-    rev_crash = normalize(rev_crash, fd.riser_intensity * 0.65)
-
-    stutter = to_list(synthesize_stutter(GlitchPreset(
-        name="Stut", glitch_type="stutter", frequency=FREQ["F3"],
-        duration_s=BEAT * 2, rate=fd.stutter_rate,
-        depth=0.9, distortion=fd.vocal_chop_distortion * 0.8
-    )))
-    stutter = normalize(stutter, fd.impact_intensity * 0.68)
-
-    gate_chop = to_list(synthesize_transition(TransitionPreset(
-        name="GateChop", fx_type="gate_chop", duration_s=BAR * 2,
-    # hat_pattern kept for backward compat (outro / breakdown still reference it)
-        gate_divisions=int(fd.stutter_rate), brightness=0.5
-    )))
-    gate_chop = normalize(gate_chop, fd.riser_intensity * 0.53)
-
-    # ═══ SPRINT 2 — Bus routing + signal chain ════
-    print("  🔧 SPRINT 2 — Bus routing + signal chain...")
-    _signal_chain = build_render_signal_chain(dna)
-    log_milestone(_session_logger, "Sound design complete — all elements rendered")
-
-    # ═══════════════════════════════════════════
-    #  GROOVE — Grooved hat patterns
-    # ═══════════════════════════════════════════
-    print("  [7/9] Groove patterns...")
-
-    def make_hat_events_bar():
-        events = []
-        _hat_steps = getattr(dd, 'hat_density', 16)
-        for i in range(_hat_steps):
-            vel = 0.6 + 0.3 * ((i % 4) == 0)
-            if i % 4 == 2:
-                vel *= 0.7
-            events.append(NoteEvent(
-                time=i * (BAR / _hat_steps),
-                duration=0.03, pitch=42, velocity=vel
-            ))
-        grooved = groove_eng.apply_groove(
-            events, GROOVE_TEMPLATES.get("dubstep_halftime")
+        # ═══ MWP PHASE 1: ORACLE ═════════════════════════
+        # Brain: ARCHITECT — understand DNA, analyze references
+        # Wired: song_dna, dojo, recipe_book, dsp_core
+        # Available: audio_analyzer, reference_analyzer, emulator, style_transfer
+        if workflow:
+            workflow._run_hooks("pre_oracle", ctx)
+    
+        # ═══ DNA SETUP ═══════════════════════════════════
+        if dna is None:
+            dna = _default_v5_dna()
+    
+        # ═══ DOJO SESSION — Governor (Sprint 1) ═══════════
+        from engine.dojo import DojoSession, DojoPhase, DojoBrain, BeltRank
+        from engine.recipe_book import select_recipe, check_quality_gate
+    
+        # Sprint 5: Dynamic belt from cross-session memory
+        _current_belt_str = load_current_belt()
+        _belt_rank = getattr(BeltRank, _current_belt_str.upper(), BeltRank.WHITE)
+        _dojo = DojoSession(belt=_belt_rank, total_session_s=840.0)
+        _dojo.begin_session()
+        _recipe = select_recipe(
+            style=getattr(dna, 'style', 'dubstep'),
+            mood=getattr(dna, 'mood', ''),
+            reference_dna=dna,
         )
-        grooved = groove_eng.humanize(grooved, timing_ms=5, velocity_pct=8)
-        return grooved
-
-    hat_pattern = make_hat_events_bar()
-
-    # ═══ QUALITY GATE: SKETCH → ARRANGE ═══════════════
-    # Count sound elements generated in sketch phase
-    _sketch_elements = 0
-    for _var_name in ['kick', 'snare', 'hat_c', 'hat_o', 'clap', 'sub',
-                      'fm_growl', 'growl_wt', 'dist_fm', 'sync_bass',
-                      'acid_bass', 'neuro_bass', 'formant_bass',
-                      'dark_pad', 'lush', 'drone', 'riser',
-                      'boom', 'hit', 'drop_noise']:
-        if _var_name in dir() and locals().get(_var_name) is not None:
-            _sketch_elements += 1
-    _dojo.check_quality_gate(DojoPhase.SKETCH, [
-        {"name": "Sound Elements", "value": _sketch_elements,
-         "target_min": 8, "target_max": 50, "unit": "elements"},
-    ])
-
-    # ── Pack SKETCH outputs ──
-    ctx.kick, ctx.snare, ctx.hat_c, ctx.hat_o, ctx.clap = kick, snare, hat_c, hat_o, clap
-    ctx.sub, ctx.bass_arsenal, ctx.bass_repeat = sub, bass_arsenal, bass_repeat
-    ctx.lead_notes, ctx.lead_notes_long = lead_notes, lead_notes_long
-    ctx.chord_notes_l, ctx.chord_notes_r = chord_notes_l, chord_notes_r
-    ctx.vocal_chops, ctx.dark_pad, ctx.drone = vocal_chops, dark_pad, drone
-    ctx.lush, ctx.drop_noise, ctx.reese = lush, drop_noise, reese
-    ctx.riser, ctx.boom, ctx.hit = riser, boom, hit
-    ctx.tape_stop, ctx.pitch_dive, ctx.rev_crash = tape_stop, pitch_dive, rev_crash
-    ctx.stutter, ctx.gate_chop, ctx.hat_pattern = stutter, gate_chop, hat_pattern
-    if workflow:
-        workflow._run_hooks("post_sketch", ctx)
-
-    # ── SKETCH audit: individual element WAVs ──
-    _sketch_dir = _phase_base / "04_SKETCH"
-    _sketch_inventory = {}
-    for _el_name, _el_sig in [
-        ("kick", kick), ("snare", snare), ("hat_c", hat_c), ("hat_o", hat_o),
-        ("clap", clap), ("sub", sub), ("dark_pad", dark_pad), ("drone", drone),
-        ("lush", lush), ("drop_noise", drop_noise), ("riser", riser),
-        ("boom", boom), ("hit", hit), ("tape_stop", tape_stop),
-        ("pitch_dive", pitch_dive), ("rev_crash", rev_crash),
-        ("stutter", stutter), ("gate_chop", gate_chop),
-    ]:
-        if _el_sig:
-            _write_audit_wav_mono(_sketch_dir, f"{_el_name}.wav", _el_sig)
-            _sketch_inventory[_el_name] = {
-                "samples": len(_el_sig),
-                "duration_s": round(len(_el_sig) / SR, 3),
-                "peak": round(max(abs(s) for s in _el_sig), 4),
-            }
-    # Bass arsenal — write each variant
-    if bass_arsenal:
-        for _bi, (_bname, _bsig) in enumerate(bass_arsenal):
-            if _bsig:
-                _write_audit_wav_mono(_sketch_dir, f"bass_{_bname}.wav", _bsig)
-                _sketch_inventory[f"bass_{_bname}"] = {
-                    "samples": len(_bsig),
-                    "duration_s": round(len(_bsig) / SR, 3),
+    
+        _dojo.begin_phase(DojoPhase.ORACLE)
+        print(_dojo.phase_banner(DojoPhase.ORACLE,
+              "Understanding DNA, analyzing references — ARCHITECT BRAIN..."))
+    
+        # Import DSP primitives needed throughout
+        from engine.dsp_core import svf_highpass, svf_lowpass, multiband_compress
+    
+        # Shadow module-level timing constants with DNA values
+        BEAT = 60.0 / dna.bpm
+        BAR = BEAT * 4
+    
+        def samples(beats: float) -> int:
+            return int(beats * BEAT * SR)
+    
+        # Scale-degree frequency helper
+        intervals = SCALE_INTERVALS.get(dna.scale, [0, 2, 3, 5, 7, 8, 10])
+    
+        def n(degree: int, octave: int) -> float:
+            """Scale degree → Hz. n(0,1)=root@oct1, n(2,3)=3rd@oct3."""
+            semi = intervals[degree % len(intervals)]
+            return dna.root_freq * (2.0 ** (octave - 1)) * (2.0 ** (semi / 12.0))
+    
+        # Build FREQ lookup from DNA (shadows module-level FREQ)
+        # Maps same keys V5 code used → DNA-key frequencies
+        FREQ = {
+            "F1": n(0, 1), "F2": n(0, 2), "F3": n(0, 3), "F4": n(0, 4),
+            "G2": n(1, 2), "G3": n(1, 3), "G4": n(1, 4),
+            "Ab1": n(2, 1), "Ab2": n(2, 2), "Ab3": n(2, 3), "Ab4": n(2, 4),
+            "Bb1": n(3, 1), "Bb2": n(3, 2), "Bb3": n(3, 3),
+            "C2": n(4, 1), "C3": n(4, 2), "C4": n(4, 3),
+            "Db2": n(5, 1), "Db3": n(5, 2), "Db4": n(5, 3),
+            "Eb2": n(6, 1), "Eb3": n(6, 2), "Eb4": n(6, 3),
+        }
+    
+        # Shorthand aliases for DNA sub-specifications
+        dd = dna.drums
+        bd = dna.bass
+        ld = dna.lead
+        ad = dna.atmosphere
+        fd = dna.fx
+        md = dna.mix
+    
+        # Derive note names for vocal chops from DNA key
+        _root_idx = NOTES.index(dna.key) if dna.key in NOTES else 5
+        _fifth_idx = (_root_idx + intervals[4 % len(intervals)]) % 12
+        _root_note3 = f"{dna.key}3"
+        _fifth_note3 = f"{NOTES[_fifth_idx]}3"
+    
+        # Extract arrangement section bars
+        sec_map = {s.name: s.bars for s in dna.arrangement}
+        INTRO = sec_map.get("intro", 8)
+        BUILD = sec_map.get("build", 4)
+        DROP1 = sec_map.get("drop1", sec_map.get("drop1b", 16))
+        BREAK_ = sec_map.get("break", 8)
+        BUILD2 = sec_map.get("build2", 4)
+        DROP2 = sec_map.get("drop2", sec_map.get("drop2b", 16))
+        OUTRO = sec_map.get("outro", 8)
+        # Recalculate total_bars from ONLY rendered sections (excludes verse1/drop1b etc)
+        total_bars = INTRO + BUILD + DROP1 + BREAK_ + BUILD2 + DROP2 + OUTRO
+        total_s = samples(total_bars * 4)
+    
+        song_label = dna.name or "dubstep_track"
+        safe_name = song_label.lower().replace(" ", "_").replace("'", "")
+    
+        # ── Phase Audit: per-phase output folders ──
+        _phase_base = _init_phase_audit(safe_name)
+        _phase_t0 = time.perf_counter()
+    
+        print(f"\n═══ RENDERING: {dna.name} ═══")
+        print(f"  {dna.key} {dna.scale} @ {dna.bpm} BPM | {total_bars} bars | Mood: {dna.mood_name}")
+        print(f"  Bass: {' → '.join(dna.bass_rotation[:5])}")
+        print(f"  Arrangement: {' → '.join(s.name for s in dna.arrangement)}")
+        print(f"  Drums: kick@{dd.kick_pitch:.0f}Hz drive={dd.kick_drive:.2f} | snare@{dd.snare_pitch:.0f}Hz")
+        print(f"  Bass: FM depth={bd.fm_depth:.1f} dist={bd.distortion:.2f} | Lead: {ld.additive_partials}p {ld.additive_rolloff}")
+        print(f"  Mix: {md.target_lufs:.1f} LUFS target | ceiling={md.ceiling_db:.1f} dB")
+    
+        sat = SaturationEngine(sample_rate=SR)
+        panner = PanningEngine(sample_rate=SR)
+        groove_eng = GrooveEngine(bpm=dna.bpm, sample_rate=SR)
+    
+        # ── Rhythm Engine — pattern-driven drum placement ──
+        _energy = getattr(dna, 'energy', 0.7)
+        if hasattr(dna, 'mood') and isinstance(dna.mood, str):
+            if any(w in dna.mood.lower() for w in ('aggressive', 'rage', 'fury', 'war')):
+                _energy = max(_energy, 0.8)
+        rhythm_eng = RhythmEngine.from_drum_dna(
+            dd, bpm=dna.bpm, energy=_energy, seed=hash(dna.name) & 0xFFFF)
+        print(f"  {rhythm_eng.describe()}")
+    
+        # ═══ PHASE 1 — Methodology Integration ════════════
+        print("\n  🔧 STAGE INTEGRATION — Phase 1: Mood + Energy + Chords...")
+        dna = enhance_dna(dna)
+        energy_map = build_energy_map(dna)
+        # Re-alias after DNA enhancement
+        dd = dna.drums
+        bd = dna.bass
+        ld = dna.lead
+        ad = dna.atmosphere
+        fd = dna.fx
+        md = dna.mix
+    
+        # ── Pack ORACLE outputs ──
+        ctx.dna, ctx.BEAT, ctx.BAR, ctx.FREQ = dna, BEAT, BAR, FREQ
+        ctx.dd, ctx.bd, ctx.ld, ctx.ad, ctx.fd, ctx.md = dd, bd, ld, ad, fd, md
+        ctx.intervals, ctx._dojo, ctx.energy_map = intervals, _dojo, energy_map
+        ctx.sat, ctx.panner = sat, panner
+        ctx.groove_eng, ctx.rhythm_eng = groove_eng, rhythm_eng
+        ctx.INTRO, ctx.BUILD, ctx.DROP1 = INTRO, BUILD, DROP1
+        ctx.BREAK_, ctx.BUILD2, ctx.DROP2, ctx.OUTRO = BREAK_, BUILD2, DROP2, OUTRO
+        ctx.total_bars, ctx.total_s, ctx.safe_name = total_bars, total_s, safe_name
+        ctx.samples_fn, ctx.n_fn = samples, n
+        if workflow:
+            workflow._run_hooks("post_oracle", ctx)
+    
+        # ── ORACLE audit ──
+        _oracle_dir = _phase_base / "01_ORACLE"
+        _write_audit_json(_oracle_dir, "dna.json", {
+            "name": dna.name, "key": dna.key, "scale": dna.scale,
+            "bpm": dna.bpm, "mood_name": dna.mood_name,
+            "bass_rotation": dna.bass_rotation[:5],
+            "arrangement": [{"name": s.name, "bars": s.bars} for s in dna.arrangement],
+            "drums": {"kick_pitch": dd.kick_pitch, "kick_drive": dd.kick_drive,
+                      "snare_pitch": dd.snare_pitch},
+            "bass": {"fm_depth": bd.fm_depth, "distortion": bd.distortion},
+            "lead": {"partials": ld.additive_partials, "rolloff": ld.additive_rolloff},
+            "mix": {"target_lufs": md.target_lufs, "ceiling_db": md.ceiling_db},
+        })
+        _write_audit_json(_oracle_dir, "render_config.json", {
+            "sr": SR, "bpm": dna.bpm, "beat_s": BEAT, "bar_s": BAR,
+            "total_bars": total_bars, "total_samples": total_s,
+            "sections": {"intro": INTRO, "build": BUILD, "drop1": DROP1,
+                         "break": BREAK_, "build2": BUILD2, "drop2": DROP2,
+                         "outro": OUTRO},
+            "energy_map": {k: str(v) for k, v in energy_map.items()}
+            if isinstance(energy_map, dict) else str(energy_map),
+        })
+        _emit_phase_log(_oracle_dir, "ORACLE", time.perf_counter() - _phase_t0)
+        _phase_t0 = time.perf_counter()
+    
+        # ═══ MWP PHASE 2: COLLECT ═════════════════════════
+        # Brain: CHILD — gather freely, no judgment
+        # Wired: stage_integrations (tuning, session, memory, lessons, sample_library)
+        # Available: sample_pack_builder, batch_processor, format_converter
+        _dojo.begin_phase(DojoPhase.COLLECT)
+        print(_dojo.phase_banner(DojoPhase.COLLECT,
+              "Gathering tools, samples, session state — CHILD BRAIN..."))
+        if workflow:
+            workflow._run_hooks("pre_collect", ctx)
+    
+        # ═══ SPRINT 1 — Phase 1: Tuning + Arrangement ════
+        print("  🔧 SPRINT 1 — Phase 1: Tuning validation + arrangement template...")
+        validate_tuning_432(FREQ)
+        _arrangement_template = get_arrangement_template(dna)
+    
+        # ═══ SPRINT 2 — Phase 1: Session + Memory + Lessons + Evolution ════
+        print("  🔧 SPRINT 2 — Phase 1: Session, memory, lessons, evolution...")
+        _mem_engine = begin_render_session(dna)
+        _session_logger = create_session_logger(dna)
+        _lessons = get_lessons_adjustments(dna)
+        _evo_params = get_evolution_preset(dna)
+        _markov_melody = generate_markov_melody(dna, FREQ["F3"], SR)
+        _trance_arp = add_trance_arp_layer(dna, root_semitone=0)
+        log_milestone(_session_logger, "Phase 1 complete — DNA enhanced")
+    
+        # ═══ DOJO SPRINT 2 — COLLECT: Sample Library + 128 Rack ════
+        print("  🔧 DOJO SPRINT 2 — COLLECT: Sample library, 128 Rack, palette...")
+        _sample_lib = init_sample_library(dna)
+        _galatcia = init_galatcia_catalog()
+        _curated_palette = curate_sound_palette(dna, _sample_lib, _galatcia)
+        _rack_128 = build_128_rack_from_palette(_curated_palette, dna)
+        _loop_slices = slice_loops_to_oneshots(_sample_lib, dna, sr=SR)
+        _wav_pool = init_wav_pool("output")
+        _preset_browser = init_preset_browser()
+        _ref_tempo_key = detect_reference_tempo_key(dna, sr=SR)
+        _tonal_colors = generate_tonal_palette(dna)
+        log_milestone(_session_logger, "COLLECT complete — 128 Rack populated")
+    
+        # ── Pack COLLECT outputs ──
+        ctx._mem_engine = _mem_engine
+        ctx._session_logger = _session_logger
+        if workflow:
+            workflow._run_hooks("post_collect", ctx)
+    
+        # ── COLLECT audit ──
+        _collect_dir = _phase_base / "02_COLLECT"
+        _write_audit_json(_collect_dir, "sample_inventory.json", {
+            "sample_library": str(_sample_lib) if _sample_lib else None,
+            "galatcia_catalog": str(_galatcia) if _galatcia else None,
+            "curated_palette": str(_curated_palette) if _curated_palette else None,
+            "rack_128_slots": len(_rack_128) if isinstance(_rack_128, (list, dict)) else str(_rack_128),
+            "loop_slices": len(_loop_slices) if isinstance(_loop_slices, (list, dict)) else str(_loop_slices),
+            "tonal_colors": str(_tonal_colors),
+            "ref_tempo_key": str(_ref_tempo_key),
+        })
+        _emit_phase_log(_collect_dir, "COLLECT", time.perf_counter() - _phase_t0)
+        _phase_t0 = time.perf_counter()
+    
+        # ═══ MWP PHASE 3: RECIPES ═════════════════════════
+        # Brain: ARCHITECT — templates, blueprints, variation planning
+        # Wired: template_engine, macro_presets, genetic_evolution, serum_blueprint
+        # Available: randomizer, preset_vcs, snapshot_manager, plugin_scaffold
+        _dojo.begin_phase(DojoPhase.RECIPES)
+        print(_dojo.phase_banner(DojoPhase.RECIPES,
+              "Planning templates, blueprints, variations — ARCHITECT BRAIN..."))
+        if workflow:
+            workflow._run_hooks("pre_recipes", ctx)
+    
+        # ═══ SPRINT 3 — Phase 1: Templates + Macros + Evolution ════
+        print("  🔧 SPRINT 3 — Templates, macros, genetic evolution...")
+        _template_config = generate_template_config(dna)
+        _macro_presets = get_macro_presets(dna)
+        _evolved_patch = evolve_patch(dna)
+        _mutated_preset = mutate_preset_patch(dna)
+        _serum_blueprint = generate_serum_blueprint(dna)
+    
+        # ═══ SPRINT 4 — Phase 1: Scenes + Pipeline checks ════
+        print("  🔧 SPRINT 4 — Scene system, pipeline checks...")
+        _scene_mgr = init_scene_system(dna)
+        _perf_recorder = init_performance_recorder(dna)
+        check_production_pipeline(dna)
+        _subphonics_greeting = process_subphonics_greeting()
+    
+        if workflow:
+            workflow._run_hooks("post_recipes", ctx)
+    
+        # ── RECIPES audit ──
+        _recipes_dir = _phase_base / "03_RECIPES"
+        _write_audit_json(_recipes_dir, "recipes.json", {
+            "template_config": str(_template_config),
+            "macro_presets": str(_macro_presets),
+            "evolved_patch": str(_evolved_patch),
+            "mutated_preset": str(_mutated_preset),
+            "serum_blueprint": str(_serum_blueprint),
+        })
+        _emit_phase_log(_recipes_dir, "RECIPES", time.perf_counter() - _phase_t0)
+        _phase_t0 = time.perf_counter()
+    
+        # ═══ MWP PHASE 4: SKETCH ═════════════════════════
+        # Brain: CHILD — raw sound design, first instincts
+        # Wired: perc_synth, bass_synth, fm_synth, additive_synth, noise_synth,
+        #         lead_synth, formant_synth, pad_synth, granular_synth, ks_synth,
+        #         supersaw, vocal_synth, transition_fx, growl_resample
+        # Available: phase_distortion, vector_synth, vocoder, vocal_tts,
+        #            spectral_morph, spectral_resynthesis, wavetable_morph,
+        #            envelope_generator
+        # ═══════════════════════════════════════════
+        #  SOUND DESIGN — Drums (LAYERED, MULTI-SOURCE)
+        # ═══════════════════════════════════════════
+        _dojo.begin_phase(DojoPhase.SKETCH)
+        print(_dojo.phase_banner(DojoPhase.SKETCH,
+              "Designing sounds, first instincts — CHILD BRAIN, no judgment..."))
+        if workflow:
+            workflow._run_hooks("pre_sketch", ctx)
+        print("  [1/9] Drums — layered synthesis...")
+    
+        # ── KICK ──────────────────────────────────────────
+        # Layer 1: Sub body — perc_synth kick with DNA-driven pitch sweep
+        kick_sub = to_list(synthesize_kick(PercPreset(
+            name="KSub", perc_type="kick", pitch=dd.kick_pitch, duration_s=0.6,
+            decay_s=0.45, tone_mix=0.95, brightness=0.1 + (1 - dd.kick_sub_weight) * 0.15,
+            distortion=dd.kick_drive * 0.36
+        )))
+    
+        # Layer 2: FM body — DNA-driven mod_index and feedback
+        kick_fm_patch = FMPatch(
+            name="KickFM",
+            operators=[
+                FMOperator(freq_ratio=1.0, amplitude=1.0, mod_index=dd.kick_fm_depth,
+                           feedback=dd.kick_drive * 0.36, envelope=(0.001, 0.08, 0.0, 0.05)),
+                FMOperator(freq_ratio=2.0, amplitude=0.8, mod_index=dd.kick_fm_depth * 0.67,
+                           feedback=0.0, envelope=(0.001, 0.04, 0.0, 0.02)),
+            ],
+            algorithm=0, master_gain=0.85,
+        )
+        kick_fm = render_fm(kick_fm_patch, freq=dd.kick_pitch * 1.3, duration=0.3)
+    
+        # Layer 3: Click transient — Karplus-Strong with very high freq, short
+        kick_click = render_ks(KarplusStrongPatch(
+            frequency=2500.0, duration=0.015, damping=0.8, brightness=0.95,
+            stretch=0.0, feedback=0.5, noise_mix=1.0
+        ))
+    
+        # Layer 4: Brown noise sub rumble
+        kick_rumble = to_list(synthesize_noise(NoisePreset(
+            name="KRumble", noise_type="brown", duration_s=0.25,
+            brightness=0.1, gain=0.4, attack_s=0.001, release_s=0.2
+        )))
+    
+        # Mix kick layers
+        kick_len = max(len(kick_sub), len(kick_fm), len(kick_click), len(kick_rumble))
+        kick = [0.0] * kick_len
+        for i in range(len(kick_sub)):
+            kick[i] += kick_sub[i] * 0.35
+        for i in range(len(kick_fm)):
+            kick[i] += kick_fm[i] * 0.35
+        for i in range(len(kick_click)):
+            kick[i] += kick_click[i] * 0.45
+        for i in range(len(kick_rumble)):
+            kick[i] += kick_rumble[i] * 0.2
+    
+        # Process kick — DNA-driven intensity
+        kick = transient_shape(kick, attack_gain=dd.kick_attack, sustain_gain=0.6)
+        kick = compress(kick, CompressorSettings(
+            threshold_db=-4.0, ratio=10.0, attack_ms=0.2, release_ms=35.0, makeup_db=4.0
+        ))
+        kick = sat.saturate(kick, SatConfig(sat_type="tape", drive=dd.kick_drive, mix=0.5))
+        kick = apply_eq_band(kick, center_hz=dd.kick_pitch * 1.3, gain_db=4.0, q=0.5)   # sub weight
+        kick = apply_eq_band(kick, center_hz=3500.0, gain_db=4.0, q=1.2)  # click
+        kick = apply_eq_band(kick, center_hz=300.0, gain_db=-3.0, q=1.0)  # scoop mud
+        kick = normalize(kick, 0.98)
+    
+        # ── SNARE ─────────────────────────────────────────
+        # Layer 1: Tonal body — DNA-driven pitch and mix
+        snare_body = to_list(synthesize_snare(PercPreset(
+            name="SBody", perc_type="snare", pitch=dd.snare_pitch, duration_s=0.3,
+            decay_s=0.15, tone_mix=dd.snare_noise_mix, brightness=0.5,
+            distortion=dd.snare_metallic * 0.67
+        )))
+    
+        # Layer 2: Pink noise tail
+        snare_noise = to_list(synthesize_noise(NoisePreset(
+            name="SNoise", noise_type="pink", duration_s=0.25,
+            brightness=0.5 + dd.snare_noise_mix * 0.4, gain=0.7,
+            attack_s=0.001, release_s=0.18
+        )))
+    
+        # Layer 3: Metallic Karplus ring — DNA metallic control
+        snare_ring = render_ks(KarplusStrongPatch(
+            frequency=dd.snare_pitch * 3.5, duration=0.12,
+            damping=0.4, brightness=dd.hat_brightness,
+            stretch=0.2 + dd.snare_metallic * 0.3,
+            feedback=0.5 + dd.snare_metallic * 0.3, noise_mix=0.8
+        ))
+    
+        # Layer 4: White noise top (transient)
+        snare_top = to_list(synthesize_noise(NoisePreset(
+            name="STop", noise_type="white", duration_s=0.05,
+            brightness=0.95, gain=0.9, attack_s=0.0005, release_s=0.04
+        )))
+    
+        # Mix snare layers
+        snr_len = max(len(snare_body), len(snare_noise), len(snare_ring), len(snare_top))
+        snare_dry = [0.0] * snr_len
+        for i in range(len(snare_body)):
+            snare_dry[i] += snare_body[i] * 0.45
+        for i in range(len(snare_noise)):
+            snare_dry[i] += snare_noise[i] * 0.35
+        for i in range(len(snare_ring)):
+            snare_dry[i] += snare_ring[i] * 0.2
+        for i in range(len(snare_top)):
+            snare_dry[i] += snare_top[i] * 0.3
+    
+        # Process snare — parallel compression
+        snr_compressed = compress(snare_dry, CompressorSettings(
+            threshold_db=-12.0, ratio=8.0, attack_ms=0.3, release_ms=30.0, makeup_db=6.0
+        ))
+        # Blend dry + compressed (parallel compression)
+        snare_pc = [0.0] * len(snare_dry)
+        for i in range(len(snare_dry)):
+            snare_pc[i] = snare_dry[i] * 0.5 + (snr_compressed[i] if i < len(snr_compressed) else 0.0) * 0.5
+    
+        snare_pc = transient_shape(snare_pc, attack_gain=1.5 + dd.snare_compression * 0.1, sustain_gain=0.55)
+        snare_pc = _ott_simulate(snare_pc, dd.snare_ott)
+        snare_pc = sat.saturate(snare_pc, SatConfig(sat_type="transistor", drive=dd.snare_metallic + 0.2, mix=0.35))
+        snare_pc = apply_eq_band(snare_pc, center_hz=dd.snare_pitch * 0.87, gain_db=2.5, q=1.0)  # body
+        snare_pc = apply_eq_band(snare_pc, center_hz=5000.0, gain_db=3.0, q=0.8)  # crack
+        # Plate reverb
+        snr_np = apply_reverb_delay(to_np(snare_pc), ReverbDelayPreset(
+            name="SnrPlate", effect_type="plate", decay_time=0.6,
+            pre_delay_ms=8.0, diffusion=0.85, damping=0.55, mix=0.2
+        ))
+        snare = to_list(snr_np)
+        snare = normalize(snare, 0.93)
+    
+        # ── HATS — DNA-driven Karplus-Strong metallic ─────
+        hat_c_ks = render_ks(KarplusStrongPatch(
+            frequency=dd.hat_frequency, duration=0.06,
+            damping=0.85, brightness=dd.hat_brightness,
+            stretch=0.1 + dd.hat_metallic * 0.3,
+            feedback=0.2 + dd.hat_metallic * 0.3, noise_mix=0.9, pluck_position=0.3
+        ))
+        hat_c_perc = to_list(synthesize_hat(PercPreset(
+            name="HC", perc_type="hat", pitch=dd.hat_frequency * 1.19,
+            duration_s=0.04, decay_s=0.025, tone_mix=0.06,
+            brightness=dd.hat_brightness
+        )))
+        # Mix
+        hc_len = max(len(hat_c_ks), len(hat_c_perc))
+        hat_c = [0.0] * hc_len
+        for i in range(len(hat_c_ks)):
+            hat_c[i] += hat_c_ks[i] * 0.5
+        for i in range(len(hat_c_perc)):
+            hat_c[i] += hat_c_perc[i] * 0.5
+        hat_c = apply_eq_band(hat_c, center_hz=10000.0, gain_db=3.0, q=0.4)
+        hat_c = sat.saturate(hat_c, SatConfig(sat_type="tape", drive=0.3, mix=0.25))
+        hat_c = normalize(hat_c, 0.85)
+    
+        # Open hat: longer Karplus + noise — DNA-driven
+        hat_o_ks = render_ks(KarplusStrongPatch(
+            frequency=dd.hat_frequency * 0.81, duration=0.25,
+            damping=0.3, brightness=dd.hat_brightness * 0.95,
+            stretch=0.08 + dd.hat_metallic * 0.2,
+            feedback=0.4 + dd.hat_metallic * 0.3, noise_mix=0.85
+        ))
+        hat_o_noise = to_list(synthesize_noise(NoisePreset(
+            name="HO", noise_type="white", duration_s=0.2,
+            brightness=dd.hat_brightness * 0.9, gain=0.5,
+            attack_s=0.001, release_s=0.15
+        )))
+        ho_len = max(len(hat_o_ks), len(hat_o_noise))
+        hat_o = [0.0] * ho_len
+        for i in range(len(hat_o_ks)):
+            hat_o[i] += hat_o_ks[i] * 0.55
+        for i in range(len(hat_o_noise)):
+            hat_o[i] += hat_o_noise[i] * 0.45
+        hat_o = normalize(hat_o, 0.78)
+    
+        # ── CLAP — DNA-driven brightness + reverb ────────
+        clap = to_list(synthesize_clap(PercPreset(
+            name="CL", perc_type="clap", pitch=dd.snare_pitch * 1.09,
+            duration_s=0.3, decay_s=0.18, tone_mix=0.1,
+            brightness=dd.clap_brightness
+        )))
+        clap = compress(clap, CompressorSettings(
+            threshold_db=-8.0, ratio=5.0, attack_ms=0.3, release_ms=25.0, makeup_db=3.5
+        ))
+        clap = sat.harmonic_exciter(clap, amount=0.3, frequency=4000)
+        clap_np = apply_reverb_delay(to_np(clap), ReverbDelayPreset(
+            name="ClapVerb", effect_type="plate", decay_time=0.3 + dd.clap_reverb,
+            diffusion=0.7, damping=0.6, mix=dd.clap_reverb
+        ))
+        clap = to_list(clap_np)
+        clap = normalize(clap, 0.82)
+    
+        # ═══ SPRINT 1 — Pipeline readiness checks ════════
+        check_drum_pipeline(dna, SR)
+    
+        # ═══════════════════════════════════════════
+        #  SOUND DESIGN — Bass (DNA-DRIVEN, 7 types)
+        # ═══════════════════════════════════════════
+        print(f"  [2/9] Bass — {bd.primary_type}/{bd.secondary_type}/{bd.tertiary_type}...")
+    
+        # SUB — clean root sub with DNA sub_weight
+        sub = to_list(synthesize_bass(BassPreset(
+            name="Sub", bass_type="sub_sine", frequency=FREQ["F1"],
+            duration_s=BEAT * 2, attack_s=0.002, release_s=0.1
+        )))
+        sub = apply_eq_band(sub, center_hz=FREQ["F1"] * 1.03, gain_db=bd.sub_weight * 1.0, q=0.6)
+        # DNA sub_weight scales normalize target — pro mixes keep sub controlled
+        _sub_norm = 0.35 * (0.5 + 0.5 * bd.sub_weight)  # range ~0.18 to 0.35
+        sub = normalize(sub, min(_sub_norm, 0.40))
+        # ═══ SPRINT 1 — Sub bass enhancement ═════════════
+        sub = enhance_sub_bass(sub, dna, FREQ["F1"], SR)
+    
+        # BASS 1: FM Growl — DNA-driven mod_index, feedback, depth
+        print(f"    FM Growl (depth={bd.fm_depth:.1f})...")
+        fm_growl_patch = FMPatch(
+            name="GrowlFM",
+            operators=[
+                FMOperator(freq_ratio=1.0, amplitude=1.0, mod_index=bd.fm_depth,
+                           feedback=bd.fm_feedback, envelope=(0.005, 0.08, 0.85, 0.15)),
+                FMOperator(freq_ratio=2.0, amplitude=0.9, mod_index=bd.fm_depth * 0.7,
+                           feedback=bd.fm_feedback * 0.58, envelope=(0.003, 0.1, 0.75, 0.12)),
+                FMOperator(freq_ratio=PHI, amplitude=0.5, mod_index=bd.fm_depth * 0.4,
+                           feedback=0.0, envelope=(0.001, 0.06, 0.55, 0.08)),
+            ],
+            algorithm=0, master_gain=0.8,
+        )
+        fm_growl_raw = render_fm(fm_growl_patch, freq=FREQ["F2"], duration=BEAT * 2)
+        fm_growl_np = to_np(fm_growl_raw)
+        # LFO wobble — DNA rate and depth
+        lfo_fg = generate_lfo(LFOPreset(
+            name="FMLfo", lfo_type="sine", rate_hz=bd.lfo_rate,
+            depth=bd.lfo_depth, polarity="unipolar", sync_bpm=float(dna.bpm),
+            sync_division=2.0
+        ), duration_s=BEAT * 2, sample_rate=SR)
+        # Ensure LFO matches audio length (resample if needed)
+        if len(lfo_fg) < len(fm_growl_np):
+            lfo_fg = np.interp(
+                np.linspace(0, 1, len(fm_growl_np)),
+                np.linspace(0, 1, len(lfo_fg)),
+                lfo_fg,
+            )
+        fm_growl_np = fm_growl_np * (0.2 + 0.8 * lfo_fg[:len(fm_growl_np)])
+        # UNISON — 5 detuned voices for massive width
+        fm_growl_np = np.array(_unison_bass(fm_growl_np, n_voices=5, detune_cents=12.0))
+        # STACKED DISTORTION — 3 serial stages (tube → tape → aggressive)
+        fm_growl_np = _stack_distortion(fm_growl_np, drive=bd.mid_drive * 2.0, stages=3)
+        fm_growl = to_list(fm_growl_np)
+        fm_growl = _ott_simulate(fm_growl, min(bd.ott_amount * 1.3, 1.0))
+        fm_growl = normalize(fm_growl, 0.65)
+    
+        # BASS 2: Growl Resampler — DNA fm_depth drives wavetable character
+        print("    Growl Resampler wavetable...")
+        growl_source = generate_fm_source(size=WAVETABLE_SIZE, fm_ratio=PHI,
+                                           fm_depth=bd.fm_depth * 0.4)
+        growl_frames = growl_resample_pipeline(growl_source, n_output_frames=256)
+        growl_wt_np = _wavetable_to_audio(growl_frames, freq=FREQ["F2"],
+                                           duration_s=BEAT * 2, sr=SR)
+        # UNISON — 5 voices for Subtronics-tier width
+        growl_wt_np = np.array(_unison_bass(growl_wt_np, n_voices=5, detune_cents=10.0))
+        # STACKED DISTORTION — 3 stages
+        growl_wt_np = _stack_distortion(growl_wt_np, drive=bd.mid_drive * 2.0, stages=3)
+        growl_wt = to_list(growl_wt_np)
+        growl_wt = _ott_simulate(growl_wt, min(bd.ott_amount * 1.3, 1.0))
+        growl_wt = normalize(growl_wt, 0.62)
+    
+        # BASS 3: Dist FM — DNA distortion + filter
+        print(f"    Dist FM (dist={bd.distortion:.2f})...")
+        dist_fm = to_list(synthesize_bass(BassPreset(
+            name="DistFM", bass_type="dist_fm", frequency=FREQ["F2"],
+            duration_s=BEAT, fm_ratio=2.5, fm_depth=bd.fm_depth * 0.4,
+            distortion=bd.distortion, filter_cutoff=bd.filter_cutoff
+        )))
+        dist_fm_np = to_np(dist_fm)
+        # UNISON — 5 voices
+        dist_fm_np = np.array(_unison_bass(dist_fm_np, n_voices=5, detune_cents=14.0))
+        # STACKED DISTORTION — 3 stages
+        dist_fm_np = _stack_distortion(dist_fm_np, drive=bd.mid_drive * 2.5, stages=3)
+        dist_fm = to_list(dist_fm_np)
+        dist_fm = _ott_simulate(dist_fm, min(bd.ott_amount * 1.3, 1.0))
+        dist_fm = normalize(dist_fm, 0.62)
+    
+        # BASS 4: Sync bass — DNA lfo_rate drives sweep
+        print("    Sync bass...")
+        sync_bass = to_list(synthesize_bass(BassPreset(
+            name="Sync", bass_type="sync", frequency=FREQ["F2"],
+            duration_s=BEAT * 1.5, distortion=bd.distortion * 0.78,
+            filter_cutoff=bd.filter_cutoff
+        )))
+        sync_np = to_np(sync_bass)
+        lfo_sync = generate_lfo(LFOPreset(
+            name="SyncLFO", lfo_type="triangle", rate_hz=bd.lfo_rate * 1.2,
+            depth=bd.lfo_depth * 0.88, polarity="unipolar"
+        ), duration_s=BEAT * 1.5, sample_rate=SR)
+        if len(lfo_sync) < len(sync_np):
+            lfo_sync = np.interp(
+                np.linspace(0, 1, len(sync_np)),
+                np.linspace(0, 1, len(lfo_sync)),
+                lfo_sync,
+            )
+        sync_np = sync_np * (0.3 + 0.7 * lfo_sync[:len(sync_np)])
+        # UNISON — 5 voices
+        sync_np = np.array(_unison_bass(sync_np, n_voices=5, detune_cents=10.0))
+        # STACKED DISTORTION — 3 stages
+        sync_np = _stack_distortion(sync_np, drive=bd.mid_drive * 2.0, stages=3)
+        sync_bass = to_list(sync_np)
+        sync_bass = _ott_simulate(sync_bass, min(bd.ott_amount * 1.2, 1.0))
+        sync_bass = normalize(sync_bass, 0.60)
+    
+        # BASS 5: Acid bass — DNA acid_resonance drives filter character
+        print(f"    Acid bass (res={bd.acid_resonance:.2f})...")
+        acid = to_list(synthesize_bass(BassPreset(
+            name="Acid", bass_type="acid", frequency=FREQ["F2"],
+            duration_s=BEAT * 2, distortion=bd.distortion * 0.72,
+            filter_cutoff=bd.filter_cutoff * 1.12
+        )))
+        acid_np = to_np(acid)
+        # UNISON — 5 voices
+        acid_np = np.array(_unison_bass(acid_np, n_voices=5, detune_cents=8.0))
+        # STACKED DISTORTION — 2 stages (acid needs to keep filter character)
+        acid_np = _stack_distortion(acid_np, drive=bd.mid_drive * 1.8, stages=2)
+        acid = to_list(acid_np)
+        acid = _ott_simulate(acid, min(bd.ott_amount * 1.1, 1.0))
+        acid = normalize(acid, 0.58)
+    
+        # BASS 6: Neuro — DNA fm_depth + lfo_rate for phase distortion chaos
+        print(f"    Neuro bass (fm={bd.fm_depth:.1f})...")
+        neuro = to_list(synthesize_bass(BassPreset(
+            name="Neuro", bass_type="neuro", frequency=FREQ["F2"],
+            duration_s=BEAT, fm_ratio=3.0, fm_depth=bd.fm_depth * 0.6,
+            distortion=bd.distortion, filter_cutoff=bd.filter_cutoff * 0.88
+        )))
+        neuro_np = to_np(neuro)
+        lfo_n = generate_lfo(LFOPreset(
+            name="NroLFO", lfo_type="square", rate_hz=bd.lfo_rate * 1.6,
+            depth=bd.lfo_depth * 0.94, polarity="unipolar", pulse_width=0.3
+        ), duration_s=BEAT, sample_rate=SR)
+        if len(lfo_n) < len(neuro_np):
+            lfo_n = np.interp(
+                np.linspace(0, 1, len(neuro_np)),
+                np.linspace(0, 1, len(lfo_n)),
+                lfo_n,
+            )
+        neuro_np = neuro_np * (0.25 + 0.75 * lfo_n[:len(neuro_np)])
+        # UNISON — 7 voices for maximum chaos
+        neuro_np = np.array(_unison_bass(neuro_np, n_voices=7, detune_cents=15.0))
+        # STACKED DISTORTION — 3 stages, HARDEST of all bass types
+        neuro_np = _stack_distortion(neuro_np, drive=bd.mid_drive * 3.0, stages=3)
+        neuro = to_list(neuro_np)
+        neuro = _ott_simulate(neuro, min(bd.ott_amount * 1.4, 1.0))
+        neuro = normalize(neuro, 0.58)
+    
+        # BASS 7: Formant "yoi" — DNA distortion + brightness
+        print("    Formant bass...")
+        formant_raw = synthesize_morph_formant(FormantPreset(
+            name="Yoi", formant_type="morph", frequency=FREQ["F2"],
+            duration_s=BEAT * 2, bandwidth=110.0,
+            brightness=0.5 + bd.filter_cutoff * 0.38,
+            distortion=bd.distortion * 0.44
+        ))
+        form_np = to_np(formant_raw)
+        # UNISON — 5 voices
+        form_np = np.array(_unison_bass(form_np, n_voices=5, detune_cents=10.0))
+        # STACKED DISTORTION — 3 stages
+        form_np = _stack_distortion(form_np, drive=bd.mid_drive * 2.0, stages=3)
+        formant = to_list(form_np)
+        formant = _ott_simulate(formant, min(bd.ott_amount * 1.2, 1.0))
+        formant = normalize(formant, 0.58)
+    
+        # Pitch-dive variant — DNA pitch_dive_semi
+        dive_raw = to_list(fm_growl)
+        dive_np = to_np(dive_raw)
+        dive_np = apply_pitch_automation(dive_np, PitchAutoPreset(
+            name="BassDive", auto_type="dive", start_semitones=0.0,
+            end_semitones=-bd.pitch_dive_semi, duration_s=BEAT * 2,
+            curve_exp=3.0
+        ), base_freq=FREQ["F2"])
+        dive_bass = to_list(dive_np)
+        dive_bass = normalize(dive_bass, 0.85)
+    
+        # Reese — detuned saws
+        reese = to_list(synthesize_bass(BassPreset(
+            name="Reese", bass_type="reese", frequency=FREQ["F2"],
+            duration_s=BAR, detune_cents=25.0, filter_cutoff=0.35,
+            attack_s=0.3, release_s=0.5
+        )))
+        reese = sat.warmth(reese, amount=0.5)
+        reese = normalize(reese, 0.72)
+    
+        # Bass fills — DNA stutter_rate
+        bass_repeat = apply_beat_repeat(dist_fm, BeatRepeatPatch(
+            name="BassGlitch", grid="1/16", repeats=8, decay=0.15,
+            pitch_shift=-3.0, reverse_probability=fd.beat_repeat_probability,
+            gate=0.75
+        ), bpm=float(dna.bpm))
+        bass_repeat = normalize(bass_repeat, 0.7)
+    
+        # Arsenal for rotation
+        bass_arsenal = [fm_growl, growl_wt, dist_fm, sync_bass, acid, neuro, formant]
+    
+        # ── Cutting-edge: wavefold + bitcrush if DNA demands it ──
+        if bd.wavefold_thresh > 0.0 and bd.wavefold_thresh < 1.0:
+            def _wavefold(sig, thresh):
+                """Analog-style wavefolding — creates dense harmonics."""
+                out = list(sig)
+                inv_t = 1.0 / max(thresh, 0.01)
+                for i in range(len(out)):
+                    x = out[i] * inv_t
+                    # Triangle-fold: keeps within [-1, 1] while adding harmonics
+                    x = 4 * abs((x / 4 + 0.25) % 1 - 0.5) - 1
+                    out[i] = x * thresh
+                return out
+            bass_arsenal = [_wavefold(b, bd.wavefold_thresh) for b in bass_arsenal]
+            fm_growl = _wavefold(fm_growl, bd.wavefold_thresh)
+            neuro = _wavefold(neuro, bd.wavefold_thresh)
+            dist_fm = _wavefold(dist_fm, bd.wavefold_thresh)
+            print(f"    wavefold @ {bd.wavefold_thresh:.2f} thresh")
+    
+        if bd.bitcrush_bits > 0:
+            def _bitcrush(sig, bits):
+                """Digital degradation — quantize to N bits."""
+                levels = 2 ** bits
+                out = list(sig)
+                for i in range(len(out)):
+                    out[i] = round(out[i] * levels) / levels
+                return out
+            bass_arsenal = [_bitcrush(b, bd.bitcrush_bits) for b in bass_arsenal]
+            fm_growl = _bitcrush(fm_growl, bd.bitcrush_bits)
+            neuro = _bitcrush(neuro, bd.bitcrush_bits)
+            dist_fm = _bitcrush(dist_fm, bd.bitcrush_bits)
+            print(f"    bitcrush @ {bd.bitcrush_bits} bits")
+    
+        # ═══ SPRINT 1 — Midbass pipeline readiness ══════════
+        check_midbass_pipeline(dna, SR)
+    
+        # ═══ SPRINT 2 — Bass: Wave folder + Ring mod enrichment ════
+        print("  🔧 SPRINT 2 — Bass enrichment: wave folder + ring mod...")
+        bass_arsenal = apply_wave_folder_bass(bass_arsenal, dna)
+        bass_arsenal = apply_ring_mod_bass(bass_arsenal, dna, FREQ["F2"], SR)
+        log_milestone(_session_logger, "Bass enrichment complete")
+    
+        # ═══ SPRINT 3 — VIP bass mutation ════
+        _vip_result = apply_vip_bass_mutation(
+            getattr(bd, 'bass_type', 'reese'), FREQ["F2"], duration_s=0.8, sr=SR)
+    
+        # ═══ PHASE 2 — Sound Architecture ══════════════════
+        print("\n  🔧 STAGE INTEGRATION — Phase 2: Riddim + Wobble bass palette...")
+        bass_arsenal = enhance_bass_palette(bass_arsenal, dna, SR, BEAT, FREQ["F2"])
+        psbs_info = get_psbs_info(FREQ["F1"])
+    
+        # ═══ SPRINT 2 — Harmonic enrichment + resonance ════
+        _harmonic_info = add_harmonic_enrichment(bass_arsenal[0] if bass_arsenal else [], FREQ["F2"], SR)
+        log_milestone(_session_logger, "Phase 2 complete — sound architecture")
+    
+        # ═══════════════════════════════════════════
+        #  SOUND DESIGN — Leads (DNA-DRIVEN)
+        # ═══════════════════════════════════════════
+        print(f"  [3/9] Leads — SCREECH + FM + {ld.additive_partials}p additive, unison...")
+    
+        # Lead maker — UPGRADED: screech layer + FM + additive, 5-voice unison,
+        # SVF filter, stacked distortion. Sounds like Subtronics, not MIDI.
+        def make_lead(freq, dur):
+            ld_parts = []
+    
+            # Layer 1: SCREECH — the main lead sound (bandlimited square → SVF → saturation)
+            screech_sig = synthesize_screech_lead(LeadPreset(
+                name="Screech", lead_type="screech", frequency=freq, duration_s=dur,
+                filter_cutoff=0.65 + ld.brightness * 0.3,
+                resonance=0.4, distortion=0.5 + ld.brightness * 0.3,
+                attack_s=0.003, decay_s=0.1, sustain=0.7, release_s=min(dur * 0.3, 0.15),
+            ))
+            ld_parts.append(("screech", screech_sig.tolist()))
+    
+            # Layer 2: FM — metallic harmonics for bite
+            if ld.use_fm:
+                fm_ops = [
+                    FMOperator(freq_ratio=1.0, amplitude=0.7, mod_index=ld.fm_depth * 1.5,
+                               feedback=0.2, envelope=(0.003, 0.1, 0.5, 0.15)),
+                    FMOperator(freq_ratio=PHI, amplitude=0.4, mod_index=ld.fm_depth,
+                               feedback=0.0, envelope=(0.005, 0.08, 0.3, 0.1)),
+                ]
+                if ld.fm_operators >= 3:
+                    fm_ops.append(FMOperator(
+                        freq_ratio=PHI * 2, amplitude=0.25, mod_index=ld.fm_depth * 0.5,
+                        feedback=0.08, envelope=(0.002, 0.06, 0.2, 0.08)))
+                fm_ld = render_fm(FMPatch(
+                    name="LeadFM", operators=fm_ops,
+                    algorithm=0, master_gain=0.5,
+                ), freq=freq, duration=dur)
+                ld_parts.append(("fm", fm_ld))
+    
+            # Layer 3: Additive — harmonic body (optional, thins if too many layers)
+            if ld.use_additive:
+                add_patch = AdditivePatch(
+                    name="Lead",
+                    partials=harmonic_partials(ld.additive_partials, rolloff=ld.additive_rolloff),
+                    master_gain=0.4,
+                )
+                ld_parts.append(("add", render_additive(add_patch, freq=freq, duration=dur)))
+    
+            # Mix layers — screech dominates
+            weights = {"screech": 0.55, "fm": 0.30, "add": 0.15}
+            max_len = max(len(p[1]) for p in ld_parts) if ld_parts else 0
+            ld_sig = [0.0] * max_len
+            for lbl, sig in ld_parts:
+                g = weights.get(lbl, 0.3)
+                for i in range(len(sig)):
+                    ld_sig[i] += sig[i] * g
+    
+            # 5-voice UNISON for width
+            ld_sig_np = np.array(_unison_bass(ld_sig, n_voices=5, detune_cents=8.0))
+            ld_sig = ld_sig_np.tolist()
+    
+            # Stacked distortion (2 stages — not as hard as bass)
+            ld_sig = _stack_distortion(ld_sig, drive=ld.brightness * 1.5, stages=2)
+    
+            # Process — DNA-driven OTT and brightness
+            ld_sig = _ott_simulate(ld_sig, min(ld.ott_amount * 1.2, 1.0))
+            ld_sig = sat.harmonic_exciter(ld_sig, amount=ld.brightness * 0.7, frequency=4000)
+            ld_np = apply_reverb_delay(to_np(ld_sig), ReverbDelayPreset(
+                name="LdVerb", effect_type="plate", decay_time=ld.reverb_decay,
+                diffusion=0.75, damping=0.5, mix=0.18
+            ))
+            return to_list(ld_np)
+    
+        # Pre-render leads for ALL 7 scale degrees × 2 octaves (oct 3 & 4)
+        # so DNA melody_patterns can reference any scale degree
+        lead_notes = {}  # {(degree, octave): audio_list}
+        for _deg in range(7):
+            for _oct in [3, 4]:
+                _freq = n(_deg, _oct)
+                lead_notes[(_deg, _oct)] = make_lead(_freq, BEAT * 0.5)
+        # Also pre-render longer variants for held notes
+        lead_notes_long = {}
+        for _deg in range(7):
+            for _oct in [3, 4]:
+                _freq = n(_deg, _oct)
+                lead_notes_long[(_deg, _oct)] = make_lead(_freq, BEAT * 1.0)
+        # Backwards-compat aliases
+        lead_f = lead_notes[(0, 4)]
+        lead_eb = lead_notes[(6, 3)]
+        lead_c = lead_notes[(4, 3)]
+        lead_ab = lead_notes[(2, 4)]
+    
+        # Pre-render chord stabs for all chord progression degrees
+        chord_notes_l = {}
+        chord_notes_r = {}
+    
+        # Supersaw chord stabs — DNA-driven voices + detune
+        def make_chord(freq, dur=BEAT * 0.75):
+            cl, cr = render_supersaw(SupersawPatch(
+                name="Chord", n_voices=ld.supersaw_voices,
+                detune_cents=ld.supersaw_detune, mix=0.8,
+                stereo_width=0.9, cutoff_hz=ld.supersaw_cutoff,
+                resonance=0.38, attack=0.003, decay=0.12,
+                sustain=0.55, release=0.22, master_gain=0.72
+            ), freq=freq, duration=dur)
+            cl_np = apply_reverb_delay(to_np(cl), ReverbDelayPreset(
+                name="ChVerb", effect_type="room", decay_time=ld.reverb_decay * 0.8,
+                diffusion=0.6, damping=0.6, mix=0.12
+            ))
+            return to_list(cl_np), cr
+    
+        chord_f_l, chord_f_r = make_chord(FREQ["F3"])
+        chord_ab_l, chord_ab_r = make_chord(FREQ["Ab3"])
+        chord_c_l, chord_c_r = make_chord(FREQ["C3"])
+    
+        # Pre-render chords for all progression degrees
+        _chord_prog = getattr(ld, 'chord_progression', [0, 5, 2, 4])
+        for _cdeg in set(_chord_prog):
+            _cfreq = n(_cdeg, 3)
+            _cl, _cr = make_chord(_cfreq)
+            chord_notes_l[_cdeg] = _cl
+            chord_notes_r[_cdeg] = _cr
+    
+        # ═══ SPRINT 1 — Chord pad enhancement ═════════════
+        chord_notes_l, chord_notes_r = enhance_chord_voicings(
+            chord_notes_l, chord_notes_r, dna, FREQ["F3"], SR)
+    
+        # ═══ SPRINT 2 — Lead/FX pipeline readiness ════
+        check_lead_pipeline_ready(dna)
+        check_fx_pipeline_ready(dna)
+        log_milestone(_session_logger, "Leads + Chords complete")
+    
+        # ═══════════════════════════════════════════
+        #  SOUND DESIGN — Vocal chops (DNA-driven vowels)
+        # ═══════════════════════════════════════════
+        print(f"  [4/9] Vocal chops — {' '.join(dna.chop_vowels[:4])}...")
+    
+        # Map DNA vowels to chops
+        _vowel_list = dna.chop_vowels if dna.chop_vowels else ["ah", "oh", "ee", "oo"]
+    
+        chop_ah = to_list(synthesize_chop(VocalChop(
+            name=_vowel_list[0], vowel=_vowel_list[0], note=_root_note3,
+            duration_s=0.2, distortion=fd.vocal_chop_distortion, stutter_count=0
+        )))
+        chop_ah = _ott_simulate(chop_ah, 0.3)
+        chop_ah = normalize(chop_ah, 0.72)
+    
+        chop_oh = to_list(synthesize_chop(VocalChop(
+            name=_vowel_list[1], vowel=_vowel_list[1], note=_fifth_note3,
+            duration_s=0.15, distortion=fd.vocal_chop_distortion * 0.86,
+            stutter_count=0
+        )))
+        chop_oh = normalize(chop_oh, 0.68)
+    
+        chop_ee_stut = to_list(synthesize_chop(VocalChop(
+            name="stutter", vowel=_vowel_list[2] if len(_vowel_list) > 2 else "ee",
+            note=_root_note3, duration_s=0.4,
+            distortion=fd.vocal_chop_distortion * 1.14, stutter_count=4
+        )))
+        chop_ee_stut = normalize(chop_ee_stut, 0.72)
+    
+        _yoi_vowel = _vowel_list[3] if len(_vowel_list) > 3 else "oo"
+        chop_yoi = to_list(synthesize_chop(VocalChop(
+            name="yoi", vowel=_yoi_vowel, note=_root_note3,
+            duration_s=0.3, formant_shift=3.0,
+            distortion=fd.vocal_chop_distortion, stutter_count=2
+        )))
+        chop_yoi_np = apply_reverb_delay(to_np(chop_yoi), ReverbDelayPreset(
+            name="ChopVerb", effect_type="plate", decay_time=0.3, mix=0.15
+        ))
+        chop_yoi = to_list(chop_yoi_np)
+        chop_yoi = normalize(chop_yoi, 0.72)
+    
+        vocal_chops = [chop_ah, chop_oh, chop_ee_stut, chop_yoi]
+    
+        # ═══════════════════════════════════════════
+        #  SOUND DESIGN — Pads & atmosphere (DNA-driven)
+        # ═══════════════════════════════════════════
+        print(f"  [5/9] Pads — {ad.pad_type} pad, verb={ad.reverb_decay:.1f}s...")
+    
+        # Pad — DNA-driven type, attack, brightness
+        # Use HARMONIC partials (integer multiples) for consonance with bass key.
+        # Phi-spaced partials (1.0, 1.618, 2.618...) are inharmonic and clash.
+        # Uses harmonic_partials with natural 1/n rolloff for rich, tonal pad.
+        pad_add = render_additive(AdditivePatch(
+            name="DarkPad", partials=harmonic_partials(12, rolloff="natural"),
+            master_gain=0.5,
+        ), freq=FREQ["F3"], duration=BAR * 8)
+    
+        _pad_synth = synthesize_dark_pad if ad.pad_type == "dark" else synthesize_lush_pad
+        dark_pad_raw = to_list(_pad_synth(PadPreset(
+            name="DP", pad_type=ad.pad_type, frequency=FREQ["F3"],
+            duration_s=BAR * 8, detune_cents=18.0,
+            filter_cutoff=ad.pad_brightness + 0.05,
+            attack_s=ad.pad_attack, release_s=ad.pad_attack * 1.5,
+            brightness=ad.pad_brightness
+        )))
+    
+        gran_tex = to_list(synthesize_cloud(GranularPreset(
+            name="Tex", grain_type="cloud", frequency=FREQ["F3"],
+            duration_s=BAR * 8, grain_size_ms=90.0,
+            grain_density=ad.granular_density,
+            pitch_spread=5.0, brightness=ad.pad_brightness + 0.05,
+            reverb_amount=0.5
+        )))
+    
+        # Mix — DNA stereo_width drives the blend
+        pad_len = min(len(dark_pad_raw), len(gran_tex), len(pad_add))
+        dark_pad = [0.0] * pad_len
+        for i in range(pad_len):
+            dark_pad[i] = dark_pad_raw[i] * 0.4 + gran_tex[i] * 0.3 + pad_add[i] * 0.3
+    
+        _pad_verb_type = "shimmer" if ad.shimmer > 0.3 else "hall"
+        pad_np = apply_reverb_delay(to_np(dark_pad), ReverbDelayPreset(
+            name="PadShim", effect_type=_pad_verb_type,
+            decay_time=ad.reverb_decay,
+            pre_delay_ms=35.0, diffusion=0.9, damping=0.35,
+            shimmer_pitch=12.0 if ad.shimmer > 0.3 else 0.0,
+            shimmer_feedback=ad.shimmer if ad.shimmer > 0.3 else 0.0,
+            mix=0.35
+        ))
+        dark_pad = to_list(pad_np)
+        dark_pad = normalize(dark_pad, 0.6)
+        # HPF pad at 80Hz — keep all pad energy in bass/mid bands, not sub
+        dark_pad_np = to_np(dark_pad)
+        dark_pad_np = svf_highpass(dark_pad_np, 80.0, 0.5, SR)
+        dark_pad = to_list(dark_pad_np)
+    
+        # ═══ SPRINT 2 — Ambient textures ════════════════
+        print("  🔧 SPRINT 2 — Ambient texture layer...")
+        _ambient_tex = add_ambient_textures(dna, SR, BAR)
+    
+        # ═══ SPRINT 3 — Resonance coloring ════
+        if dark_pad:
+            dark_pad = apply_resonance_filter(dark_pad, freq=FREQ["F3"], sr=SR)
+        log_milestone(_session_logger, "Pads + Atmosphere complete")
+    
+        # Drone — DNA voices + movement + Karplus-Strong option
+        drone_parts = []
+        if ad.use_karplus_drone:
+            drone_ks = render_ks(KarplusStrongPatch(
+                frequency=FREQ["F3"], duration=BAR * INTRO,
+                damping=0.2, brightness=ad.pad_brightness + 0.05,
+                stretch=0.05, feedback=0.999, noise_mix=0.7
+            ))
+            drone_parts.append((drone_ks, 0.35))
+    
+        drone_synth_sig = to_list(synthesize_dark_drone(DronePreset(
+            name="Drone", drone_type="dark", frequency=FREQ["F3"],
+            duration_s=BAR * INTRO, num_voices=ad.drone_voices,
+            detune_cents=12.0, brightness=ad.pad_brightness,
+            movement=ad.drone_movement, distortion=0.15,
+            reverb_amount=0.55
+        )))
+        drone_parts.append((drone_synth_sig, 0.65 if ad.use_karplus_drone else 1.0))
+    
+        drone_len = min(len(p[0]) for p in drone_parts)
+        drone = [0.0] * drone_len
+        for sig, gain in drone_parts:
+            for i in range(drone_len):
+                drone[i] += sig[i] * gain if i < len(sig) else 0.0
+        drone = normalize(drone, 0.45)
+        # HPF drone at 165Hz — V3q: bass=52.3%, V3l(200Hz)=4.7%, V3r(180Hz)=45.8%
+        # V3s: revert to V3q cutoff — 180Hz killed dynamics
+        drone_np = to_np(drone)
+        drone_np = svf_highpass(drone_np, 165.0, 0.7, SR)
+        drone = to_list(drone_np)
+    
+        # Breakdown pad — DNA atmosphere personality
+        _break_type = "lush" if ad.pad_type == "dark" else "dark"
+        _break_synth = synthesize_lush_pad if _break_type == "lush" else synthesize_dark_pad
+        lush = to_list(_break_synth(PadPreset(
+            name="LP", pad_type=_break_type, frequency=FREQ["Ab3"],
+            duration_s=BAR * BREAK_, filter_cutoff=ad.pad_brightness + 0.3,
+            brightness=ad.pad_brightness + 0.3,
+            attack_s=ad.pad_attack * 0.25, release_s=ad.pad_attack
+        )))
+        lush_np = apply_reverb_delay(to_np(lush), ReverbDelayPreset(
+            name="LushVerb", effect_type="hall",
+            decay_time=ad.reverb_decay * 0.8,
+            diffusion=0.88, damping=0.35, mix=0.3
+        ))
+        lush = to_list(lush_np)
+        lush = normalize(lush, 0.55)
+    
+        # Noise bed — DNA type and level
+        drop_noise_raw = to_list(synthesize_noise(NoisePreset(
+            name="DropNoise", noise_type=ad.noise_bed_type,
+            duration_s=BAR * 4, brightness=0.3,
+            gain=ad.noise_bed_level * 2.33
+        )))
+        drop_noise = apply_eq_band(drop_noise_raw, center_hz=3500.0, gain_db=4.0, q=0.4)
+        drop_noise = apply_eq_band(drop_noise, center_hz=200.0, gain_db=-8.0, q=0.5)
+        drop_noise = apply_eq_band(drop_noise, center_hz=10000.0, gain_db=-4.0, q=0.4)
+        drop_noise = normalize(drop_noise, 0.30)
+    
+        # ═══════════════════════════════════════════
+        #  SOUND DESIGN — Transition FX (DNA-driven)
+        # ═══════════════════════════════════════════
+        print(f"  [6/9] Transition FX — riser {fd.riser_start_freq:.0f}→{fd.riser_end_freq:.0f}Hz...")
+    
+        _riser_bars = max(BUILD, BUILD2, 8)
+        riser = to_list(synthesize_noise_sweep(RiserPreset(
+            name="Riser", riser_type="noise_sweep", duration_s=BAR * _riser_bars,
+            start_freq=fd.riser_start_freq, end_freq=fd.riser_end_freq,
+            brightness=0.8, intensity=fd.riser_intensity, reverb_amount=0.3
+        )))
+        riser = normalize(riser, fd.riser_intensity * 0.88)
+    
+        boom = to_list(synthesize_sub_boom(ImpactPreset(
+            name="Boom", impact_type="sub_boom", duration_s=fd.boom_decay + 0.5,
+            frequency=FREQ["F1"], decay_s=fd.boom_decay,
+            intensity=fd.impact_intensity
+        )))
+        boom = compress(boom, CompressorSettings(
+            threshold_db=-4.0, ratio=10.0, attack_ms=0.3, release_ms=80.0, makeup_db=4.0
+        ))
+        boom = normalize(boom, fd.impact_intensity * 1.02)
+    
+        hit = to_list(synthesize_cinematic_hit(ImpactPreset(
+            name="Hit", impact_type="cinematic_hit", duration_s=2.0,
+            frequency=FREQ["F1"] * 2, decay_s=1.5,
+            intensity=fd.impact_intensity
+        )))
+        hit_np = apply_reverb_delay(to_np(hit), ReverbDelayPreset(
+            name="HitVerb", effect_type="plate", decay_time=1.2,
+            diffusion=0.8, mix=0.22
+        ))
+        hit = to_list(hit_np)
+        hit = normalize(hit, fd.impact_intensity * 0.92)
+    
+        tape_stop = to_list(synthesize_transition(TransitionPreset(
+            name="TapeStop", fx_type="tape_stop", duration_s=0.8,
+            start_freq=fd.riser_start_freq * 2, end_freq=30.0, brightness=0.6
+        )))
+        tape_stop = normalize(tape_stop, fd.impact_intensity * 0.68)
+    
+        pitch_dive = to_list(synthesize_transition(TransitionPreset(
+            name="Dive", fx_type="pitch_dive", duration_s=1.5,
+            start_freq=fd.riser_start_freq * 3.33, end_freq=25.0,
+            brightness=0.5, reverb_amount=0.2
+        )))
+        pitch_dive = normalize(pitch_dive, fd.impact_intensity * 0.63)
+    
+        rev_crash = to_list(synthesize_transition(TransitionPreset(
+            name="RevCrash", fx_type="reverse_crash", duration_s=2.0,
+            brightness=fd.riser_intensity * 0.82, reverb_amount=0.3
+        )))
+        rev_crash = normalize(rev_crash, fd.riser_intensity * 0.65)
+    
+        stutter = to_list(synthesize_stutter(GlitchPreset(
+            name="Stut", glitch_type="stutter", frequency=FREQ["F3"],
+            duration_s=BEAT * 2, rate=fd.stutter_rate,
+            depth=0.9, distortion=fd.vocal_chop_distortion * 0.8
+        )))
+        stutter = normalize(stutter, fd.impact_intensity * 0.68)
+    
+        gate_chop = to_list(synthesize_transition(TransitionPreset(
+            name="GateChop", fx_type="gate_chop", duration_s=BAR * 2,
+        # hat_pattern kept for backward compat (outro / breakdown still reference it)
+            gate_divisions=int(fd.stutter_rate), brightness=0.5
+        )))
+        gate_chop = normalize(gate_chop, fd.riser_intensity * 0.53)
+    
+        # ═══ SPRINT 2 — Bus routing + signal chain ════
+        print("  🔧 SPRINT 2 — Bus routing + signal chain...")
+        _signal_chain = build_render_signal_chain(dna)
+        log_milestone(_session_logger, "Sound design complete — all elements rendered")
+    
+        # ═══════════════════════════════════════════
+        #  GROOVE — Grooved hat patterns
+        # ═══════════════════════════════════════════
+        print("  [7/9] Groove patterns...")
+    
+        def make_hat_events_bar():
+            events = []
+            _hat_steps = getattr(dd, 'hat_density', 16)
+            for i in range(_hat_steps):
+                vel = 0.6 + 0.3 * ((i % 4) == 0)
+                if i % 4 == 2:
+                    vel *= 0.7
+                events.append(NoteEvent(
+                    time=i * (BAR / _hat_steps),
+                    duration=0.03, pitch=42, velocity=vel
+                ))
+            grooved = groove_eng.apply_groove(
+                events, GROOVE_TEMPLATES.get("dubstep_halftime")
+            )
+            grooved = groove_eng.humanize(grooved, timing_ms=5, velocity_pct=8)
+            return grooved
+    
+        hat_pattern = make_hat_events_bar()
+    
+        # ═══ QUALITY GATE: SKETCH → ARRANGE ═══════════════
+        # Count sound elements generated in sketch phase
+        _sketch_elements = 0
+        for _var_name in ['kick', 'snare', 'hat_c', 'hat_o', 'clap', 'sub',
+                          'fm_growl', 'growl_wt', 'dist_fm', 'sync_bass',
+                          'acid_bass', 'neuro_bass', 'formant_bass',
+                          'dark_pad', 'lush', 'drone', 'riser',
+                          'boom', 'hit', 'drop_noise']:
+            if _var_name in dir() and locals().get(_var_name) is not None:
+                _sketch_elements += 1
+        _dojo.check_quality_gate(DojoPhase.SKETCH, [
+            {"name": "Sound Elements", "value": _sketch_elements,
+             "target_min": 8, "target_max": 50, "unit": "elements"},
+        ])
+    
+        # ── Pack SKETCH outputs ──
+        ctx.kick, ctx.snare, ctx.hat_c, ctx.hat_o, ctx.clap = kick, snare, hat_c, hat_o, clap
+        ctx.sub, ctx.bass_arsenal, ctx.bass_repeat = sub, bass_arsenal, bass_repeat
+        ctx.lead_notes, ctx.lead_notes_long = lead_notes, lead_notes_long
+        ctx.chord_notes_l, ctx.chord_notes_r = chord_notes_l, chord_notes_r
+        ctx.vocal_chops, ctx.dark_pad, ctx.drone = vocal_chops, dark_pad, drone
+        ctx.lush, ctx.drop_noise, ctx.reese = lush, drop_noise, reese
+        ctx.riser, ctx.boom, ctx.hit = riser, boom, hit
+        ctx.tape_stop, ctx.pitch_dive, ctx.rev_crash = tape_stop, pitch_dive, rev_crash
+        ctx.stutter, ctx.gate_chop, ctx.hat_pattern = stutter, gate_chop, hat_pattern
+        if workflow:
+            workflow._run_hooks("post_sketch", ctx)
+    
+        # ── SKETCH audit: individual element WAVs ──
+        _sketch_dir = _phase_base / "04_SKETCH"
+        _sketch_inventory = {}
+        for _el_name, _el_sig in [
+            ("kick", kick), ("snare", snare), ("hat_c", hat_c), ("hat_o", hat_o),
+            ("clap", clap), ("sub", sub), ("dark_pad", dark_pad), ("drone", drone),
+            ("lush", lush), ("drop_noise", drop_noise), ("riser", riser),
+            ("boom", boom), ("hit", hit), ("tape_stop", tape_stop),
+            ("pitch_dive", pitch_dive), ("rev_crash", rev_crash),
+            ("stutter", stutter), ("gate_chop", gate_chop),
+        ]:
+            if _el_sig:
+                _write_audit_wav_mono(_sketch_dir, f"{_el_name}.wav", _el_sig)
+                _sketch_inventory[_el_name] = {
+                    "samples": len(_el_sig),
+                    "duration_s": round(len(_el_sig) / SR, 3),
+                    "peak": round(max(abs(s) for s in _el_sig), 4),
                 }
-    # Lead + chord stereo pairs
-    if lead_notes:
-        _write_audit_wav_mono(_sketch_dir, "lead_notes.wav", lead_notes)
-    if chord_notes_l and chord_notes_r:
-        _write_audit_wav_stereo(_sketch_dir, "chords.wav", chord_notes_l, chord_notes_r)
-    if vocal_chops:
-        _write_audit_wav_mono(_sketch_dir, "vocal_chops.wav", vocal_chops)
-    _write_audit_json(_sketch_dir, "element_inventory.json", _sketch_inventory)
-    _emit_phase_log(_sketch_dir, "SKETCH", time.perf_counter() - _phase_t0, {
-        "elements_count": _sketch_elements,
-    })
-    _phase_t0 = time.perf_counter()
+        # Bass arsenal — write each variant
+        if bass_arsenal:
+            for _bi, (_bname, _bsig) in enumerate(bass_arsenal):
+                if _bsig:
+                    _write_audit_wav_mono(_sketch_dir, f"bass_{_bname}.wav", _bsig)
+                    _sketch_inventory[f"bass_{_bname}"] = {
+                        "samples": len(_bsig),
+                        "duration_s": round(len(_bsig) / SR, 3),
+                    }
+        # Lead + chord stereo pairs
+        if lead_notes:
+            _write_audit_wav_mono(_sketch_dir, "lead_notes.wav", lead_notes)
+        if chord_notes_l and chord_notes_r:
+            _write_audit_wav_stereo(_sketch_dir, "chords.wav", chord_notes_l, chord_notes_r)
+        if vocal_chops:
+            _write_audit_wav_mono(_sketch_dir, "vocal_chops.wav", vocal_chops)
+        _write_audit_json(_sketch_dir, "element_inventory.json", _sketch_inventory)
+        _emit_phase_log(_sketch_dir, "SKETCH", time.perf_counter() - _phase_t0, {
+            "elements_count": _sketch_elements,
+        })
+        _phase_t0 = time.perf_counter()
+
+    except _SkipToArrange:
+        pass  # phase_one bridge set all variables; skip legacy Phases 1–4
 
     # ═══ MWP PHASE 5: ARRANGE ════════════════════════
     # Brain: ARCHITECT — structure, energy arc, section contrast
@@ -2586,9 +2962,9 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
             _sketch_sounds[_snd_name] = _snd
     _fat_loop = build_fat_loop_map(dna, _sketch_sounds, SR)
     _ghost_markers = extract_ghost_markers(dna, SR)
-    _subtract_map = compute_subtractive_map(_fat_loop, dna, rco_energy)
+    _subtract_map = compute_subtractive_map(_fat_loop, dna, energy_map)
     _section_contrast = measure_section_contrast(_subtract_map, dna)
-    _energy_curve = compute_arrangement_energy_curve(dna, _ghost_markers, rco_energy)
+    _energy_curve = compute_arrangement_energy_curve(dna, _ghost_markers, energy_map)
     log_milestone(_session_logger, "FAT LOOP complete — subtractive map ready")
 
     L = [0.0] * total_s
@@ -2720,7 +3096,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
         place_drums(drum_evs, off)
 
         # Sub — reduced levels, F1 fundamental is in sub band (20-60Hz)
-        sub_sc = sidechain(sub, depth=0.93, release=0.15, bpm=dna.bpm)
+        sub_sc = sidechain(sub, depth=0.93, release=0.15, bpm=dna.bpm)  # type: ignore[union-attr]
         _sw = bd.sub_weight  # DNA sub_weight scales sub mix level
         mx(sub_sc, off, 0.12 * _sw, 0.12 * _sw)
         mx(sub_sc, off + samples(2), 0.08 * _sw, 0.08 * _sw)
@@ -2843,7 +3219,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
             ))
             plk_np = apply_reverb_delay(to_np(plk), ReverbDelayPreset(
                 name="PlkDly", effect_type="delay", decay_time=0.5,
-                bpm=float(dna.bpm), delay_feedback=0.35, num_taps=3, mix=0.22
+                bpm=float(dna.bpm), delay_feedback=0.35, num_taps=3, mix=0.22  # type: ignore[union-attr]
             ))
             plk = to_list(plk_np)
             pan = -0.45 + 0.9 * (q / 3)
@@ -2880,7 +3256,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
         cutoff_hz=ld.supersaw_cutoff * 0.64, resonance=0.42,
         attack=2.5, decay=0.1, sustain=0.9, release=0.5,
         master_gain=0.5
-    ), freq=FREQ["F3"], duration=BAR * BUILD2)
+    ), freq=FREQ["F3"], duration=BAR * BUILD2)  # type: ignore[possibly-undefined]
     seg_l = swell_l[:samples(BUILD2 * 4)]
     seg_r = swell_r[:samples(BUILD2 * 4)]
     mx_stereo(seg_l, seg_r, cursor, 0.42)
@@ -2909,7 +3285,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
         place_drums(drum_evs, off)
 
         # Sub — controlled dubstep level (Drop 2 slightly hotter)
-        sub_sc = sidechain(sub, depth=0.94, release=0.14, bpm=dna.bpm)
+        sub_sc = sidechain(sub, depth=0.94, release=0.14, bpm=dna.bpm)  # type: ignore[union-attr]
         _sw = bd.sub_weight  # DNA sub_weight scales sub mix level
         mx(sub_sc, off, 0.14 * _sw, 0.14 * _sw)
         mx(sub_sc, off + samples(2), 0.10 * _sw, 0.10 * _sw)
@@ -3042,7 +3418,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
         workflow._run_hooks("post_arrange", ctx)
 
     # ── ARRANGE audit: pre-mix stereo snapshot ──
-    _arrange_dir = _phase_base / "05_ARRANGE"
+    _arrange_dir = _phase_base / "05_ARRANGE"  # type: ignore[possibly-undefined]
     _write_audit_wav_stereo(_arrange_dir, "arrangement_premix.wav", L, R)
     _write_audit_json(_arrange_dir, "section_map.json", {
         "sections": {"intro": INTRO, "build": BUILD, "drop1": DROP1,
@@ -3091,7 +3467,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
         workflow._run_hooks("post_design", ctx)
 
     # ── DESIGN audit: post-FX stereo + bus routing ──
-    _design_dir = _phase_base / "06_DESIGN"
+    _design_dir = _phase_base / "06_DESIGN"  # type: ignore[possibly-undefined]
     _write_audit_wav_stereo(_design_dir, "post_design.wav", L, R)
     _write_audit_json(_design_dir, "bus_routing.json", {
         "bus_routing": str(_bus_routing),
@@ -3282,7 +3658,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
         workflow._run_hooks("post_mix", ctx)
 
     # ── MIX audit: post-mix stereo snapshot ──
-    _mix_dir = _phase_base / "07_MIX"
+    _mix_dir = _phase_base / "07_MIX"  # type: ignore[possibly-undefined]
     _mix_L = stereo[:, 0].tolist()
     _mix_R = stereo[:, 1].tolist()
     _write_audit_wav_stereo(_mix_dir, "post_mix.wav", _mix_L, _mix_R)
@@ -3382,7 +3758,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
         workflow._run_hooks("post_master", ctx)
 
     # ── MASTER audit: mastered WAV + report ──
-    _master_dir = _phase_base / "08_MASTER"
+    _master_dir = _phase_base / "08_MASTER"  # type: ignore[possibly-undefined]
     _write_audit_wav_stereo(_master_dir, "mastered.wav", master_L, master_R)
     _write_audit_json(_master_dir, "master_report.json", {
         "output_lufs": round(report.output_lufs, 1),
@@ -3424,15 +3800,15 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
 
     # ═══ SPRINT 2 — MIDI + metadata + bounce export ════
     print("  🔧 SPRINT 2 — MIDI export + metadata + bounce...")
-    _midi_path = export_midi_file(dna, out_dir="output/midi", bpm=int(dna.bpm))
+    _midi_path = export_midi_file(dna, out_dir="output/midi", bpm=int(dna.bpm))  # type: ignore[union-attr]
     _meta = write_audio_metadata(out_path, dna, SR)
     _bounce_info = export_bounce_stems(out_path, master_L, master_R, SR)
     log_milestone(_session_logger, "Export complete")
 
     # ═══ SPRINT 3 — Post-render analysis + creative exports ════
     print("  🔧 SPRINT 3 — Genre detection + patterns + artwork + Serum2...")
-    _genre_info = detect_genre(master_L, SR, dna.bpm)
-    _pattern_info = detect_patterns(master_L, bpm=dna.bpm, sr=SR)
+    _genre_info = detect_genre(master_L, SR, dna.bpm)  # type: ignore[union-attr]
+    _pattern_info = detect_patterns(master_L, bpm=dna.bpm, sr=SR)  # type: ignore[union-attr]
     _artwork = generate_artwork(dna)
     _serum2 = export_serum2_preset(dna)
     _ep_info = build_ep_metadata(dna, out_path)
@@ -3462,7 +3838,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
         workflow._run_hooks("post_release", ctx)
 
     # ── RELEASE audit: exports manifest ──
-    _release_dir = _phase_base / "09_RELEASE"
+    _release_dir = _phase_base / "09_RELEASE"  # type: ignore[possibly-undefined]
     _write_audit_json(_release_dir, "exports_manifest.json", {
         "wav_output": out_path,
         "midi_path": str(_midi_path),
@@ -3500,7 +3876,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
 
     # ═══ SPRINT 5 — Belt Enforcement ═════════════════
     print("  🥋 SPRINT 5 — Belt assessment + report card...")
-    _report_card = generate_report_card(dna, out_path, L, R, sr)
+    _report_card = generate_report_card(dna, out_path, L, R, SR)  # type: ignore[possibly-undefined]
     _session_report = _dojo.get_session_report()
     _gates_passed = _session_report["gates_passed"]
     _gates_total = _session_report["gates_total"]
@@ -3529,7 +3905,7 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
         workflow.ctx = ctx
 
     # ── REFLECT audit: report card + belt + session ──
-    _reflect_dir = _phase_base / "10_REFLECT"
+    _reflect_dir = _phase_base / "10_REFLECT"  # type: ignore[possibly-undefined]
     _write_audit_json(_reflect_dir, "report_card.json", _report_card)
     _write_audit_json(_reflect_dir, "session_report.json", _session_report)
     _write_audit_json(_reflect_dir, "belt_assessment.json", _belt_assessment)
@@ -3546,8 +3922,226 @@ def render_full_track(dna: 'SongDNA | None' = None, *, workflow=None):
     return out_path
 # ═══════════════════════════════════════════
 
+_LAUNCH_TRACKS = {
+    "wild-ones": {
+        "args": ["--song", "Wild Ones V12", "--style", "dubstep", "--bpm", "150"],
+        "label": "Wild Ones V12 (MIDI+ALS+GALATCIA)",
+    },
+    "apology": {
+        "args": ["--song", "The Apology That Never Came V4", "--style", "dubstep", "--bpm", "140"],
+        "label": "The Apology That Never Came V4 (MIDI+ALS)",
+    },
+    "forge": {
+        "args": ["--song", "Forge Session", "--style", "dubstep", "--bpm", "140"],
+        "label": "Full Forge Pipeline",
+    },
+    "quick": {
+        "args": ["--song", "Quick Dubstep Track", "--style", "dubstep", "--bpm", "140"],
+        "label": "Quick Dubstep Track",
+    },
+}
+
+
+def _arg_value(args: list[str], long_flag: str, short_flag: str | None = None, default: str = "") -> str:
+    for flag in (long_flag, short_flag):
+        if not flag:
+            continue
+        if flag in args:
+            i = args.index(flag)
+            if i + 1 < len(args):
+                return args[i + 1]
+    return default
+
+
+def _launch_mode_requested(args: list[str]) -> bool:
+    return any(flag in args for flag in ("--launch", "--ui", "--ui-only", "--render-only"))
+
+
+def _kill_port(port: int) -> int:
+    try:
+        result = subprocess.run(["lsof", "-ti", f":{port}"], capture_output=True, text=True, timeout=5)
+        pids = result.stdout.strip().split()
+        killed = 0
+        for pid_str in pids:
+            try:
+                os.kill(int(pid_str), signal.SIGKILL)
+                killed += 1
+            except (ProcessLookupError, ValueError):
+                pass
+        return killed
+    except Exception:
+        return 0
+
+
+def _kill_stale_processes(port: int) -> None:
+    killed_total = 0
+    n = _kill_port(port)
+    if n:
+        print(f"  ⚠ Killed {n} stale process(es) on port {port}")
+        killed_total += n
+
+    try:
+        result = subprocess.run(["pkill", "-9", "-f", "dubstep_analyzer_ui"], capture_output=True, timeout=5)
+        if result.returncode == 0:
+            print("  ⚠ Killed orphaned dubstep_analyzer_ui processes")
+            killed_total += 1
+    except Exception:
+        pass
+
+    try:
+        result = subprocess.run(["pkill", "-9", "-f", "AbletonOSC"], capture_output=True, timeout=5)
+        if result.returncode == 0:
+            print("  ⚠ Killed stale AbletonOSC processes")
+            killed_total += 1
+    except Exception:
+        pass
+
+    if killed_total:
+        time.sleep(0.5)
+    else:
+        print("  ✓ No stale processes found")
+
+
+def _render_track_for_launch(track_key: str) -> bool:
+    project = Path(__file__).resolve().parent
+    info = _LAUNCH_TRACKS.get(track_key)
+    if info is None:
+        print(f"  ✗ Unknown track key: {track_key}")
+        return False
+
+    forge_script = project / "forge.py"
+    if not forge_script.exists():
+        print(f"  ✗ Script not found: {forge_script}")
+        return False
+
+    cmd = [sys.executable, str(forge_script), *info.get("args", [])]
+
+    print(f"  ▸ Rendering: {info['label']}")
+    print("    Runtime: forge.py")
+    print()
+
+    t0 = time.time()
+    result = subprocess.run(cmd, cwd=str(project))
+    elapsed = time.time() - t0
+
+    if result.returncode == 0:
+        print(f"\n  ✓ Render complete ({elapsed:.0f}s)")
+        return True
+
+    print(f"\n  ✗ Render FAILED (exit {result.returncode}, {elapsed:.0f}s)")
+    return False
+
+
+def _wait_for_port(port: int, timeout: float = 45.0) -> bool:
+    import socket
+
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.5)
+    return False
+
+
+def _run_launch_mode(args: list[str]) -> None:
+    if "--help" in args or "-h" in args:
+        print("DUBFORGE unified launch mode")
+        print("Usage: python forge.py --launch [--track KEY] [--ui-only] [--render-only] [--host HOST] [--port PORT]")
+        print("Track keys: wild-ones | apology | forge | quick")
+        print("Aliases: --ui (same as --ui-only)")
+        return
+
+    track_key = _arg_value(args, "--track", "-t", "quick")
+    ui_only = ("--ui-only" in args) or ("--ui" in args)
+    render_only = "--render-only" in args
+    host = _arg_value(args, "--host", None, "127.0.0.1")
+    port_val = _arg_value(args, "--port", None, "7861")
+    try:
+        port = int(port_val)
+    except ValueError:
+        port = 7861
+
+    project = Path(__file__).resolve().parent
+    ui_script = project / "dubstep_analyzer_ui.py"
+
+    print()
+    print("╔══════════════════════════════════════════════════════════════╗")
+    print("║          DUBFORGE — Unified Launch (forge.py)              ║")
+    print(f"║          NEXUS  →  http://localhost:{port:<4}                       ║")
+    print("╚══════════════════════════════════════════════════════════════╝")
+    print()
+
+    print("━━━ CLEANUP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    _kill_stale_processes(port)
+    print()
+
+    if not ui_only:
+        print("━━━ Phase 1: RENDER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        success = _render_track_for_launch(track_key)
+        if not success and not render_only:
+            print("  ⚠ Render failed — continuing to UI launch")
+        print()
+
+    if render_only:
+        return
+
+    if not ui_script.exists():
+        print(f"  ✗ UI script not found: {ui_script}")
+        return
+
+    print("━━━ Phase 2: NEXUS UI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"  ▸ Launching UI on {host}:{port}")
+    proc = subprocess.Popen(
+        [sys.executable, str(ui_script), "--host", host, "--port", str(port)],
+        cwd=str(project),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env={**os.environ, "DUBFORGE_LAUNCHER": "1"},
+    )
+
+    ready = _wait_for_port(port, timeout=45)
+    if ready:
+        url = f"http://localhost:{port}"
+        print(f"  ✓ UI ready: {url}")
+        webbrowser.open(url)
+    else:
+        print(f"  ✗ UI did not become ready on port {port}")
+
+    print("\n  Press Ctrl+C to stop the UI\n")
+
+    def _shutdown(sig, frame):
+        print("\n  Shutting down...")
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        print("  ✓ UI stopped")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _shutdown)
+    signal.signal(signal.SIGTERM, _shutdown)
+
+    try:
+        while True:
+            if proc.poll() is not None:
+                break
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        _shutdown(None, None)
+
+    print(f"  UI process exited (code {proc.returncode})")
+
+
 def main():
     args = sys.argv[1:]
+
+    # ── Unified launcher mode (canonical entrypoint): forge.py --launch ... ──
+    if _launch_mode_requested(args):
+        _run_launch_mode(args)
+        return
 
     # ── Dojo mode: --dojo [--song "Song Name"] [--timer 840] ──
     if "--dojo" in args:
@@ -3723,6 +4317,42 @@ def main():
         session = engine.run(song_name, style=style, mood=mood)
         return
 
+    # ── Reference intake mode: --ref URL ──
+    if "--ref" in args:
+        ri = args.index("--ref")
+        url = args[ri + 1] if ri + 1 < len(args) else ""
+        if not url or not url.startswith("http"):
+            print("  ERROR: --ref requires a URL")
+            print("  Usage: python forge.py --ref https://soundcloud.com/artist/track")
+            return
+
+        from engine.reference_intake import intake_from_url, save_intake_report
+
+        print(f"  🔗 Reference intake: {url}")
+        result = intake_from_url(url, research="--no-research" not in args)
+
+        dna = result.song_dna
+        if dna is None:
+            print("  ERROR: Intake failed — no SongDNA produced")
+            return
+
+        report_path = save_intake_report(result)
+        print(f"\n  📋 Intake report: {report_path}")
+
+        print("╔══════════════════════════════════════════════╗")
+        print(f"║  DUBFORGE — REF: {dna.name:<28}║")
+        print(f"║  BPM: {dna.bpm}  |  Key: {dna.key} {dna.scale:<8} | ref  ║")
+        print("╚══════════════════════════════════════════════╝")
+        print(dna.summary())
+
+        dna_path = save_dna(dna)
+        print(f"\n  DNA saved: {dna_path}")
+
+        render_phased_pipeline(dna=dna)
+        return
+
+        return
+
     # ── Song mode: --song "Song Name" [--style dubstep] [--mood dark] [--producer subtronics] ──
     if "--song" in args:
         idx = args.index("--song")
@@ -3780,8 +4410,8 @@ def main():
         dna_path = save_dna(dna)
         print(f"\n  DNA saved: {dna_path}")
 
-        # Render track with full DNA→render integration
-        render_full_track(dna=dna)
+        # Canonical runtime path: always execute phased pipeline via forge_runner.
+        render_phased_pipeline(dna=dna)
         return
 
     print("╔══════════════════════════════════════════════╗")
@@ -3808,7 +4438,7 @@ def main():
         generate_ableton_project()
 
     if run_all or "--track" in args:
-        render_full_track()
+        render_phased_pipeline()
 
     # ── New modules ──────────────────────────────────────────────
     if run_all or "--wavetable-packs" in args:
@@ -3845,7 +4475,7 @@ def main():
     print("║                                              ║")
     print("║  WHAT TO DO NEXT:                            ║")
     print("║                                              ║")
-    print("║  1. Open Ableton Live 10                     ║")
+    print("║  1. Open Ableton Live 12                     ║")
     print("║     File → Open → output/ableton/            ║")
     print("║       DUBFORGE_SESSION.als                   ║")
     print("║                                              ║")
@@ -3857,7 +4487,7 @@ def main():
     print("║     into the audio tracks                    ║")
     print("║                                              ║")
     print("║  4. Listen to the full mix:                  ║")
-    print("║     open output/dubstep_track_v5.wav         ║")
+    print("║     open output/<song_name>.wav              ║")
     print("║                                              ║")
     print("╚══════════════════════════════════════════════╝")
 

@@ -32,11 +32,11 @@ except Exception:
 def _load_wav_mono(path: str) -> np.ndarray:
     """Load a WAV/AIFF file as mono float64."""
     try:
-        import soundfile as sf
+        import soundfile as sf  # type: ignore[import-not-found]
         audio, sr = sf.read(path, dtype="float64", always_2d=True)
         mono = audio.mean(axis=1) if audio.ndim > 1 else audio.ravel()
         if sr != SAMPLE_RATE:
-            from scipy.signal import resample
+            from scipy.signal import resample  # type: ignore[import-not-found]
             mono = resample(mono, int(len(mono) * SAMPLE_RATE / sr))
         return mono
     except ImportError:

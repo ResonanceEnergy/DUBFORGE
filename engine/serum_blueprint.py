@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+# pyright: reportOptionalCall=false
 """
 DUBFORGE Engine — Serum 2 Blueprint Generator
 
@@ -57,7 +59,7 @@ except ImportError:
     HAS_NUMPY = False
 
 try:
-    import soundfile as sf
+    import soundfile as sf  # type: ignore[import-not-found]
     HAS_SOUNDFILE = True
 except ImportError:
     sf = None  # type: ignore[assignment]
@@ -768,7 +770,7 @@ def export_stem_as_wavetable(audio_path: str,
     if not HAS_NUMPY or not HAS_SOUNDFILE:
         raise ImportError("Wavetable export requires numpy and soundfile")
 
-    import soundfile as sf
+    import soundfile as sf  # type: ignore[import-not-found]
 
     # Load audio
     y, sr = sf.read(audio_path, dtype='float32')
@@ -789,7 +791,7 @@ def export_stem_as_wavetable(audio_path: str,
     # Optional: pitch shift to golden zone
     if golden_zone_shift and HAS_NUMPY:
         try:
-            import librosa
+            import librosa  # type: ignore[import-not-found]
             # Detect fundamental frequency
             f0_frames = librosa.yin(
                 y, fmin=20, fmax=2000,

@@ -70,7 +70,7 @@ class TestWriteWav:
     def test_write_list_input(self, tmp_path):
         sig = [0.0, 0.5, -0.5, 1.0, -1.0]
         path = str(tmp_path / "list.wav")
-        write_wav_fast(path, sig)
+        write_wav_fast(path, sig)  # type: ignore[arg-type]
         assert os.path.exists(path)
 
 

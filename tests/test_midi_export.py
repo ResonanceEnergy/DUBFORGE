@@ -222,7 +222,7 @@ class TestEventsToTrack(unittest.TestCase):
     def test_end_of_track_present(self):
         track = events_to_track(self._sample_events())
         last = track[-1]
-        self.assertEqual(last.type, 'end_of_track')
+        self.assertEqual(last.type, 'end_of_track')  # type: ignore[union-attr]
 
     def test_delta_times_are_non_negative(self):
         track = events_to_track(self._sample_events())

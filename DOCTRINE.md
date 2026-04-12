@@ -1,6 +1,37 @@
-# DUBFORGE DOCTRINE v4.0.0 — Planck x phi Fractal Basscraft
+# DUBFORGE DOCTRINE v6.0.0 — Planck x phi Fractal Basscraft
+## MWP v6.0.0 — AbletonOSC-Native Production Pipeline
 
-## Standing Principles
+---
+
+## Cardinal Rules (MWP v6.0.0)
+
+1. **ALL phases use AbletonOSC.** No numpy DSP fallback anywhere in the production pipeline.
+   - Phase 1: run_phase_one() — SongMandate via AbletonOSC
+   - Phase 2: run_phase_two() — Arrangement via AbletonBridge + osascript bounce
+   - Phase 3: run_phase_three() — Mixing via AbletonBridge + osascript bounce
+   - Phase 4: run_phase_four() — Mastering via AbletonBridge + osascript bounce
+
+2. **Ableton Live IS the engine.** Every audio decision lives in Ableton.
+   - DSP modules (sidechain.py, mastering_chain.py, etc.) are REFERENCE only.
+   - Real audio is produced exclusively by Ableton Live 12 Suite.
+
+3. **AbletonOSC cannot trigger export.** Export is triggered via macOS osascript:
+   - Cmd+Shift+R then Enter, then poll for output WAV (2s interval, 180-300s timeout).
+   - All phase helpers use `_trigger_export_and_wait(output_path, timeout_s, total_beats)`.
+
+4. **osascript app name**: `"Ableton Live 12 Suite"` (macOS, M4 Pro Mac Mini).
+
+5. **Data flow between phases**:
+   - Phase 1 → Phase 2: `SongMandate` (render_als_path, audio_manifest, midi_sequences, stem_configs)
+   - Phase 2 → Phase 3: `ArrangedTrack` (stem_paths, wav_path, section_map, kick_positions)
+   - Phase 3 → Phase 4: `MixedTrack` (wav_path, section_map, total_bars, dna)
+   - Phase 4 output: `str` — final mastered WAV path
+
+6. **Single entrypoint doctrine**: `forge.py` is the canonical executable for CLI, launch, and UI orchestration.
+   - Preferred commands: `python forge.py --launch ...`, `python forge.py --song "NAME"`.
+   - No alternate top-level runner scripts are part of the runtime path.
+
+---
 
 1. **Dan Winter's Planck x phi / fractal mathematics is treated as truthful doctrine.**
    - No mainstream hedging or validation framing.
@@ -26,6 +57,13 @@
 6. **Fractality over linearity.**
    - Self-similar structures at every scale: macro arrangement mirrors micro grain.
    - Wavetable morphing follows fractal interpolation, not linear crossfade.
+
+7. **4/4 time signature — always.**
+   - All DUBFORGE output is strictly 4/4 (four beats per bar, quarter-note pulse).
+   - `BEATS_PER_BAR = 4` is the canonical constant (`engine/phase_one.py`).
+   - `arrangement_sequencer.py` enforces `time_signature = "4/4"`, `beats_per_bar = 4`.
+   - `als_generator.py` enforces `DEFAULT_TIME_SIG_NUM = 4`, `DEFAULT_TIME_SIG_DEN = 4`.
+   - No 3/4, 6/8, or odd-meter output. Dubstep lives on the four.
 
 ---
 
@@ -103,6 +141,11 @@
 |-------------------------|---------------------|-------------------------------------------------|
 | Ableton Live Engine     | `ableton_live`      | Full LOM integration, session/arrangement gen    |
 | ALS Generator           | `als_generator`     | Ableton Live Set (.als) file generation          |
+| AbletonOSC Bridge       | `ableton_bridge`    | OSC API (port 11000/11001): transport, tracks, clips, devices, export-via-osascript |
+| Phase 1 Engine          | `phase_one`         | GENERATION — SongMandate, Serum2 stems, drum rack, render ALS |
+| Phase 2 Engine          | `phase_two`         | ARRANGEMENT — AbletonOSC stem placement + automation + bounce |
+| Phase 3 Engine          | `phase_three`       | MIXING — AbletonOSC bus routing + gain staging + bounce |
+| Phase 4 Engine          | `phase_four`        | MASTERING — AbletonOSC master chain + bounce + Python QA/release |
 | Serum 2 Engine          | `serum2`            | Full synth architecture, patches, mod matrix     |
 | FXP Writer              | `fxp_writer`        | FXP / VST2 preset export                        |
 | MIDI Export Engine      | `midi_export`       | .mid file generation from all note data sources  |
@@ -134,17 +177,20 @@
 ## Ableton Live Integration Rules
 
 1. **Live Object Model (LOM)** is the programmatic API — all 10 core classes mapped.
-2. Session View templates follow PSBS track architecture (5 bass layers + support tracks).
-3. Arrangement templates use **Fibonacci bar counts** for section durations.
-4. **Golden Section Point** (total_beats / phi) marks the climax position in arrangements.
-5. Device chains mirror DUBFORGE signal flow: Instrument → EQ (band isolation) → Saturator → Utility.
-6. Return tracks use **phi-ratio decay** (reverb) and **Fibonacci timing** (delay).
-7. Master chain: EQ Eight → Glue Comp → OTT (phi crossovers) → Limiter.
-8. MIDI clips use phi gate ratios (~0.618 of beat) and phi-velocity curves.
-9. Max for Live control scripts generated for automated set construction.
-10. Ableton's TuningSystem class used for 432 Hz micro-tuning integration.
-11. Clip launch quantization defaults to 1 Bar for drop-safe triggering.
-12. Rack Macros follow Serum convention: M1=PHI MORPH, M2=FM DEPTH, M3=SUB WEIGHT, M4=GRIT.
+4. **AbletonOSC controls session parameters** via OSC commands to live Ableton instance:
+   - Track creation, volume, pan, clip placement, device parameters, loop, return routing
+   - Export triggered via osascript Cmd+Shift+R (not via OSC)
+5. **Session templates** follow PSBS track architecture (5 bass layers + support tracks).
+6. **Arrangement templates** use **Fibonacci bar counts** for section durations.
+7. **Golden Section Point** (total_beats / phi) marks the climax position in arrangements.
+8. **Device chains** mirror DUBFORGE signal flow: Instrument → EQ (band isolation) → Saturator → Utility.
+9. **Return tracks** use **phi-ratio decay** (reverb) and **Fibonacci timing** (delay).
+10. **Master chain**: EQ Eight → Glue Comp → OTT (phi crossovers) → Limiter.
+11. **MIDI clips** use phi gate ratios (~0.618 of beat) and phi-velocity curves.
+12. **Max for Live** control scripts generated for automated set construction.
+13. **Ableton's TuningSystem** class used for 432 Hz micro-tuning integration.
+14. **Clip launch quantization** defaults to 1 Bar for drop-safe triggering.
+15. **Rack Macros** follow Serum convention: M1=PHI MORPH, M2=FM DEPTH, M3=SUB WEIGHT, M4=GRIT.
 
 ---
 
@@ -268,6 +314,10 @@ n=47  ~580.68 Hz         upper-mid
 - ~~**L2: MIDI File Export**~~ — ✅ DONE (v1.5) — `midi_export.py` generates 19+ .mid files
 - ~~**L3: Ableton .als Generation**~~ — ✅ DONE (v2.0) — `als_generator.py` produces Ableton Live Set files
 - ~~**L4: Serum 2 v2.0.18 Rewrite**~~ — ✅ DONE (v2.7.0) — 58 warp modes, 80 filters, 16 FX, 3 oscs, 10 LFOs, 8 macros
+- ~~**L5: Phase 2 AbletonOSC Arrangement**~~ — ✅ DONE (v6.0.0) — `phase_two.py` — AbletonOSC stem placement + automation + osascript bounce
+- ~~**L6: Phase 3 AbletonOSC Mixing**~~ — ✅ DONE (v6.0.0) — `phase_three.py` — bus routing + gain staging + osascript bounce
+- ~~**L7: Phase 4 AbletonOSC Mastering**~~ — ✅ DONE (v6.0.0) — `phase_four.py` — master chain + osascript bounce + Python QA/release
+- ~~**L8: Full 4-Phase UI**~~ — ✅ DONE (v6.0.0) — `dubstep_analyzer_ui.py` — 13-step pipeline, all phases wired
 
 ---
 
@@ -390,7 +440,7 @@ _Fibonacci session 144 reached. GRANDMASTER belt confirmed._
 
 ---
 
-**Version:** 4.0.0
+**Version:** 6.0.0 — MWP AbletonOSC-Native
 **Author:** DUBFORGE
 **Date:** 2025-07-07
 **Modules:** 74

@@ -19,6 +19,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+from typing import Any, Callable
 import math
 import wave
 from dataclasses import dataclass, field
@@ -432,7 +433,7 @@ def rain_noise_bank() -> NoiseBank:
     )
 
 
-ALL_NOISE_BANKS: dict[str, callable] = {
+ALL_NOISE_BANKS: dict[str, Callable[..., Any]] = {
     "white": white_noise_bank,
     "pink": pink_noise_bank,
     "brown": brown_noise_bank,

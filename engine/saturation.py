@@ -7,6 +7,7 @@ console, PHI-saturation, harmonic enhancement.
 
 import math
 from dataclasses import dataclass
+from typing import Any, Callable
 
 from engine.config_loader import PHI
 from engine.turboquant import (
@@ -103,7 +104,7 @@ class SaturationEngine:
         else:
             return math.copysign(1.0, driven)
 
-    def _get_saturator(self, sat_type: str) -> callable:
+    def _get_saturator(self, sat_type: str) -> Callable[..., Any]:
         """Get saturation function by type."""
         return {
             "tube": self._tube,

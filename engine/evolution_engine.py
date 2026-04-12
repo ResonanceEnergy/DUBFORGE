@@ -10,6 +10,7 @@ produce highest-rated output. Maintains an evolution log with scoring.
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -221,7 +222,7 @@ def track_stability(preset: EvolutionPreset) -> EvolutionLog:
 
 
 # Router
-TRACKER_FUNCTIONS: dict[str, callable] = {
+TRACKER_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "param_drift": track_param_drift,
     "phi_convergence": track_phi_convergence,
     "score_climb": track_score_climb,
@@ -286,7 +287,7 @@ def stability_bank() -> EvolutionBank:
     ])
 
 
-ALL_EVOLUTION_BANKS: dict[str, callable] = {
+ALL_EVOLUTION_BANKS: dict[str, Callable[..., Any]] = {
     "param_drift": param_drift_bank,
     "phi_convergence": phi_convergence_bank,
     "score_climb": score_climb_bank,

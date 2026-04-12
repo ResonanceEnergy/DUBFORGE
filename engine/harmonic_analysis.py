@@ -14,6 +14,7 @@ Types:
 """
 
 from dataclasses import dataclass, field
+from typing import Any, Callable
 
 import numpy as np
 
@@ -237,14 +238,14 @@ def analyze_harmonic_series(signal: np.ndarray, preset: AnalysisPreset,
                 harmonics.append(SpectralPeak(
                     frequency=actual_freq,
                     magnitude_db=mag_db,
-                    bin_index=local_peak,
+                    bin_index=int(local_peak),
                 ))
                 total_deviation += deviation
 
         if len(harmonics) >= 2:
             inharmonicity = total_deviation / len(harmonics)
             results.append(HarmonicSeries(
-                fundamental=fund_freq,
+                fundamental=float(fund_freq),
                 harmonics=harmonics,
                 inharmonicity=inharmonicity,
             ))
@@ -496,7 +497,7 @@ def roughness_bank() -> AnalysisBank:
     ])
 
 
-ALL_ANALYSIS_BANKS: dict[str, callable] = {
+ALL_ANALYSIS_BANKS: dict[str, Callable[..., Any]] = {
     "spectral_peaks": spectral_peaks_bank,
     "harmonic_series": harmonic_series_bank,
     "phi_detection": phi_detection_bank,
@@ -586,7 +587,7 @@ def analyze_wav_file(wav_path: str, analysis_type: str = "spectral_peaks",
         bank = bank_fn()
         preset = bank.presets[0]
 
-    result_obj = run_analysis(samples, preset)
+    result_obj = run_analysis(samples, preset)  # type: ignore[arg-type]
 
     # Convert result to serialisable dict
     def _to_dict(obj):

@@ -17,6 +17,7 @@ Outputs:
 """
 
 from __future__ import annotations
+from typing import Any, Callable
 
 import json
 import math
@@ -345,7 +346,7 @@ def growl_wobble_bank() -> WobbleBank:
     )
 
 
-ALL_WOBBLE_BANKS: dict[str, callable] = {
+ALL_WOBBLE_BANKS: dict[str, Callable[..., Any]] = {
     "classic": classic_wobble_bank,
     "slow": slow_wobble_bank,
     "fast": fast_wobble_bank,

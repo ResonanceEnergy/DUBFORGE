@@ -17,6 +17,7 @@ Outputs:
 """
 
 from __future__ import annotations
+from typing import Any, Callable
 
 import json
 import math
@@ -454,7 +455,7 @@ def distorted_sub_bank() -> SubBassBank:
     )
 
 
-ALL_SUB_BASS_BANKS: dict[str, callable] = {
+ALL_SUB_BASS_BANKS: dict[str, Callable[..., Any]] = {
     "deep_sines": deep_sine_bank,
     "octaves": octave_bank,
     "fifths": fifth_bank,

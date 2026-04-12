@@ -103,9 +103,9 @@ class LoudnessMetering:
 class AnalysisReport:
     """Complete analysis report."""
     filepath: str = ""
-    waveform: WaveformStats = None
-    spectral: SpectralProfile = None
-    loudness: LoudnessMetering = None
+    waveform: WaveformStats | None = None
+    spectral: SpectralProfile | None = None
+    loudness: LoudnessMetering | None = None
     phi_alignment: float = 0.0
 
     def __post_init__(self):

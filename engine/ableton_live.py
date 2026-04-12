@@ -611,7 +611,7 @@ def generate_arp_clip(
 
 
 def generate_chord_stab_clip(
-    chord_notes: list = None,
+    chord_notes: list | None = None,
     bars: int = 8,
     rhythm_pattern: str = "fibonacci",
 ) -> MIDIClip:
@@ -748,7 +748,7 @@ def psbs_device_chain() -> list:
             DeviceParam("Macro 4 — GRIT", 0.15),
         ],
         rack_chains=chains,
-    )
+    )  # type: ignore[return-value]
 
 
 def dubstep_master_chain() -> list:
@@ -1507,7 +1507,7 @@ def main() -> None:
     psbs = psbs_device_chain()
     psbs_path = out_dir / "device_chain_psbs_rack.json"
     with open(psbs_path, "w") as f:
-        json.dump(psbs.to_dict(), f, indent=2, default=str)
+        json.dump(psbs.to_dict(), f, indent=2, default=str)  # type: ignore[union-attr]
     print(f"    ✓ {psbs_path.name}")
 
     master = dubstep_master_chain()

@@ -269,6 +269,21 @@ class ReferenceAnalysis:
     def to_dict(self) -> dict:
         return _dc_to_dict(self)
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "ReferenceAnalysis":
+        """Reconstruct from a to_dict() output (best-effort)."""
+        from dataclasses import fields as dc_fields
+        kwargs: dict = {}
+        for f in dc_fields(cls):
+            if f.name not in d:
+                continue
+            val = d[f.name]
+            # If the field type is a dataclass, reconstruct it
+            if hasattr(f.type, "__dataclass_fields__") if isinstance(f.type, type) else False:
+                val = f.type(**{k: val[k] for k in f.type.__dataclass_fields__ if k in val})  # type: ignore[union-attr, misc]
+            kwargs[f.name] = val
+        return cls(**kwargs)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BACKWARD COMPAT (Session 166 API)
@@ -1091,18 +1106,32 @@ def _analyze_arrangement(mono: np.ndarray, sr: int) -> ArrangementDNA:
     p75 = float(np.percentile(curve, 75))
     e_range = max(curve) - min(curve)
     labels: list[str] = []
+    n_segs = len(sec_energies)
     for i, seg_e in enumerate(sec_energies):
         prev_e = sec_energies[i - 1] if i > 0 else seg_e - 10
         rising = seg_e - prev_e
+        # Position-aware quiet detection: first 15% → intro, last 15% → outro
+        is_first_region = i / max(n_segs, 1) < 0.15
+        is_last_region = i / max(n_segs, 1) > 0.85
         # Drop: high-energy section following a significant rise
         if seg_e >= p75 - 1.0 and rising > max(1.5, e_range * 0.10):
             labels.append("drop")
         elif seg_e >= p75 and i > 0 and prev_e < p50:
             labels.append("drop")
         elif seg_e <= p25 - 3:
-            labels.append("intro/outro")
+            if is_first_region:
+                labels.append("intro")
+            elif is_last_region:
+                labels.append("outro")
+            else:
+                labels.append("break")
         elif seg_e <= p25:
-            labels.append("breakdown")
+            if is_first_region:
+                labels.append("intro")
+            elif is_last_region:
+                labels.append("outro")
+            else:
+                labels.append("breakdown")
         elif rising > 1.0 and seg_e > p50:
             labels.append("build")
         elif seg_e >= p75:

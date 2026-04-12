@@ -19,6 +19,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+from typing import Any, Callable
 import math
 import wave
 from dataclasses import dataclass, field
@@ -346,7 +347,7 @@ def evolving_drone_bank() -> DroneBank:
     )
 
 
-ALL_DRONE_BANKS: dict[str, callable] = {
+ALL_DRONE_BANKS: dict[str, Callable[..., Any]] = {
     "harmonic": harmonic_drone_bank,
     "beating": beating_drone_bank,
     "dark": dark_drone_bank,

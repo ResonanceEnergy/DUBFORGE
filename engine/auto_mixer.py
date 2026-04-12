@@ -48,17 +48,35 @@ class GainStagingResult:
 
 
 # Priority levels for gain staging (higher = louder)
+# Subtronics-aligned bus hierarchy (v7.0.0)
 ELEMENT_PRIORITY: dict[str, float] = {
+    # DRUMS Bus
     "kick": 1.0,
     "snare": 0.9,
+    "hihat": 0.6,
+    "sc_trigger": 0.0,    # muted — sidechain only
+    # BASS Bus
     "sub_bass": 0.95,
-    "bass": 0.85,
+    "mid_bass": 0.85,
+    "bass": 0.85,         # legacy alias
+    "growl": 0.8,
+    "wobble": 0.75,
+    "riddim": 0.75,
+    "formant": 0.7,
+    # MELODICS Bus
     "lead": 0.75,
     "vocal": 0.8,
+    "counter": 0.65,
+    "chords": 0.6,
     "pad": 0.5,
-    "hihat": 0.6,
-    "fx": 0.4,
-    "riser": 0.5,
+    "arp": 0.55,
+    # FX Bus
+    "impacts": 0.4,
+    "risers": 0.5,
+    "transitions": 0.35,
+    "atmos": 0.3,
+    "fx": 0.4,            # legacy alias
+    "riser": 0.5,         # legacy alias
     "ambient": 0.3,
 }
 

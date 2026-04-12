@@ -194,7 +194,7 @@ These are likely in test_auto_arranger.py or test_auto_mixer.py based on alphabe
 | als_generator.py | .als Ableton Live Sets (gzip XML) | ✅ Valid |
 | midi_export.py | .mid Standard MIDI (Type 1, 480 PPQN via mido) | ✅ Solid |
 | forge.py | ALL: wavetables + stems + .als + .fxp + mastered stereo track | ✅ Full pipeline |
-| make_track.py | Full dubstep track (140 BPM, F minor, 64 bars, stereo WAV) | ✅ Full pipeline |
+| archive/top_level_runners/make_track.py | Full dubstep track (140 BPM, F minor, 64 bars, stereo WAV) | ✅ Full pipeline |
 
 ### Infrastructure Modules
 

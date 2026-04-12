@@ -21,8 +21,10 @@ from __future__ import annotations
 import json
 import math
 import wave
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -399,7 +401,7 @@ def acid_arp_bank() -> ArpSynthBank:
     )
 
 
-ALL_ARP_BANKS: dict[str, callable] = {
+ALL_ARP_BANKS: dict[str, Callable[..., Any]] = {
     "pulse": pulse_arp_bank,
     "saw":   saw_arp_bank,
     "fm":    fm_arp_bank,

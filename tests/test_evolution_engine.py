@@ -48,7 +48,9 @@ def test_log_best_entry():
         EvolutionEntry(1, score=0.9),
         EvolutionEntry(2, score=0.5),
     ])
-    assert log.best_entry().score == 0.9
+    best = log.best_entry()
+    assert best is not None
+    assert best.score == 0.9
 
 
 def test_log_trend():

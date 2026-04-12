@@ -11,6 +11,7 @@ Outputs:
 """
 
 from __future__ import annotations
+from typing import Any, Callable
 
 import json
 import math
@@ -483,7 +484,7 @@ def doppler_riser_bank() -> RiserBank:
     )
 
 
-ALL_RISER_BANKS: dict[str, callable] = {
+ALL_RISER_BANKS: dict[str, Callable[..., Any]] = {
     "noise_sweeps":    noise_sweep_bank,
     "pitch_rises":     pitch_rise_bank,
     "filter_sweeps":   filter_sweep_bank,

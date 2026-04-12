@@ -14,7 +14,9 @@ Each template defines sections (intro, build, drop, break, outro)
 with bar counts and which elements are active per section.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from engine.config_loader import PHI
 from engine.turboquant import (
@@ -306,7 +308,7 @@ def fibonacci_arrangement_bank() -> ArrangementBank:
 
 # --- Registry -------------------------------------------------------------
 
-ALL_ARRANGEMENT_BANKS: dict[str, callable] = {
+ALL_ARRANGEMENT_BANKS: dict[str, Callable[..., Any]] = {
     "weapon": weapon_arrangement_bank,
     "emotive": emotive_arrangement_bank,
     "hybrid": hybrid_arrangement_bank,

@@ -708,20 +708,6 @@ from engine.psbs import (
 from engine.psbs import (
     export_wavetable as export_psbs_wavetable,
 )
-from engine.rco import (
-    RCOProfile,
-    Section,
-    dojo_narrative_preset,
-    exponential_curve,
-    fibonacci_step_curve,
-    generate_energy_curve,
-    linear_curve,
-    phi_curve,
-    plot_curve,
-    subtronics_emotive_preset,
-    subtronics_hybrid_preset,
-    subtronics_weapon_preset,
-)
 from engine.reverb_delay import (
     ALL_REVERB_DELAY_BANKS,
     ReverbDelayBank,
@@ -971,18 +957,6 @@ __all__ = [
     "midi_to_freq",
     "freq_to_midi",
     # rco
-    "Section",
-    "RCOProfile",
-    "phi_curve",
-    "fibonacci_step_curve",
-    "linear_curve",
-    "exponential_curve",
-    "generate_energy_curve",
-    "subtronics_weapon_preset",
-    "subtronics_emotive_preset",
-    "subtronics_hybrid_preset",
-    "dojo_narrative_preset",
-    "plot_curve",
     # psbs
     "BassLayer",
     "PSBSPreset",
@@ -1871,14 +1845,6 @@ __all__ = [
     "export_blueprint",
     "export_all_blueprints",
     "write_serum_blueprint_manifest",
-    # soundcloud pipeline
-    "DownloadedTrack",
-    "PipelineResult",
-    "download_soundcloud_likes",
-    "separate_stems",
-    "run_pipeline",
-    "analyze_local_files",
-    "apply_feedback",
 ]
 
 # --- dubstep taste analyzer ---
@@ -1913,17 +1879,6 @@ from engine.serum_blueprint import (
     export_blueprint,
     export_all_blueprints,
     write_serum_blueprint_manifest,
-)
-
-# --- soundcloud pipeline ---
-from engine.soundcloud_pipeline import (
-    DownloadedTrack,
-    PipelineResult,
-    download_soundcloud_likes,
-    separate_stems,
-    run_pipeline,
-    analyze_local_files,
-    apply_feedback,
 )
 
 # --- TurboQuant vector quantization (arXiv:2504.19874) ---
@@ -1967,4 +1922,33 @@ from engine.galatcia import (
     install_wavetables,
     integrate_galatcia_als,
     read_wav_samples,
+)
+
+# --- Session Template (canonical track/bus layout) ---
+from engine.session_template import (
+    BusGroup,
+    ReturnDef,
+    SceneDef,
+    SessionLayout,
+    TrackDef,
+    build_dubstep_session,
+    get_template_requirements,
+    to_ableton_live_template,
+    to_bus_router,
+    MANDATE_TO_TRACK,
+    TRACK_TO_MANDATE,
+    TRACK_MODULES,
+    GAP_MODULE_TRACKS,
+)
+
+# --- Phase 2 Setup (template → session bridge) ---
+from engine.phase_two_setup import (
+    BusArrangement,
+    SessionArrangement,
+    TrackArrangement,
+    build_energy_curve,
+    build_scene_map,
+    export_session_als,
+    resolve_mandate_stems,
+    setup_phase_two,
 )

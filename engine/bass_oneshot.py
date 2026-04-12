@@ -27,8 +27,10 @@ from __future__ import annotations
 import json
 import math
 import wave
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -1116,7 +1118,7 @@ def pulse_width_bass_bank() -> BassBank:
     )
 
 
-ALL_BASS_BANKS: dict[str, callable] = {
+ALL_BASS_BANKS: dict[str, Callable[..., Any]] = {
     "sub_sine":    sub_sine_bank,
     "reese":       reese_bank,
     "fm_bass":     fm_bass_bank,

@@ -44,14 +44,13 @@ _log = get_logger("dubforge.galatcia")
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-DEFAULT_GALATCIA_ROOT = Path(r"C:\dev\DUBFORGE GALATCIA")
+DEFAULT_GALATCIA_ROOT = Path("/Users/natrix/dev/DUBFORGE/DUBFORGE GALACTICA")
 
 # Relative paths inside GALATCIA root
-_REL_PRESETS = Path("Black Octopus - Brutal Dubstep and Riddim") / \
-    "Black Octopus - Brutal Dubstep and Riddim"
-_REL_WAVETABLES = Path("ERB NEURO WT") / "ERB NEURO WT"
-_REL_SAMPLES = Path("Samples") / "Samples"
-_REL_RACKS = Path("Ableton Racks") / "Ableton Racks"
+_REL_PRESETS = Path("Black Octopus - Brutal Dubstep and Riddim")
+_REL_WAVETABLES = Path("ERB NEURO WT")
+_REL_SAMPLES = Path("Samples")
+_REL_RACKS = Path("Ableton Racks")
 _REL_SERUMPACK = Path("ERB N DUB NEURO DNB.SerumPack")
 
 # FXP prefix → DUBFORGE category mapping
@@ -78,6 +77,10 @@ SAMPLE_CATEGORY_MAP: dict[str, str] = {
     "Snares":               "snares",
     "Booms":                "impacts",
     "Reverses":             "reverses",
+    # NOTE: "Falling" and "Rising" are ambiguous (Noise vs Tonal children).
+    # galatcia.py resolves via parent: FX/Noise/Rising → fx_rising,
+    # FX/Tonal/Rising → fx_tonal_rising, etc.  Flat map catches the
+    # common Noise variants; Tonal variants override below.
     "Falling":              "fx_falling",
     "Rising":               "fx_rising",
     "Shepard Tones":        "shepard_tones",
@@ -272,11 +275,52 @@ def read_wav_samples(path: str | Path) -> np.ndarray:
         Audio samples as float64, mono, normalized.
     """
     path = Path(path)
-    with wave.open(str(path), "rb") as wf:
-        n_channels = wf.getnchannels()
-        sampwidth = wf.getsampwidth()
-        n_frames = wf.getnframes()
-        raw = wf.readframes(n_frames)
+    try:
+        with wave.open(str(path), "rb") as wf:
+            n_channels = wf.getnchannels()
+            sampwidth = wf.getsampwidth()
+            n_frames = wf.getnframes()
+            raw = wf.readframes(n_frames)
+    except wave.Error:
+        # IEEE float WAV (format 3) — wave module doesn't support it.
+        # Parse RIFF header manually.
+        data = path.read_bytes()
+        if data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+            raise ValueError(f"Not a valid WAV file: {path}")
+        # Walk chunks
+        pos = 12
+        n_channels = 1
+        sampwidth = 4
+        sample_rate = 44100
+        audio_data = b""
+        while pos < len(data) - 8:
+            chunk_id = data[pos:pos + 4]
+            chunk_size = int.from_bytes(data[pos + 4:pos + 8], "little")
+            if chunk_id == b"fmt ":
+                fmt_tag = int.from_bytes(data[pos + 8:pos + 10], "little")
+                n_channels = int.from_bytes(data[pos + 10:pos + 12], "little")
+                sample_rate = int.from_bytes(data[pos + 12:pos + 16], "little")
+                sampwidth = int.from_bytes(data[pos + 22:pos + 24], "little") // 8
+            elif chunk_id == b"data":
+                audio_data = data[pos + 8:pos + 8 + chunk_size]
+            pos += 8 + chunk_size
+            if pos % 2:
+                pos += 1  # word-align
+
+        if not audio_data:
+            raise ValueError(f"No audio data found in {path}")
+
+        # IEEE float32 or float64
+        if sampwidth == 4:
+            samples = np.frombuffer(audio_data, dtype=np.float32)
+        elif sampwidth == 8:
+            samples = np.frombuffer(audio_data, dtype=np.float64)
+        else:
+            raise ValueError(f"Unsupported float sample width: {sampwidth}")
+        audio = samples.astype(np.float64)
+        if n_channels > 1:
+            audio = audio.reshape(-1, n_channels).mean(axis=1)
+        return audio
 
     if sampwidth == 2:
         dtype = np.int16
@@ -597,6 +641,141 @@ def export_all_galatcia(galatcia_root: str | Path | None = None,
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# RACK ZONE MAPPING — Map Galactia samples → 128 Rack Fibonacci zones
+# ═══════════════════════════════════════════════════════════════════════════
+# Maps every Galactia sample category to a Rack128 zone for direct loading.
+# Used by Stage 2E (rack build) and Stage 5A (rack load from raw audio).
+
+# Galactia sample category → Rack zone name
+SAMPLE_TO_ZONE: dict[str, str] = {
+    # Drum one-shots
+    "kicks":          "kicks",
+    "snares":         "snares",
+    "claps":          "snares",
+    "hihats_closed":  "hats",
+    "hihats_open":    "hats",
+    # Drum loops
+    "drum_loops":     "perc",
+    "buildups":       "transitions",
+    "perc_loops":     "perc",
+    "hihat_loops":    "hats",
+    "kick_snare_loops": "kicks",
+    # FX
+    "impacts":        "fx",
+    "reverses":       "fx",
+    "fx_falling":     "fx",
+    "fx_rising":      "fx",
+    "shepard_tones":  "fx",
+    # Misc / default
+    "misc":           "utility",
+}
+
+# Serum .fxp prefix → Rack zone name
+PRESET_TO_ZONE: dict[str, str] = {
+    "BS":  "mid_bass",      # bass presets
+    "LD":  "melodic",       # leads
+    "PAD": "atmos",         # pads → atmosphere
+    "PL":  "melodic",       # plucks → melodic
+    "SFX": "fx",            # sfx
+    "SYN": "melodic",       # synth stabs
+}
+
+
+@dataclass
+class GalactiaZoneMap:
+    """Galactia samples organized by Rack128 zone for direct loading.
+
+    Each zone entry is a list of (name, audio_array, source_path) tuples
+    ready to pass to ``_rack_add()``.
+    """
+    zones: dict[str, list[tuple[str, np.ndarray, str]]] = field(
+        default_factory=lambda: {
+            "sub_bass": [], "low_bass": [], "mid_bass": [], "high_bass": [],
+            "kicks": [], "snares": [], "hats": [], "perc": [],
+            "fx": [], "melodic": [], "atmos": [], "vocal": [],
+            "transitions": [], "utility": [],
+        }
+    )
+    preset_zones: dict[str, list[tuple[str, str, str]]] = field(
+        default_factory=dict
+    )
+    total_audio: int = 0
+    total_presets: int = 0
+
+    def summary(self) -> dict[str, int]:
+        return {z: len(items) for z, items in self.zones.items() if items}
+
+
+def map_galactia_to_zones(
+    catalog: GalatciaCatalog | None = None,
+    galatcia_root: Path | None = None,
+    max_per_zone: int = 8,
+) -> GalactiaZoneMap:
+    """Scan Galactia and load samples into zone-mapped arrays.
+
+    Parameters
+    ----------
+    catalog : GalatciaCatalog, optional
+        Pre-built catalog.  If None, runs ``catalog_galatcia()``.
+    galatcia_root : Path, optional
+        Override Galactia root folder.
+    max_per_zone : int
+        Maximum samples to load per zone (prevents memory bloat).
+
+    Returns
+    -------
+    GalactiaZoneMap
+        Zone-organized samples ready for Rack128 insertion.
+    """
+    if catalog is None:
+        catalog = catalog_galatcia(galatcia_root)
+
+    zm = GalactiaZoneMap()
+
+    # ── Audio samples → zones ──
+    for sample in catalog.samples:
+        zone = SAMPLE_TO_ZONE.get(sample.category)
+        if zone is None or zone not in zm.zones:
+            continue
+        if len(zm.zones[zone]) >= max_per_zone:
+            continue
+        try:
+            audio = read_wav_samples(sample.source_path)
+            name = f"gal_{sample.category}_{Path(sample.filename).stem}"
+            source = f"galactia:{sample.original_folder}/{sample.filename}"
+            zm.zones[zone].append((name, audio, source))
+            zm.total_audio += 1
+        except Exception as exc:
+            _log.warning("Failed to read %s: %s", sample.filename, exc)
+
+    # ── Wavetables → utility zone ──
+    for wt in catalog.wavetables:
+        if len(zm.zones["utility"]) >= max_per_zone:
+            break
+        try:
+            frames = read_wavetable_frames(wt.source_path)
+            if frames:
+                name = f"gal_wt_{wt.name}"
+                source = f"galactia:wt/{wt.filename}"
+                zm.zones["utility"].append((name, frames[0], source))
+                zm.total_audio += 1
+        except Exception as exc:
+            _log.warning("Failed to read WT %s: %s", wt.filename, exc)
+
+    # ── Presets → zone mapping (metadata only, no audio) ──
+    for preset in catalog.presets:
+        zone = PRESET_TO_ZONE.get(preset.prefix, "mid_bass")
+        zm.preset_zones.setdefault(zone, []).append(
+            (preset.name, preset.filename, f"galactia:preset/{preset.filename}")
+        )
+        zm.total_presets += 1
+
+    _log.info("GALACTIA ZONE MAP: %d audio, %d presets — %s",
+              zm.total_audio, zm.total_presets, zm.summary())
+    return zm
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ALS INTEGRATION — Project-wide GALATCIA → Ableton audio tracks
 # ═══════════════════════════════════════════════════════════════════════════
 # These functions convert GALATCIA samples into ALSTrack / ALSClipInfo
@@ -617,10 +796,10 @@ DEFAULT_FX_SAMPLES: dict[str, str] = {
     "impact":   "FX/Impacts/Booms/BODP_Impact_3.wav",
     "impact2":  "FX/Impacts/Booms/BODP_Impact_7.wav",
     "reverse":  "FX/Impacts/Reverses/BODP_Impact_Reverse_5.wav",
-    "rising":   "FX/Rising/BODP_Rising_3.wav",
-    "rising2":  "FX/Rising/BODP_Rising_C_5.wav",
-    "falling":  "FX/Falling/BODP_Falling_3.wav",
-    "falling2": "FX/Falling/BODP_Falling_C_7.wav",
+    "rising":   "FX/Noise/Rising/BODP_Rising_3.wav",
+    "rising2":  "FX/Tonal/Rising/BODP_Rising_C_5.wav",
+    "falling":  "FX/Noise/Falling/BODP_Falling_3.wav",
+    "falling2": "FX/Tonal/Falling/BODP_Falling_C_7.wav",
     "shepard":  "FX/Shepard Tones/BODP_Shepard_F_1.wav",
 }
 
@@ -686,7 +865,7 @@ def _resolve_sample(rel: str,
                     galatcia_root: Path | None = None) -> Path:
     """Resolve a relative GALATCIA sample path to absolute."""
     root = galatcia_root or DEFAULT_GALATCIA_ROOT
-    return root / "Samples" / "Samples" / rel
+    return root / "Samples" / rel
 
 
 def build_drum_audio_tracks(
@@ -1038,7 +1217,7 @@ def install_wavetables(
         Number of files copied.
     """
     root = galatcia_root or DEFAULT_GALATCIA_ROOT
-    wt_dir = root / "ERB NEURO WT" / "ERB NEURO WT"
+    wt_dir = root / "ERB NEURO WT"
     serum_tables = (Path.home() / "Documents" / "Xfer"
                     / "Serum Presets" / "Tables" / dest_folder)
     if not wt_dir.is_dir():

@@ -69,9 +69,10 @@ arrangement:
 # Each track has: role, color, volume, pan, synth, preset, automation rules
 
 tracks:
-  # === DRUMS (Drum Rack) ===
+  # === DRUMS BUS ===
   DRUMS:
     role: drums
+    bus: drums
     color: 69         # Red
     volume_db: 0.0
     pan: 0.0
@@ -88,6 +89,17 @@ tracks:
       - { note: 56, name: Perc_1,   choke: -1 }
       - { note: 57, name: Perc_2,   choke: -1 }
       - { note: 75, name: Clav,     choke: -1 }
+
+  # Sidechain trigger — muted ghost kick for sidechain pumping
+  SC_TRIGGER:
+    role: sc_trigger
+    bus: drums
+    color: 1          # Dark grey
+    volume_db: -70.0  # Muted output
+    pan: 0.0
+    synth: null       # Drum Rack or silent kick sample
+    mute: true        # Track is muted — only for sidechain routing
+    active_sections: [drop, build, vip]
     # Drums auto-generate per section type:
     #   intro: sparse hats building
     #   build: accelerating snare + kick density
@@ -95,9 +107,11 @@ tracks:
     #   break: minimal perc + snare rolls
     #   outro: decaying sparse
 
-  # === BASS LAYER (4 tracks) ===
-  BASS:
-    role: bass
+  # === BASS BUS (6 tracks — Subtronics-aligned) ===
+  # SUB / MID_BASS / GROWL / WOBBLE / RIDDIM / FORMANT
+  MID_BASS:
+    role: mid_bass
+    bus: bass
     color: 16         # Deep blue
     volume_db: -3.0
     pan: 0.0
@@ -113,6 +127,7 @@ tracks:
 
   SUB:
     role: sub
+    bus: bass
     color: 17         # Darker blue
     volume_db: -6.0
     pan: 0.0
@@ -127,6 +142,7 @@ tracks:
 
   GROWL:
     role: growl
+    bus: bass
     color: 60         # Orange-red
     volume_db: -4.0
     pan: 0.0
@@ -149,6 +165,7 @@ tracks:
 
   WOBBLE:
     role: wobble
+    bus: bass
     color: 12         # Purple
     volume_db: -5.0
     pan: 0.1
@@ -165,6 +182,7 @@ tracks:
 
   RIDDIM:
     role: riddim
+    bus: bass
     color: 13         # Magenta
     volume_db: -5.0
     pan: -0.1
@@ -183,6 +201,7 @@ tracks:
 
   FORMANT:
     role: formant
+    bus: bass
     color: 14         # Pink
     volume_db: -5.0
     pan: 0.0
@@ -198,9 +217,11 @@ tracks:
         max: 0.9
         cycles_per_bar: 0.25  # slow vowel morph
 
-  # === MELODIC LAYER (6 tracks) ===
+  # === MELODICS BUS (6 tracks — Subtronics-aligned) ===
+  # LEAD / COUNTER / VOCAL / CHORDS / PAD / ARP
   LEAD:
     role: lead
+    bus: melodics
     color: 25         # Yellow
     volume_db: -4.0
     pan: 0.0
@@ -217,6 +238,7 @@ tracks:
 
   COUNTER:
     role: counter
+    bus: melodics
     color: 26         # Green-yellow
     volume_db: -6.0
     pan: 0.0
@@ -228,8 +250,9 @@ tracks:
       vip: 0.3
       build: 0.2
 
-  VOCAL_CHOP:
-    role: vocal_chop
+  VOCAL:
+    role: vocal
+    bus: melodics
     color: 41         # Teal
     volume_db: -5.0
     pan: 0.2
@@ -242,6 +265,7 @@ tracks:
 
   CHORDS:
     role: chords
+    bus: melodics
     color: 45         # Green
     volume_db: -6.0
     pan: 0.0
@@ -261,6 +285,7 @@ tracks:
 
   PAD:
     role: pad
+    bus: melodics
     color: 46         # Lighter green
     volume_db: -9.0
     pan: 0.0
@@ -282,6 +307,7 @@ tracks:
 
   ARP:
     role: arp
+    bus: melodics
     color: 50         # Cyan
     volume_db: -8.0
     pan: -0.3
@@ -293,9 +319,11 @@ tracks:
       bridge: 0.6
       vip: 0.45
 
-  # === UTILITY LAYER ===
-  FX:
-    role: fx
+  # === FX BUS (4 tracks — Subtronics-aligned) ===
+  # IMPACTS / RISERS / TRANSITIONS / ATMOS
+  IMPACTS:
+    role: impacts
+    bus: fx
     color: 3          # White
     volume_db: -6.0
     pan: 0.0
@@ -304,8 +332,9 @@ tracks:
     active_sections: [drop, build]
     # One-shot impacts at section transitions
 
-  RISER:
-    role: riser
+  RISERS:
+    role: risers
+    bus: fx
     color: 4          # Light grey
     volume_db: -8.0
     pan: 0.0
@@ -325,6 +354,35 @@ tracks:
         start: 0.2
         end: 1.0
 
+  TRANSITIONS:
+    role: transitions
+    bus: fx
+    color: 5          # Medium grey
+    volume_db: -8.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "{TRACK}_Tape_Glitch"
+    active_sections: [build, break]
+    # Tape stops, glitches, gate chops at section boundaries
+    send_b:
+      build: 0.3
+      break: 0.2
+
+  ATMOS:
+    role: atmos
+    bus: fx
+    color: 6          # Darker grey
+    volume_db: -12.0
+    pan: 0.0
+    synth: "Serum 2"
+    preset_name: "{TRACK}_Ambient_Texture"
+    active_sections: [intro, break, bridge, outro]
+    send_a:
+      intro: 0.6
+      break: 0.5
+      bridge: 0.55
+      outro: 0.7
+
 # ───────────────────────────────────────────────────────────
 # RETURN TRACKS (FX Sends)
 # ───────────────────────────────────────────────────────────
@@ -334,13 +392,23 @@ returns:
     send_id: A
     color: 57         # Blue-grey
     volume_db: -6.0
-    # Tracks routed here: LEAD, COUNTER, CHORDS, PAD
+    # Receives from: LEAD, COUNTER, CHORDS, PAD, ATMOS (shared space — hall or plate)
 
   DELAY:
     send_id: B
     color: 58         # Grey
     volume_db: -6.0
-    # Tracks routed here: VOCAL_CHOP, ARP
+    # Receives from: VOCAL, ARP, TRANSITIONS (tempo-synced — 1/4 or dotted 1/8)
+
+  PARALLEL_COMP:
+    send_id: C
+    color: 59         # Darker grey
+    volume_db: -9.0
+    # Heavy ratio parallel compression blended back
+    # Receives from: DRUMS, BASS bus (glue + punch)
+    ratio: 8.0
+    attack_ms: 10
+    release_ms: 100
 
 # ───────────────────────────────────────────────────────────
 # DRUM PATTERNS (per section type)
@@ -402,7 +470,7 @@ drum_patterns:
 # ───────────────────────────────────────────────────────────
 
 midi_rules:
-  bass:
+  mid_bass:
     pattern: root_per_chord      # root note per 2-bar chord cycle
     octave_offset: 0
     default_velocity: 100
@@ -447,7 +515,7 @@ midi_rules:
     notes: [F4, D4, C4, A3]
     default_velocity: 85
 
-  vocal_chop:
+  vocal:
     pattern: rhythmic_hits       # syncopated hits
     default_velocity: 100
 
@@ -464,14 +532,28 @@ midi_rules:
     pattern: arpeggio            # 16th note arpeggiated chord tones
     default_velocity: 85
 
-  fx:
+  impacts:
     pattern: transition_hit      # one-shots at section boundaries
     default_velocity: 110
 
-  riser:
+  risers:
     pattern: sustained_note      # single rising note through build
     default_velocity: 90
     duration: section_length     # entire build section
+
+  sc_trigger:
+    pattern: quarter_kick        # quarter-note ghost kick for sidechain
+    default_velocity: 100
+    duration: 0.1                # short trigger pulse
+
+  transitions:
+    pattern: section_boundary    # tape stops + glitches at transitions
+    default_velocity: 100
+
+  atmos:
+    pattern: sustained_texture   # long ambient notes in atmospheric sections
+    default_velocity: 60
+    duration: 16.0               # 4 bars sustained
 
 # ───────────────────────────────────────────────────────────
 # SOUND DESIGN PRESETS (Serum 2 Macro assignments)

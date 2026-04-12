@@ -1432,9 +1432,10 @@ def main() -> None:
             # Cache processor + controller state bytes for ALS embedding
             proc = s2_preset.get_processor_state()
             ctrl = s2_preset.get_controller_state()
-            _serum2_proc_cache[s2_name] = proc
-            _serum2_ctrl_cache[s2_name] = ctrl
-            print(f"    {s2_name}: proc={len(proc)}B ctrl={len(ctrl)}B")
+            if proc is not None and ctrl is not None:
+                _serum2_proc_cache[s2_name] = proc
+                _serum2_ctrl_cache[s2_name] = ctrl
+                print(f"    {s2_name}: proc={len(proc)}B ctrl={len(ctrl)}B")
         # Install to Serum 2 User presets folder
         installed = install_all_presets()
         print(f"    Installed {len(installed)} presets to Serum 2 User/DUBFORGE/")

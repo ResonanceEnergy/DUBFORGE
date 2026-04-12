@@ -482,7 +482,7 @@ def _mixer_param_map(mixer: ET.Element) -> dict[str, str]:
         if el is not None:
             at = el.find("AutomationTarget")
             if at is not None:
-                pmap[tag] = at.get("Id")
+                pmap[tag] = at.get("Id")  # type: ignore[assignment]
     sends = mixer.find("Sends")
     if sends is not None:
         for holder in sends.findall("TrackSendHolder"):
@@ -490,7 +490,7 @@ def _mixer_param_map(mixer: ET.Element) -> dict[str, str]:
             if send is not None:
                 at = send.find("AutomationTarget")
                 if at is not None:
-                    pmap[f"Send {holder.get('Id', '0')}"] = at.get("Id")
+                    pmap[f"Send {holder.get('Id', '0')}"] = at.get("Id")  # type: ignore[assignment]
     return pmap
 
 
@@ -547,7 +547,7 @@ def _populate_automation_envelopes(envs: ET.Element, automations: list,
                 attrs["CurveControl1Y"] = str(round(pt.curve, 4))
                 attrs["CurveControl2X"] = str(round(0.5, 4))
                 attrs["CurveControl2Y"] = str(round(pt.curve, 4))
-            ET.SubElement(events, "FloatEvent", **attrs)
+            ET.SubElement(events, "FloatEvent", **attrs)  # type: ignore[arg-type]
         atvs = ET.SubElement(automation, "AutomationTransformViewState")
         _v(atvs, "IsTransformPending", "false")
         ET.SubElement(atvs, "TimeAndValueTransforms")
@@ -758,7 +758,7 @@ def _build_vst3_plugin_device(
     _v(vst3, "WinPosY", "0")
     num_inputs = "0" if info["device_type"] == 1 else "1"
     _v(vst3, "NumAudioInputs", num_inputs)
-    _v(vst3, "NumAudioOutputs", "1")
+    _v(vst3, "NumAudioOutputs", "2")  # stereo output (Serum 2, etc.)
     _v(vst3, "IsPlaceholderDevice", "false")
 
     # Preset > Vst3Preset
@@ -1058,17 +1058,29 @@ def _build_eq8(devices_elem: ET.Element, ids: _IdCounter,
 
 
 def _build_compressor(devices_elem: ET.Element, ids: _IdCounter,
-                      device_id: int = 0) -> None:
-    """Build an Ableton Compressor (Compressor2) device with sensible defaults."""
+                      device_id: int = 0, *,
+                      threshold: str = "-20",
+                      ratio: str = "4",
+                      attack: str = "1",
+                      release: str = "100",
+                      sidechain_on: bool = False,
+                      sidechain_source: str = "",
+                      sidechain_label: str = "") -> None:
+    """Build an Ableton Compressor (Compressor2) device.
+
+    When *sidechain_on* is True the compressor's sidechain section is
+    enabled and routed from *sidechain_source* (e.g.
+    ``"AudioIn/TrackIn/S0"``).  This is used for ghost-kick pumping.
+    """
     comp = ET.SubElement(devices_elem, "Compressor2", Id=str(device_id))
     _device_header(comp, ids)
     _v(comp, "OverwriteProtectionNumber", "2816")
 
-    _float_param(comp, "Threshold", "-20", ids, min_val="-40", max_val="0")
-    _float_param(comp, "Ratio", "4", ids, min_val="1", max_val="20")
+    _float_param(comp, "Threshold", threshold, ids, min_val="-40", max_val="0")
+    _float_param(comp, "Ratio", ratio, ids, min_val="1", max_val="20")
     _float_param(comp, "ExpansionRatio", "2", ids, min_val="1", max_val="10")
-    _float_param(comp, "Attack", "1", ids, min_val="0.01", max_val="1000")
-    _float_param(comp, "Release", "100", ids, min_val="1", max_val="3000")
+    _float_param(comp, "Attack", attack, ids, min_val="0.01", max_val="1000")
+    _float_param(comp, "Release", release, ids, min_val="1", max_val="3000")
     _bool_param(comp, "AutoReleaseControlOnOff", "false", ids)
     _float_param(comp, "Gain", "0", ids, min_val="-15", max_val="15")
     _bool_param(comp, "GainCompensation", "false", ids)
@@ -1078,10 +1090,15 @@ def _build_compressor(devices_elem: ET.Element, ids: _IdCounter,
     _float_param(comp, "Knee", "6", ids, min_val="0", max_val="12")
     _float_param(comp, "LookAhead", "0", ids, min_val="0", max_val="20")
 
-    # SideChain defaults (no external side-chain)
+    # SideChain — enabled when ghost kick routing is provided
     sc = ET.SubElement(comp, "SideChain")
-    _on_switch(sc, ids, value="false")
-    _routing(sc, "RoutedFrom", "AudioIn/External/S0", "Ext. In", "1/2")
+    if sidechain_on and sidechain_source:
+        _on_switch(sc, ids, value="true")
+        _routing(sc, "RoutedFrom", sidechain_source,
+                 sidechain_label or "GHOST_KICK", "Post FX")
+    else:
+        _on_switch(sc, ids, value="false")
+        _routing(sc, "RoutedFrom", "AudioIn/External/S0", "Ext. In", "1/2")
     _float_param(sc, "DryWet", "1", ids, min_val="0", max_val="1")
 
 
@@ -1157,6 +1174,145 @@ def _build_auto_filter(devices_elem: ET.Element, ids: _IdCounter,
     _routing(sc, "RoutedFrom", "AudioIn/External/S0", "Ext. In", "1/2")
 
 
+def _build_reverb(devices_elem: ET.Element, ids: _IdCounter,
+                  device_id: int = 0, *,
+                  decay_time: str = "1.0",
+                  pre_delay: str = "10",
+                  dry_wet: str = "0.2") -> None:
+    """Build an Ableton Reverb device."""
+    rev = ET.SubElement(devices_elem, "Reverb", Id=str(device_id))
+    _device_header(rev, ids)
+    _v(rev, "OverwriteProtectionNumber", "2816")
+    _float_param(rev, "PreDelayTime", pre_delay, ids, min_val="0", max_val="500")
+    _float_param(rev, "DecayTime", decay_time, ids, min_val="0.1", max_val="60")
+    _float_param(rev, "StereoWidth", "1", ids, min_val="0", max_val="1")
+    _float_param(rev, "DiffuseAmount", "1", ids, min_val="0", max_val="1")
+    _float_param(rev, "ScaleAmount", "1", ids, min_val="0", max_val="1")
+    _float_param(rev, "ReflectionsAmount", "0.5", ids, min_val="0", max_val="1")
+    _float_param(rev, "ReflectionsTime", "0.04", ids, min_val="0", max_val="0.5")
+    _float_param(rev, "ChorusAmount", "0", ids, min_val="0", max_val="1")
+    _float_param(rev, "ChorusRate", "1", ids, min_val="0.01", max_val="10")
+    _float_param(rev, "ChorusModDepth", "0", ids, min_val="0", max_val="1")
+    _float_param(rev, "HighCutOn", "1", ids, min_val="0", max_val="1")
+    _float_param(rev, "HighCutFreq", "20000", ids, min_val="100", max_val="20000")
+    _float_param(rev, "LowCutOn", "0", ids, min_val="0", max_val="1")
+    _float_param(rev, "LowCutFreq", "50", ids, min_val="10", max_val="1000")
+    _float_param(rev, "FlattenedAmount", "0", ids, min_val="0", max_val="1")
+    _float_param(rev, "DryWet", dry_wet, ids, min_val="0", max_val="1")
+
+
+def _build_delay(devices_elem: ET.Element, ids: _IdCounter,
+                 device_id: int = 0, *,
+                 feedback: str = "0.3",
+                 dry_wet: str = "0.15") -> None:
+    """Build an Ableton Simple Delay device."""
+    dly = ET.SubElement(devices_elem, "Delay", Id=str(device_id))
+    _device_header(dly, ids)
+    _v(dly, "OverwriteProtectionNumber", "2816")
+    # Left delay line
+    ll = ET.SubElement(dly, "DelayLine.0")
+    _float_param(ll, "Delay", "1", ids, min_val="0", max_val="1")         # in beats
+    _bool_param(ll, "IsLinked", "true", ids)
+    # Right delay line
+    lr = ET.SubElement(dly, "DelayLine.1")
+    _float_param(lr, "Delay", "1", ids, min_val="0", max_val="1")
+    _bool_param(lr, "IsLinked", "true", ids)
+    _float_param(dly, "Feedback", feedback, ids, min_val="0", max_val="1")
+    _float_param(dly, "PanL", "-0.5", ids, min_val="-1", max_val="1")
+    _float_param(dly, "PanR", "0.5", ids, min_val="-1", max_val="1")
+    _float_param(dly, "DryWet", dry_wet, ids, min_val="0", max_val="1")
+    _v(dly, "SyncedDivisionL", "5")   # 1/8
+    _v(dly, "SyncedDivisionR", "5")
+    _v(dly, "SyncModeL", "1")         # 1=Beat-synced
+    _v(dly, "SyncModeR", "1")
+
+
+def _build_phaser(devices_elem: ET.Element, ids: _IdCounter,
+                  device_id: int = 0) -> None:
+    """Build an Ableton Phaser device (Live 12 Phaser-Flanger)."""
+    ph = ET.SubElement(devices_elem, "PhaserNew", Id=str(device_id))
+    _device_header(ph, ids)
+    _v(ph, "OverwriteProtectionNumber", "2816")
+    _float_param(ph, "Frequency", "440", ids, min_val="20", max_val="18000")
+    _float_param(ph, "Feedback", "0.7", ids, min_val="0", max_val="1")
+    _float_param(ph, "Poles", "4", ids, min_val="1", max_val="8")
+    _float_param(ph, "Color", "0", ids, min_val="-1", max_val="1")
+    _float_param(ph, "DryWet", "0.5", ids, min_val="0", max_val="1")
+    _float_param(ph, "LfoAmount", "0.5", ids, min_val="0", max_val="1")
+    _float_param(ph, "LfoRate", "1", ids, min_val="0.01", max_val="30")
+    _v(ph, "LfoSync", "0")
+    _v(ph, "LfoSyncedRate", "5")
+    _v(ph, "LfoWaveShape", "0")
+    _float_param(ph, "EnvelopeAmount", "0", ids, min_val="0", max_val="1")
+    _float_param(ph, "EnvelopeAttack", "10", ids, min_val="0.1", max_val="1000")
+    _float_param(ph, "EnvelopeRelease", "100", ids, min_val="1", max_val="3000")
+
+
+def _build_multiband_dynamics(devices_elem: ET.Element, ids: _IdCounter,
+                               device_id: int = 0, *,
+                               amount: str = "0.5") -> None:
+    """Build an Ableton Multiband Dynamics device (OTT-style preset)."""
+    mbd = ET.SubElement(devices_elem, "MultibandDynamics", Id=str(device_id))
+    _device_header(mbd, ids)
+    _v(mbd, "OverwriteProtectionNumber", "2816")
+    _v(mbd, "IsExpander", "false")
+    _float_param(mbd, "Amount", amount, ids, min_val="0", max_val="1")
+    _float_param(mbd, "TimeScaling", "1", ids, min_val="0", max_val="4")
+    # Three bands: low / mid / high
+    for band_idx, (lf, hf, threshold, ratio) in enumerate([
+        ("20",   "500",   "-30", "4"),
+        ("500",  "5000",  "-30", "4"),
+        ("5000", "20000", "-30", "4"),
+    ]):
+        band = ET.SubElement(mbd, f"Band.{band_idx}")
+        _v(band, "IsActive", "true")
+        _float_param(band, "LowFreq", lf, ids, min_val="10", max_val="20000")
+        _float_param(band, "HighFreq", hf, ids, min_val="10", max_val="20000")
+        _float_param(band, "CompThreshold", threshold, ids, min_val="-60", max_val="0")
+        _float_param(band, "CompRatio", ratio, ids, min_val="1", max_val="60")
+        _float_param(band, "ExpThreshold", "-60", ids, min_val="-60", max_val="0")
+        _float_param(band, "ExpRatio", "1", ids, min_val="1", max_val="20")
+        _float_param(band, "Attack", "1", ids, min_val="0.01", max_val="1000")
+        _float_param(band, "Release", "100", ids, min_val="1", max_val="3000")
+        _float_param(band, "OutputGain", "0", ids, min_val="-36", max_val="36")
+    _float_param(mbd, "OutputGain", "0", ids, min_val="-36", max_val="36")
+    _float_param(mbd, "DryWet", "1", ids, min_val="0", max_val="1")
+
+
+def _build_audio_effect_rack(devices_elem: ET.Element, ids: _IdCounter,
+                              device_id: int = 0) -> None:
+    """Build a minimal Ableton Audio Effect Rack (empty parallel chain)."""
+    rack = ET.SubElement(devices_elem, "AudioEffectGroupDevice", Id=str(device_id))
+    _device_header(rack, ids)
+    _v(rack, "OverwriteProtectionNumber", "2816")
+    _v(rack, "ShowModChain", "false")
+    # Macros (8 empty knobs)
+    macros = ET.SubElement(rack, "Macros")
+    for mi in range(8):
+        mc = ET.SubElement(macros, f"MacroControls.{mi}", Id=str(ids.next()))
+        _v(mc, "LomId", "0")
+        _v(mc, "Manual", "64")
+        _v(mc, "MidiCCOnOff", "false")
+    # Single chain with no devices
+    chains = ET.SubElement(rack, "Branches")
+    branch = ET.SubElement(chains, "AudioEffectBranch", Id=str(ids.next()))
+    _v(branch, "LomId", "0")
+    _v(branch, "Name", "Chain")
+    _v(branch, "IsSelected", "false")
+    _v(branch, "HasDrums", "false")
+    bc = ET.SubElement(branch, "DeviceChain")
+    a2a = ET.SubElement(bc, "AudioToAudioDeviceChain", Id=str(ids.next()))
+    ET.SubElement(a2a, "Devices")
+    ET.SubElement(a2a, "SignalModulations")
+    ET.SubElement(rack, "ReturnBranches")
+
+
+def _build_drum_rack_placeholder(devices_elem: ET.Element, ids: _IdCounter,
+                                  device_id: int = 0) -> None:
+    """No-op: Drum Rack is already built via track.drum_rack_pads; skip duplicate."""
+    pass   # DrumGroupDevice handled by _build_drum_group_device when drum_rack_pads is set
+
+
 # Map user-friendly FX names to native builder functions
 _NATIVE_DEVICE_BUILDERS: dict[str, Callable] = {
     "EQ Eight": _build_eq8,
@@ -1164,6 +1320,12 @@ _NATIVE_DEVICE_BUILDERS: dict[str, Callable] = {
     "Saturator": _build_saturator,
     "Utility": _build_utility,
     "Auto Filter": _build_auto_filter,
+    "Reverb": _build_reverb,
+    "Delay": _build_delay,
+    "Phaser": _build_phaser,
+    "Multiband Dynamics": _build_multiband_dynamics,
+    "Audio Effect Rack": _build_audio_effect_rack,
+    "Drum Rack": _build_drum_rack_placeholder,  # no-op — handled by drum_rack_pads
 }
 
 
@@ -1407,8 +1569,6 @@ def _inject_audio_clips(events_elem: ET.Element, track: ALSTrack,
         _v(file_ref, "OriginalCrc", "0")
         _v(file_ref, "SourceHint", "")
         _v(sample_ref, "LastModDate", "0")
-        src_ctx = ET.SubElement(sample_ref, "SourceContext")
-        ET.SubElement(src_ctx, "Value")
         _v(sample_ref, "SampleUsageHint", "0")
         _v(sample_ref, "DefaultDuration", str(cs.get("duration_frames") or 0))
         _v(sample_ref, "DefaultSampleRate", str(cs.get("sample_rate") or 44100))
@@ -1657,7 +1817,7 @@ def _build_midi_track(parent: ET.Element, track: ALSTrack, track_id: int,
     dc = ET.SubElement(t, "DeviceChain")
     events_elem = _build_device_chain(dc, track, ids, num_returns, num_scenes,
                                       track_role="midi")
-    _populate_automation_envelopes(envs, track.automations, dc.find('Mixer'))
+    _populate_automation_envelopes(envs, track.automations, dc.find('Mixer'))  # type: ignore[arg-type]
 
     # Inject MIDI clips into MainSequencer's ArrangerAutomation
     if events_elem is not None:
@@ -1696,10 +1856,10 @@ def _build_audio_track(parent: ET.Element, track: ALSTrack, track_id: int,
     dc = ET.SubElement(t, "DeviceChain")
     events_elem = _build_device_chain(dc, track, ids, num_returns, num_scenes,
                                       track_role="audio")
-    _populate_automation_envelopes(envs, track.automations, dc.find('Mixer'))
+    _populate_automation_envelopes(envs, track.automations, dc.find('Mixer'))  # type: ignore[arg-type]
 
     # Inject arrangement clips into MainSequencer's ArrangerAutomation
-    _inject_audio_clips(events_elem, track, total_beats, als_dir, project_bpm)
+    _inject_audio_clips(events_elem, track, total_beats, als_dir, project_bpm)  # type: ignore[arg-type]
 
     return t
 
@@ -1719,7 +1879,7 @@ def _build_return_track(parent: ET.Element, track: ALSTrack, track_id: int,
     dc = ET.SubElement(t, "DeviceChain")
     _build_device_chain(dc, track, ids, num_returns, num_scenes,
                         track_role="return")
-    _populate_automation_envelopes(envs, track.automations, dc.find('Mixer'))
+    _populate_automation_envelopes(envs, track.automations, dc.find('Mixer'))  # type: ignore[arg-type]
 
     return t
 
@@ -2219,8 +2379,9 @@ def dubstep_weapon_session() -> ALSProject:
                      volume_db=-10),
             ALSTrack(name="DELAY", track_type="return", color=COLOR_GREEN,
                      volume_db=-12),
-            ALSTrack(name="SIDECHAIN", track_type="return", color=COLOR_RED,
-                     volume_db=-6),
+            ALSTrack(name="GHOST_KICK", track_type="midi", color=COLOR_RED,
+                     volume_db=-70,
+                     clip_names=["GhostKick_Drop"]),
         ],
         scenes=[
             ALSScene(name="INTRO", tempo=150.0),
@@ -2314,8 +2475,9 @@ def hybrid_fractal_session() -> ALSProject:
                  volume_db=-10),
         ALSTrack(name="DELAY_PHI", track_type="return", color=COLOR_GREEN,
                  volume_db=-14),
-        ALSTrack(name="SIDECHAIN", track_type="return", color=COLOR_RED,
-                 volume_db=-6),
+        ALSTrack(name="GHOST_KICK", track_type="midi", color=COLOR_RED,
+                 volume_db=-70,
+                 clip_names=["GhostKick_Drop"]),
     ])
 
     return ALSProject(

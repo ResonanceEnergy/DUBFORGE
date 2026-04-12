@@ -211,7 +211,7 @@ def quick_render_bank() -> BatchBank:
     ])
 
 
-ALL_BATCH_BANKS: dict[str, callable] = {
+ALL_BATCH_BANKS: dict[str, callable] = {  # type: ignore[type-arg]
     "all": all_render_bank,
     "synths": synths_render_bank,
     "fx": fx_render_bank,
@@ -224,13 +224,16 @@ ALL_BATCH_BANKS: dict[str, callable] = {
 # EXPORT
 # ═══════════════════════════════════════════════════════════════════════════
 
-def export_batch_renders(output_dir: str = "output") -> list[str]:
+def export_batch_renders(
+    output_dir: str = "output",
+    compress: bool = True,
+) -> list[str]:
     """Render all batch presets and return wav paths."""
     paths: list[str] = []
     for bank_name, bank_fn in ALL_BATCH_BANKS.items():
         bank = bank_fn()
         for preset in bank.presets:
-            results = render_batch(preset, output_dir)
+            results = render_batch(preset, output_dir, compress=compress)
             paths.extend(r.wav_path for r in results)
     return paths
 

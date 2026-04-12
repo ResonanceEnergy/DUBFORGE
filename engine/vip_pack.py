@@ -34,6 +34,7 @@ from engine.bass_oneshot import BassPreset, synthesize_bass
 from engine.config_loader import PHI
 from engine.noise_generator import NoisePreset, synthesize_noise
 from engine.phi_core import SAMPLE_RATE
+from engine.accel import fft, ifft
 from engine.sample_pack_builder import (
     ALL_PACK_BANKS,
     PackPreset,
@@ -267,6 +268,264 @@ def export_all_vip_packs(output_dir: str = "output") -> list[str]:
 
     print(f"  ✓ {len(all_paths)} total VIP samples")
     return all_paths
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# v7.0.0 — VIP Generation Mode (Fractals → Antifractals)
+# ═══════════════════════════════════════════════════════════════════════════
+# Full VIP version creation workflow:
+#   1. Take existing DUBFORGE output (stems, samples, wavetables)
+#   2. Apply the Golden VIP Rule: change 61.8%, keep 38.2%
+#   3. Mutate bass textures via VIP rotation map
+#   4. Rearrange arrangement energy curve (inverse RCO)
+#   5. Shift harmonic content (new key signature or modal interchange)
+#   6. Apply fractal → antifractal processing (invert timbral qualities)
+#   7. A/B comparison between original and VIP
+
+@dataclass
+class VIPTrackConfig:
+    """Configuration for full VIP track generation."""
+    original_name: str
+    vip_name: str = ""
+    # Mutation controls
+    key_shift_semitones: int = 0       # shift root key (0=same, 5=fourth, 7=fifth)
+    bpm_shift: float = 0.0            # BPM offset (e.g. +5 or -3)
+    energy_invert: bool = False        # invert energy curve (drops↔builds)
+    bass_rotation: bool = True         # rotate bass types via VIP map
+    wavetable_morph_offset: float = 0.0  # offset morph position (0-1)
+    fx_chain_swap: bool = True         # swap FX chain parameters
+    arrangement_shuffle: bool = False  # shuffle section order
+    # Fractal → Antifractal
+    antifractal_mode: bool = True      # apply antifractal processing
+    antifractal_depth: float = PHI_KEEP  # depth of antifractal transform (0.618)
+
+
+@dataclass
+class VIPTrackResult:
+    """Result of a full VIP track generation."""
+    config: VIPTrackConfig
+    stem_mutations: dict[str, list[str]]  # stem_name -> list of mutations
+    total_changed_percent: float
+    total_kept_percent: float
+    wav_paths: list[str]
+    delta_report: dict
+
+
+def _antifractal_process(signal: np.ndarray, depth: float = 0.618) -> np.ndarray:
+    """Antifractal transform — invert timbral qualities.
+
+    Swaps spectral character: bright↔dark, transient↔sustained, clean↔distorted.
+    Based on Subtronics' Fractals→Antifractals remix technique.
+    """
+    n = len(signal)
+    if n < 64:
+        return signal
+
+    # Mirror spectral content around midpoint frequency
+    spectrum = fft(signal)
+    mid_bin = len(spectrum) // 2
+    reversed_spec = np.zeros_like(spectrum)
+    for i in range(len(spectrum)):
+        mirror_i = len(spectrum) - 1 - i
+        if 0 <= mirror_i < len(spectrum):
+            reversed_spec[i] = spectrum[mirror_i]
+
+    # Blend original and mirrored based on depth
+    blended = spectrum * (1 - depth) + reversed_spec * depth
+    result = ifft(blended, n=n)
+
+    # Normalize
+    peak = np.max(np.abs(result))
+    if peak > 0:
+        result = result / peak
+    return np.real(result)
+
+
+def _energy_curve_invert(stems: dict[str, np.ndarray],
+                         sample_rate: int = SAMPLE_RATE) -> dict[str, np.ndarray]:
+    """Invert energy curve — swap dynamics (loud↔quiet sections)."""
+    inverted = {}
+    for name, signal in stems.items():
+        n = len(signal)
+        # Compute amplitude envelope
+        chunk = max(1, int(sample_rate * 0.1))  # 100ms chunks
+        num_chunks = n // chunk
+        if num_chunks < 2:
+            inverted[name] = signal
+            continue
+        # Build envelope
+        env = np.ones(n)
+        for i in range(num_chunks):
+            start = i * chunk
+            end = min(start + chunk, n)
+            rms = float(np.sqrt(np.mean(signal[start:end] ** 2))) + 1e-12
+            env[start:end] = rms
+        # Invert: loud sections become quiet, quiet become loud
+        max_env = np.max(env) + 1e-12
+        inv_env = (max_env - env) / max_env + 0.1  # keep minimum at 10%
+        inverted[name] = signal * inv_env / np.max(np.abs(inv_env))
+    return inverted
+
+
+def _pitch_shift_stem(signal: np.ndarray, semitones: int,
+                      sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """Simple pitch shift via resampling."""
+    if semitones == 0:
+        return signal
+    ratio = 2.0 ** (semitones / 12.0)
+    n_out = int(len(signal) / ratio)
+    return np.interp(
+        np.linspace(0, len(signal) - 1, n_out),
+        np.arange(len(signal)),
+        signal,
+    )
+
+
+def generate_vip_track(
+    stems: dict[str, np.ndarray],
+    config: VIPTrackConfig,
+    output_dir: str = "output",
+    sample_rate: int = SAMPLE_RATE,
+) -> VIPTrackResult:
+    """Generate a complete VIP version of a track from its stems.
+
+    Implements the Subtronics Fractals→Antifractals workflow:
+    1. Keep 38.2% of elements identical (Golden VIP Rule)
+    2. Mutate 61.8% through bass rotation, key shift, energy inversion
+    3. Apply antifractal processing for timbral mirroring
+    4. Export mutated stems
+
+    Args:
+        stems: Dict mapping stem_name -> numpy signal array
+        config: VIP generation configuration
+        output_dir: Base output directory
+        sample_rate: Audio sample rate
+
+    Returns:
+        VIPTrackResult with mutated stems and delta report
+    """
+    if not config.vip_name:
+        config.vip_name = f"{config.original_name}_VIP"
+
+    vip_dir = Path(output_dir) / "vip_tracks" / config.vip_name
+    vip_dir.mkdir(parents=True, exist_ok=True)
+
+    stem_mutations: dict[str, list[str]] = {}
+    wav_paths: list[str] = []
+    rng = np.random.default_rng(1618)
+
+    # Decide which stems to mutate (61.8%) and keep (38.2%)
+    stem_names = sorted(stems.keys())
+    n_mutate = max(1, int(len(stem_names) * PHI_KEEP))
+    mutate_set = set(rng.choice(stem_names, size=n_mutate, replace=False))
+    keep_set = set(stem_names) - mutate_set
+
+    # Process each stem
+    vip_stems: dict[str, np.ndarray] = {}
+    for name in stem_names:
+        signal = stems[name].copy()
+        mutations: list[str] = []
+
+        if name in keep_set:
+            mutations.append("KEPT (38.2% identity)")
+            vip_stems[name] = signal
+        else:
+            # 1. Key shift
+            if config.key_shift_semitones != 0:
+                signal = _pitch_shift_stem(signal, config.key_shift_semitones,
+                                           sample_rate)
+                mutations.append(f"key_shift: {config.key_shift_semitones:+d} semitones")
+
+            # 2. Antifractal processing
+            if config.antifractal_mode:
+                signal = _antifractal_process(signal, config.antifractal_depth)
+                mutations.append(f"antifractal: depth={config.antifractal_depth:.3f}")
+
+            # 3. Bass rotation (for bass stems)
+            bass_stems = {"sub_bass", "mid_bass", "neuro", "wobble", "riddim"}
+            if config.bass_rotation and name in bass_stems:
+                # Apply VIP mutation via bass type rotation
+                audio, bass_mutations = vip_mutate_bass(
+                    "fm", 55.0, int(rng.integers(0, 1000)),
+                    duration_s=len(signal) / sample_rate,
+                    sr=sample_rate)
+                # Mix: 61.8% mutated + 38.2% original
+                n = min(len(signal), len(audio))
+                signal = signal[:n] * PHI_HOLD + audio[:n] * PHI_KEEP
+                mutations.extend([f"bass_rotate: {m}" for m in bass_mutations[:2]])
+
+            # 4. FX chain swap (subtle character change)
+            if config.fx_chain_swap:
+                # Apply random waveshaping
+                drive = rng.uniform(0.1, 0.5)
+                signal = np.tanh(signal * (1 + drive * 3))
+                mutations.append(f"fx_swap: drive={drive:.2f}")
+
+            vip_stems[name] = signal
+
+        stem_mutations[name] = mutations
+
+    # 5. Energy inversion (applied to full stem set)
+    if config.energy_invert:
+        vip_stems = _energy_curve_invert(vip_stems, sample_rate)
+        for name in mutate_set:
+            stem_mutations[name].append("energy_curve: inverted")
+
+    # Export all VIP stems
+    for name, signal in vip_stems.items():
+        # Normalize
+        peak = np.max(np.abs(signal))
+        if peak > 0:
+            signal = signal / peak * 0.9
+
+        wav_path = vip_dir / f"{config.vip_name}_{name}.wav"
+        _write_wav(wav_path, signal)
+        wav_paths.append(str(wav_path))
+
+    # Calculate actual mutation percentages
+    total_mutated = len(mutate_set)
+    total_kept = len(keep_set)
+    changed_pct = round(total_mutated / max(len(stem_names), 1) * 100, 1)
+    kept_pct = round(total_kept / max(len(stem_names), 1) * 100, 1)
+
+    # Delta report
+    delta_report = {
+        "original": config.original_name,
+        "vip": config.vip_name,
+        "golden_vip_rule": f"Changed {changed_pct}%, kept {kept_pct}%",
+        "stems_mutated": list(mutate_set),
+        "stems_kept": list(keep_set),
+        "mutations": stem_mutations,
+        "config": {
+            "key_shift": config.key_shift_semitones,
+            "bpm_shift": config.bpm_shift,
+            "energy_invert": config.energy_invert,
+            "antifractal_mode": config.antifractal_mode,
+            "antifractal_depth": config.antifractal_depth,
+        },
+    }
+    with open(vip_dir / "vip_delta.json", "w") as f:
+        json.dump(delta_report, f, indent=2)
+
+    return VIPTrackResult(
+        config=config,
+        stem_mutations=stem_mutations,
+        total_changed_percent=changed_pct,
+        total_kept_percent=kept_pct,
+        wav_paths=wav_paths,
+        delta_report=delta_report,
+    )
+
+
+def print_vip_report(result: VIPTrackResult) -> None:
+    """Pretty-print a VIP generation report."""
+    print(f"\n═══ VIP Generation: {result.config.vip_name} ═══")
+    print(f"  Golden Rule: {result.total_changed_percent}% changed, "
+          f"{result.total_kept_percent}% kept")
+    for stem, mutations in result.stem_mutations.items():
+        prefix = "  ✓" if "KEPT" in mutations[0] else "  ⚡"
+        print(f"{prefix} {stem}: {', '.join(mutations)}")
+    print(f"  → {len(result.wav_paths)} VIP stems exported")
 
 
 def main() -> None:

@@ -131,7 +131,7 @@ class SignalChain:
         self.nodes: list[ChainNode] = []
 
     def add(self, name: str, process_type: str = "effect",
-            params: dict = None, wet_dry: float = 1.0) -> ChainNode:
+            params: dict | None = None, wet_dry: float = 1.0) -> ChainNode:
         """Add a node to the chain."""
         node = ChainNode(
             name=name,

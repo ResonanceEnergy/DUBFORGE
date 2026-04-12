@@ -30,7 +30,7 @@ Return a prioritized list of improvements.
 @workspace Trace the import chain for engine/ modules.
 Build a dependency graph showing:
 - Which modules import what
-- Entry points (called from run_all.py, make_*.py)
+- Entry points (called from forge.py)
 - Isolated modules with no dependents
 - Circular dependency chains
 Format as a Mermaid diagram.

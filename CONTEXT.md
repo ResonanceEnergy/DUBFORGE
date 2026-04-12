@@ -1,6 +1,6 @@
 # DUBFORGE — Reference Context File
-**v4.0.0 · Underground Industrial Bass Factory**
-**Last Updated: 2026-03-31**
+**v6.0.0 · Underground Industrial Bass Factory · AbletonOSC-Native Pipeline**
+**Last Updated: 2026-04-10**
 
 ---
 
@@ -12,6 +12,7 @@ DUBFORGE combines:
 - **ill.Gates (Producer Dojo)** — The sacred production methodology. Belt system, 128 Rack, Mudpies, The Approach, 14-Minute Hit, stock device mastery, ninja sounds, volume is the teacher. Backed by `engine/dojo.py` (belt system, 128 Rack technique, The Approach workflow, 23 codified production rules).
 - **SUBTRONICS** — The insane genius. Sound design, sample selection, huge drops, double drops, crowd excitement, track arrangement. Backed by `configs/sb_corpus_v1.yaml` (Subtronics discography corpus + VIP deltas + spectral profiles).
 - **Dan Winter's phase coherence** — Golden mean phi ratio (φ = 1.618...) and Planck × phi fractal mathematics. Every parameter — envelope timing, filter cutoffs, bar counts, unison detune, arrangement structure, modulation depth — is keyed to phi, Fibonacci, and fractal self-similarity. Backed by `engine/config_loader.py` (PHI, FIBONACCI, A4_432 constants) flowing into all 168 engine modules.
+- **4/4 time signature — always** — All output is strictly 4/4 (four beats per bar, quarter-note pulse). `BEATS_PER_BAR = 4` is the canonical constant across the pipeline. No odd meters. Dubstep lives on the four.
 - **TurboQuant** — Psychoacoustic compression from arXiv:2504.19874 (ICLR 2026). 10-band quantization integrated across 50 engine modules. Backed by `engine/turboquant.py`.
 
 The weapons: **Serum 2** for sound generation, **bass-heavy sample packs** for drums/FX/one-shots, and **Ableton Live 12** for arrangement, mixing, and mastering.
@@ -19,9 +20,10 @@ The weapons: **Serum 2** for sound generation, **bass-heavy sample packs** for d
 ### Stats
 - **168 engine modules** in `engine/`
 - **170 test files** in `tests/` (~2838 tests passing)
-- **Dependencies**: numpy ≥ 1.24, pyyaml ≥ 6.0, mido ≥ 1.3
-- **Python**: ≥ 3.10 (tested on 3.10–3.13)
+- **Dependencies**: numpy ≥ 1.24, pyyaml ≥ 6.0, mido ≥ 1.3, python-osc ≥ 1.8
+- **Python**: 3.12+ (M4 Pro Mac Mini, macOS 15 Sequoia)
 - **License**: MIT
+- **MWP Version**: v6.0.0 — ALL phases AbletonOSC. No numpy DSP pipeline. Ableton Live IS the engine.
 
 ---
 
@@ -88,7 +90,11 @@ No arrangement happens here. No DAW session. Just sounds.
 │    engine/song_templates.py    — 20 structure templates                  │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  STEP 2: IDEA GENERATOR / ENGINE                                        │
-│  SongDNA: complete synthesis spec generated from semantic name           │
+│  SongDNA: 153-field synthesis spec generated from semantic name          │
+│  7 sub-DNAs: DrumDNA(21) + BassDNA(27) + LeadDNA(27) +                   │
+│  AtmosphereDNA(16) + FxDNA(16) + MixDNA(21) + SongDNA(25)               │
+│  Supports 432 Hz tuning (tuning_hz field), DNA-driven silence gaps,      │
+│  per-element gain staging, sidechain modes, humanization, arp/envelope   │
 │  Decides chord progression, harmonic rhythm, energy curve, section map   │
 │                                                                         │
 │  BACKEND:                                                               │
@@ -156,7 +162,7 @@ No arrangement happens here. No DAW session. Just sounds.
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key scripts**: `forge.py --serum` (wavetables + presets), `forge.py --song "NAME"` (full SongDNA), `dubforge_launchpad.py` (web UI)
+**Key scripts**: `forge.py --serum` (wavetables + presets), `forge.py --song "NAME"` (full SongDNA), `forge.py --launch` (NEXUS UI)
 
 ---
 
@@ -207,17 +213,19 @@ The arrangement and composition phase. A **fresh Ableton Live session** receives
 │    engine/dynamics.py          — compressor + transient shaper            │
 │    engine/riddim_engine.py     — 5 types × 4 presets                     │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  STEP 3: PREPARE FOR STEM EXPORT                                         │
-│  Session is 100% complete. All sounds designed, all audio placed,        │
-│  all effects applied, all modulation programmed. Ready to render.        │
+│  STEP 3: AUTOMATED STEM BOUNCE (AbletonOSC + osascript)                  │
+│  AbletonBridge sets loop region, triggers macOS osascript Cmd+Shift+R    │
+│  export. Polls for output WAV. ArrangedTrack.wav_path = bounced file.    │
 │                                                                         │
-│  ► USER ACTION: Manually export stems from Ableton (24-bit WAV)          │
-│    → Solo each track group → File > Export Audio/Video                    │
-│    → Save to output/stems/phase2/ directory                              │
+│  BACKEND:                                                               │
+│    engine/phase_two.py         — run_phase_two(mandate) → ArrangedTrack  │
+│    engine/ableton_bridge.py    — AbletonBridge OSC API (port 11000/11001) │
+│    osascript                   — Cmd+Shift+R export trigger (macOS)       │
+│  OUTPUT: ArrangedTrack.wav_path + ArrangedTrack.stem_paths dict          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key scripts**: `make_wild_ones_v10.py` (13 tracks, 3824 notes, 144 bars), `forge.py --live --song "NAME"`
+**Entry point**: `engine/phase_two.py::run_phase_two(mandate)` — fully automated via AbletonOSC + osascript
 
 ---
 
@@ -271,14 +279,20 @@ A **fresh Ableton session** receives the raw stems from Phase 2. The stems are a
 │    engine/normalizer.py        — level normalization                     │
 │  OUTPUT: output/ableton/*_PHASE3_MIXING.als                              │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  STEP 4: EXPORT MIXED STEMS                                              │
+│  STEP 4: AUTOMATED MIX BOUNCE (AbletonOSC + osascript)                   │
+│  AbletonBridge sets loop, triggers macOS osascript Cmd+Shift+R export.   │
+│  Falls back to mixed WAV pass-through if Ableton unreachable.            │
 │                                                                         │
-│  ► USER ACTION: Export mixed stems from Ableton (24-bit WAV)             │
-│    → Save to output/stems/phase2/ directory                              │
+│  BACKEND:                                                               │
+│    engine/phase_three.py       — run_phase_three(arranged, mandate) →    │
+│                                  MixedTrack.wav_path                     │
+│    engine/ableton_bridge.py    — AbletonBridge OSC API                   │
+│    osascript                   — Cmd+Shift+R export trigger              │
+│  OUTPUT: MixedTrack.wav_path — 24-bit stereo mixed WAV                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Backend analysis**: `engine/auto_mixer.py` (gain staging), `engine/intelligent_eq.py` (spectral EQ), `engine/reference_analyzer.py` (A/B comparison)
+**Entry point**: `engine/phase_three.py::run_phase_three(arranged, mandate)` — AbletonOSC gain staging + bus routing + automated bounce
 
 ---
 
@@ -312,11 +326,18 @@ A **fresh Ableton session** receives the mixed stems. The final polish for peak 
 │    engine/dither.py          — PHI dithering for bit depth               │
 │  OUTPUT: output/ableton/*_PHASE4_MASTERING.als                           │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  STEP 3: FINAL EXPORT — DANCEFLOOR BANGER                               │
+│  STEP 3: AUTOMATED MASTER BOUNCE + PYTHON POST-PROCESSING               │
+│  AbletonBridge loads mixed WAV, sets master track volume/devices,        │
+│  osascript triggers export. Python reads back mastered WAV for:          │
+│  QA validation, phi normalization, dither, watermark, MIDI export,       │
+│  artwork, Serum2 preset export, belt assessment, report card.            │
 │                                                                         │
-│  ► USER ACTION: Export final master from Ableton                         │
-│    → 24-bit / 48 kHz WAV                                                │
-│    → Save to output/masters/<TRACK_NAME>_MASTER.wav                      │
+│  BACKEND:                                                               │
+│    engine/phase_four.py        — run_phase_four(mixed, mandate) → str    │
+│    engine/ableton_bridge.py    — AbletonBridge OSC API                   │
+│    engine/stage_integrations.py — QA, phi, dither, wm, MIDI, artwork     │
+│    osascript                   — Cmd+Shift+R export trigger              │
+│  OUTPUT: output/<name>/<name>.wav — 24-bit master WAV                    │
 │                                                                         │
 │    ████████████████████████████████████████████████                       │
 │    █  DONE. DANCEFLOOR BANGER IN WAV FORMAT.   █                         │
@@ -324,7 +345,7 @@ A **fresh Ableton session** receives the mixed stems. The final polish for peak 
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Backend**: `engine/auto_master.py` (target -8.0 LUFS, ceiling -0.3 dB), `engine/mastering_chain.py` (EQ → comp → limit)
+**Entry point**: `engine/phase_four.py::run_phase_four(mixed, mandate)` — AbletonOSC mastering + full Python release pipeline
 
 ---
 
@@ -405,13 +426,17 @@ Organized by which phase of production they serve.
 | `trance_arp.py` | Fibonacci-timed arpeggiator |
 | `variation_engine.py` | SongBlueprint → SongDNA semantic engine |
 
-### 3E. PHASE 1 & 2 — DAW Integration & ALS Generation (10 modules)
+### 3E. PHASE 1 & 2 — DAW Integration & ALS Generation (14 modules)
 | Module | Purpose |
-|--------|---------|
+|--------|--------|
 | `als_generator.py` | ALS file writer (gzip XML, schema 12.0_12117) |
 | `ableton_live.py` | Full LOM, session/arrangement templates, PSBS chains |
-| `ableton_bridge.py` | OSC bridge to live Ableton instance |
+| `ableton_bridge.py` | AbletonOSC bridge (port 11000/11001) — full API: transport, tracks, clips, devices, returns, master |
 | `ableton_rack_builder.py` | Drum Rack .adg builder (128 zones) |
+| `phase_one.py` | Phase 1: GENERATION — SongMandate, Serum2 stems, drum rack, render ALS |
+| `phase_two.py` | Phase 2: ARRANGEMENT — AbletonOSC session + stem placement + osascript bounce → ArrangedTrack |
+| `phase_three.py` | Phase 3: MIXING — AbletonOSC bus routing + gain staging + osascript bounce → MixedTrack |
+| `phase_four.py` | Phase 4: MASTERING — AbletonOSC master chain + osascript bounce + Python QA/release pipeline |
 | `midi_export.py` | MIDI file export (.mid) |
 | `midi_processor.py` | MIDI processing utilities |
 | `osc_controller.py` | OSC remote control |
@@ -578,13 +603,17 @@ Backend: `engine/variation_engine.py`, `engine/mood_engine.py`
 
 ## 5. DAW ENVIRONMENT
 
-### 5A. Ableton Live 12.3.6 Standard
+### 5A. Ableton Live 12 Suite (macOS, M4 Pro)
+- osascript app name: `"Ableton Live 12 Suite"`
 - ALS format: gzip-compressed XML
 - Schema: `12.0_12117`, Creator: `Ableton Live 12.1d1`
-- **Three sessions per track** (one per production phase):
-  - Session #1: Arrangement (MIDI + audio tracks, Serum 2 instruments, racks — Phase 2)
-  - Session #2: Mixing (audio tracks only, stems from Phase 2 — Phase 3)
-  - Session #3: Mastering (audio tracks, mixed stems from Phase 3 — Phase 4)
+- **Three automated sessions per track** (one per production phase):
+  - Session #1: Arrangement — Phase 2 AbletonOSC session (MIDI + audio stems, returns)
+  - Session #2: Mixing — Phase 3 AbletonOSC session (bus groups, gain staging, sidechain)
+  - Session #3: Mastering — Phase 4 AbletonOSC session (master chain, EQ/Glue/Limiter)
+- Export: AbletonOSC **cannot** trigger file export directly
+  → All phases use `osascript key code 15 using {command down, shift down}` (Cmd+Shift+R) + poll
+- AbletonOSC ports: DEFAULT_HOST=127.0.0.1, send=11000, recv=11001
 - Session template: 10 tracks + 2 returns (Reverb/Delay), 7 scenes
 - Arrangement template: Fibonacci bar counts with golden section cue point
 - Return tracks: phi-ratio decay (reverb), Fibonacci timing (delay)
@@ -603,8 +632,23 @@ Backend: `engine/variation_engine.py`, `engine/mood_engine.py`
 ### 5C. VST3 Auto-Loading — DISABLED
 Ableton crashes with "invalid uuid string" during VST3 state restore. The binary preset buffer can only be generated by a running plugin instance. User loads Serum 2 manually on each MIDI track and loads the .fxp presets.
 
-### 5D. Sample Pack Integration
-- **GALATCIA** (`C:\dev\DUBFORGE GALATCIA`): Black Octopus Brutal Dubstep & Riddim (95 .fxp, 229 .wav, 12 WT, 2 .adg racks)
+### 5D. AbletonOSC Export Limitation
+AbletonOSC (port 11000/11001) **cannot trigger file export**. `AbletonBridge.render_arrangement()` explicitly documents this. Solution: macOS `osascript` simulates Cmd+Shift+R, then Enter to confirm dialog, then polls for the output WAV until file size stabilises.
+
+```applescript
+tell application "Ableton Live 12 Suite" to activate
+delay 0.5
+tell application "System Events"
+    key code 15 using {command down, shift down}  -- Cmd+Shift+R
+    delay 2.0
+    key code 36  -- Enter to confirm
+end tell
+```
+
+Poll interval: 2s. Timeout: 180s (arrangement), 300s (mastering).
+
+### 5E. Sample Pack Integration
+- **GALATCIA** (local sample pack): Black Octopus Brutal Dubstep & Riddim (95 .fxp, 229 .wav, 12 WT, 2 .adg racks)
 - **SampleLibrary**: Freesound.org API for CC0 samples, local file import, 25 categories
 - Samples are loaded into Drum Racks (128 Rack technique) and audio tracks in the ALS
 
@@ -618,14 +662,13 @@ Ableton crashes with "invalid uuid string" during VST3 state restore. The binary
 | `forge.py` | Master pipeline (all modes: --stems, --serum, --ableton, --live, --song, --dojo, --fibonacci) |
 | `make_wild_ones_v10.py` | V10 MIDI-first track (13 tracks, 3824 notes, 144 bars) |
 | `make_wild_ones_v9.py` | V9 Python DSP track (2961 lines, legacy audio render) |
-| `make_track.py` | Generic track builder |
-| `run_all.py` | Run all engine modules sequentially |
+| `forge.py --song "NAME"` | Generic track builder |
+| `forge.py --all` | Run all engine modules sequentially |
 
 ### 6B. Web UIs
 | File | Purpose | Port |
 |------|---------|------|
-| `dubforge_launchpad.py` | Phase 1 Launchpad — 6-tab Gradio UI (Idea Sandbox, Arrangement, Sample Packs, Serum 2 Patches, FORGE IT, Pipeline). Full end-to-end: name/mood/key/BPM → SongDNA → FXP + MIDI + ALS | 7870 |
-| `dubstep_analyzer_ui.py` | Taste Analyzer — 5-tab Gradio UI (SoundCloud, Local Files, Taste Profile, Serum Blueprints, Feedback) | 7862 |
+| `dubstep_analyzer_ui.py` | **DUBFORGE NEXUS v9.1.0** — Single-page command surface. Sections: Signal Capture, Analysis, Forge Emulation, Forge Output, Arrangement Preview, Archive, Audio Preview, WAV Analysis, Mastering, Parallel Render, Sample Library, System & Pipeline. | 7861 |
 
 ### 6C. Configuration Files
 | File | Purpose |
@@ -679,26 +722,27 @@ output/
 ## 8. COMMANDS CHEAT SHEET
 
 ```bash
-# ═══ PHASE 1: GENERATION + PHASE 2: ARRANGEMENT ═══
-python dubforge_launchpad.py              # Web UI (Gradio, port 7870)
-python dubforge_launchpad.py --share      # Web UI with public share link
-python forge.py --song "TRACK NAME"      # Full pipeline from song name
-python forge.py --live --song "NAME"     # Ableton + Serum 2 live session
-python forge.py --dojo                   # ill.Gates 14-Minute Hit mode
-python make_wild_ones_v10.py             # V10 MIDI-first (13 tracks, 144 bars)
-python forge.py                          # Full pipeline (wavetables + stems + ALS + presets)
-python forge.py --serum                  # Wavetables only
-python forge.py --ableton                # ALS project only
-python forge.py --fibonacci              # Fibonacci feedback loop mode
+# ═══ PRIMARY: 4-PHASE AUTOMATED PIPELINE (Ableton must be open) ═══
+python forge.py --launch                 # Kill stale procs + start NEXUS UI (port 7861)
+python forge.py --launch --ui-only       # NEXUS only, skip track render
+python dubstep_analyzer_ui.py            # NEXUS directly (Gradio, port 7861)
+# Input song name/mood/key/BPM → Forge pipeline → rendered stems + ALS
+python forge.py --song "TRACK NAME"     # Full CLI pipeline from song name
+python forge.py --live --song "NAME"    # Ableton + Serum 2 live session
+python forge.py --dojo                  # ill.Gates 14-Minute Hit mode
+python forge.py                         # Full pipeline (wavetables + stems + ALS + presets)
+python forge.py --serum                 # Wavetables only
+python forge.py --ableton               # ALS project only
+python forge.py --fibonacci             # Fibonacci feedback loop mode
 
 # ═══ LEGACY: Python DSP ═══
-python make_wild_ones_v9.py              # V9 full audio render (2961 lines)
+python make_wild_ones_v9.py             # V9 full audio render (2961 lines)
 python forge.py --stems                  # Audio stems only (Python DSP)
 python forge.py --track                  # Mixed track only (Python DSP)
 
 # ═══ BATCH / AUTONOMOUS ═══
 python -m engine.autonomous --queue configs/production_queue.yaml
-python run_all.py                        # Run all engine modules
+python forge.py --all                    # Run all engine modules
 
 # ═══ TEST & LINT ═══
 python -m pytest tests/ -v               # Full test suite (~2838 tests)
@@ -720,15 +764,20 @@ make check                               # Lint + test
 4. **ALS file generation** — clean gzip XML, opens in Ableton Live 12 without errors
 5. **Sample library & GALATCIA** — cataloging, categorization, Freesound API integration
 6. **Drum Rack .adg files** — ableton_rack_builder.py generates 128-zone racks
-7. **Full Python DSP pipeline** — V9 renders complete audio from Python (legacy)
-8. **Web UI Launchpad** — dubforge_launchpad.py Gradio app with 6 tabs, end-to-end forge pipeline
+7. **Phase 1** — run_phase_one() fully implemented (6,500+ lines, AbletonOSC, SongMandate output)
+8. **Phase 2** — run_phase_two() AbletonOSC stem placement + section automation + osascript bounce → ArrangedTrack
+9. **Phase 3** — run_phase_three() AbletonOSC bus routing + gain staging + osascript bounce → MixedTrack
+10. **Phase 4** — run_phase_four() AbletonOSC mastering + osascript bounce + full Python QA/release pipeline
+11. **Full 4-phase UI** — dubstep_analyzer_ui.py runs all 4 phases end-to-end with 13-step progress
+12. **Full Python DSP pipeline** — V9 renders complete audio from Python (legacy mode)
 
-### Needs Implementation
-1. **Audio tracks in ALS** — als_generator.py currently creates MIDI tracks only. For Phase 1 to fully load drum samples / vocals / FX one-shots as audio clips, `ALSTrack(is_audio=True)` with FileRef pointing to .wav files needs to be added.
-2. **Phase 3 ALS template** — A dedicated mixing session ALS generator that creates audio tracks for stem import.
-3. **Phase 4 ALS template** — A mastering session ALS generator.
-4. **VST3 auto-loading** — DISABLED. Ableton crashes on binary preset buffer restore. User loads Serum 2 manually.
-5. **SAMPLE_RATE mismatches** — 72 engine modules use hardcoded SR (44100/48000). TurboQuant uses 48000.
+### Known Gaps & Gotchas
+1. **VST3 auto-loading** — DISABLED. Ableton crashes on binary preset buffer restore. User loads Serum 2 manually per MIDI track.
+2. **SAMPLE_RATE mismatches** — 72 engine modules use hardcoded SR (44100/48000). TurboQuant uses 48000.
+3. **Sidechain via OSC** — AbletonOSC has no `set_sidechain()` command. Phase 3 wraps the call in try/except; user configures kick→bass sidechain manually in Ableton before Phase 3 runs.
+4. **Device loading via OSC** — `AbletonBridge.load_device_by_name()` logs a warning. For Phase 3/4 device chains (EQ/Comp/Limiter), user must pre-load devices in Ableton before running automated phases.
+5. **Accessibility permissions** — osascript requires macOS Accessibility access for System Events key simulation. Grant in System Settings → Privacy → Accessibility.
+6. **NoteId uniqueness** — Must use `global_note_id` counter across ALL KeyTracks. Per-KeyTrack IDs cause ALS corruption.
 
 ### Gotchas
 - **NoteId uniqueness** — Must use `global_note_id` counter across ALL KeyTracks. Per-KeyTrack IDs cause ALS corruption.
@@ -739,20 +788,43 @@ make check                               # Lint + test
 
 ## 10. PRODUCTION WORKFLOW QUICK-REFERENCE
 
-### Starting a New Track
-1. Decide: song name, key, BPM, mood, energy
-2. **Web UI**: Run `python dubforge_launchpad.py` → open http://localhost:7870 → use Idea Sandbox tab to preview mood/SongDNA → FORGE IT tab to generate all assets
-   **CLI**: Run `python forge.py --song "YOUR TRACK NAME"` (or copy `make_wild_ones_v10.py` as template)
-3. Script generates: SongDNA → MIDI patterns → FXP presets → wavetables → ALS
-4. Open `output/ableton/*_PHASE2_ARRANGEMENT.als` in Ableton Live 12
-5. Load Serum 2 on each synth track → load .fxp presets from `output/presets/`
-6. Drag wavetables from `output/wavetables/` into Serum oscillators
-7. Load drum samples from `output/galatcia/samples/` into Drum Racks
-8. Play, tweak, add automation — the arrangement is already there
-9. Export stems (24-bit WAV) → `output/stems/phase2/`
-10. Open Phase 3 mixing session → import stems → mix → export mixed stems
-11. Open Phase 4 mastering session → import mixed stems → master → export final WAV
-12. **DANCEFLOOR BANGER COMPLETE**
+### Starting a New Track (Automated 4-Phase Pipeline)
+
+**Prerequisites:**
+- Ableton Live 12 Suite running on localhost
+- AbletonOSC installed (ports 11000/11001 active)
+- macOS Accessibility permissions granted to Terminal / VS Code
+
+**Steps:**
+1. Decide: song name, key, BPM, mood, style
+2. Run `python forge.py --launch --ui-only` → open http://localhost:7861
+3. Fill in song name, mood, key, BPM, style → click **FORGE IT**
+4. **Phase 1** runs automatically:
+   - SongDNA forged → MIDI sequences → Serum 2 presets → wavetables → render ALS built
+   - _Requires Ableton open. Load Serum 2 on MIDI tracks + .fxp presets manually_
+5. **Phase 2** runs automatically after Phase 1:
+   - AbletonBridge opens Phase 1 ALS, creates audio tracks per stem, places clips
+   - Writes section volume automation, sets up return tracks (reverb/delay)
+   - osascript triggers Cmd+Shift+R export → polls for ArrangedTrack WAV
+6. **Phase 3** runs automatically after Phase 2:
+   - AbletonBridge creates fresh mixing session with DRUMS/BASS/MELODIC/FX buses
+   - Loads stems, applies _GAIN_TABLE volumes + _PAN_TABLE panning
+   - _Configure kick→bass sidechain manually in Ableton (AbletonOSC limitation)_
+   - osascript triggers export → polls for MixedTrack WAV
+7. **Phase 4** runs automatically after Phase 3:
+   - AbletonBridge loads mixed WAV into fresh mastering session
+   - Sets master chain device params (pre-load EQ/Glue/Limiter in Ableton)
+   - osascript triggers export → Python reads back mastered WAV
+   - QA validation, phi normalization, dither, watermark, MIDI export, artwork
+   - Belt assessment + report card
+8. **Final WAV** at `output/<track_name>/<track_name>.wav`
+9. **DANCEFLOOR BANGER COMPLETE**
+
+### Manual Ableton Setup (Required Before Phase 2)
+- Open Ableton Live 12 Suite
+- Enable AbletonOSC (port 11000) via Tools → AbletonOSC or M4L script
+- For Phase 3/4: pre-load EQ Eight + Glue Comp + Limiter on master track
+- Grant Accessibility permissions: System Settings → Privacy → Accessibility → Terminal ✓
 
 ---
 

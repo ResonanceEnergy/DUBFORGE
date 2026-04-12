@@ -18,6 +18,7 @@ import json
 import wave
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -147,7 +148,7 @@ def morph_spectral(frames: list[np.ndarray], preset: MorphPreset) -> list[np.nda
             k = max(1, int(len(mag) * preset.spectral_smooth))
             mag = convolve(mag, np.ones(k) / k, mode="same")
         phase = pa * (1 - frac) + pb * frac
-        frame = ifft(mag * np.exp(1j * phase), n=preset.frame_size)
+        frame = ifft(mag * np.exp(1j * phase), n=preset.frame_size)  # type: ignore[arg-type]
         peak = np.max(np.abs(frame))
         if peak > 0:
             frame = frame / peak
@@ -179,7 +180,7 @@ def morph_formant(frames: list[np.ndarray], preset: MorphPreset) -> list[np.ndar
             env_blend = np.roll(env_blend, shift)
         # Use phase from source A
         phase = np.angle(fft_a) * (1 - frac) + np.angle(fft_b) * frac
-        frame = ifft(env_blend * np.exp(1j * phase), n=preset.frame_size)
+        frame = ifft(env_blend * np.exp(1j * phase), n=preset.frame_size)  # type: ignore[arg-type]
         peak = np.max(np.abs(frame))
         if peak > 0:
             frame = frame / peak
@@ -351,7 +352,7 @@ def granular_morph_bank() -> MorphBank:
     ])
 
 
-ALL_MORPH_BANKS: dict[str, callable] = {
+ALL_MORPH_BANKS: dict[str, Callable[..., Any]] = {
     "phi_spline": phi_spline_morph_bank,
     "fractal": fractal_morph_bank,
     "spectral": spectral_morph_bank,

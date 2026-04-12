@@ -77,7 +77,7 @@ HAS_VDSP = False
 
 if IS_APPLE_SILICON:
     try:
-        import mlx.core  # noqa: F401
+        import mlx.core  # noqa: F401  # type: ignore[import-not-found]
         HAS_MLX = True
     except ImportError:
         pass

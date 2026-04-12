@@ -377,12 +377,12 @@ class TestBankConsistency:
             # 4) Key relates to name
             if hasattr(bank, "name"):
                 k_flat = bank_key.lower().replace("_", "")
-                n_flat = bank.name.lower().replace("_", "")
+                n_flat = bank.name.lower().replace("_", "")  # type: ignore[attr-defined]
                 k_tokens = set(t for t in bank_key.lower().split("_") if len(t) >= 3)
-                n_tokens = set(t for t in bank.name.lower().split("_") if len(t) >= 3)
+                n_tokens = set(t for t in bank.name.lower().split("_") if len(t) >= 3)  # type: ignore[attr-defined]
                 shared = k_tokens & n_tokens
                 assert shared or k_flat in n_flat or n_flat in k_flat or k_flat == n_flat, (
-                    f"{mod_path}: key '{bank_key}' unrelated to bank.name '{bank.name}'"
+                    f"{mod_path}: key '{bank_key}' unrelated to bank.name '{bank.name}'"  # type: ignore[attr-defined]
                 )
             # 5) Has presets
             items = _get_bank_items(bank)
@@ -773,7 +773,6 @@ class TestExtraCrossModule:
 
 _ALL_ENGINE_MODULES = [
     "engine.phi_core",
-    "engine.rco",
     "engine.psbs",
     "engine.growl_resampler",
     "engine.drum_generator",

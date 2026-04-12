@@ -19,6 +19,7 @@ import json
 import wave
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -505,7 +506,7 @@ def stems_pack_bank() -> PackBank:
     ])
 
 
-ALL_PACK_BANKS: dict[str, callable] = {
+ALL_PACK_BANKS: dict[str, Callable[..., Any]] = {
     "drums": drums_pack_bank,
     "bass": bass_pack_bank,
     "synths": synths_pack_bank,

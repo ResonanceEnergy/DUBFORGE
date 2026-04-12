@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+# pyright: reportOptionalCall=false
 """
 DUBFORGE Engine — Dubstep Taste Analyzer
 
@@ -66,14 +68,14 @@ except ImportError:
     HAS_NUMPY = False
 
 try:
-    import librosa
+    import librosa  # type: ignore[import-not-found]
     HAS_LIBROSA = True
 except ImportError:
     librosa = None  # type: ignore[assignment]
     HAS_LIBROSA = False
 
 try:
-    import soundfile as sf
+    import soundfile as sf  # type: ignore[import-not-found]
     HAS_SOUNDFILE = True
 except ImportError:
     sf = None  # type: ignore[assignment]
@@ -559,7 +561,7 @@ def extract_embedding(filepath: str, sr: int = SAMPLE_RATE) -> list[float]:
     Falls back to zero-vector if OpenL3 not installed.
     """
     try:
-        import openl3
+        import openl3  # type: ignore[import-not-found]
         y, _ = _load_audio(filepath, sr=sr)
         emb, _ = openl3.get_audio_embedding(
             y, sr, embedding_size=EMBEDDING_DIM,
@@ -895,7 +897,7 @@ def export_taste_report(analyses: list[TrackAnalysis],
 
     for stem_type, proto in profile.prototypes.items():
         lines.append(f"### {stem_type} (n={proto.sample_count})")
-        lines.append(f"- Vector dim: {proto.vector_dim}")
+        lines.append(f"- Vector dim: {len(proto.mean_vector)}")
         # Show first 15 (scalar) features with names
         scalar_names = [
             "bpm", "half_time", "sub_rms_db", "golden_zone", "centroid",
@@ -912,7 +914,7 @@ def export_taste_report(analyses: list[TrackAnalysis],
     lines.append("## Track Rankings\n")
     ranked = sorted(analyses, key=lambda a: a.banger_score, reverse=True)
     for i, a in enumerate(ranked):
-        thumb = {"up": "👍", "down": "👎"}.get(a.thumbs, "—")
+        thumb = {"up": "👍", "down": "👎"}.get(a.thumbs or "", "—")
         lines.append(f"{i+1}. **{a.track_name}** — "
                      f"Score: {a.banger_score:.1f} | BPM: {a.overall_bpm:.0f} | {thumb}")
 

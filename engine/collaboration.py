@@ -10,6 +10,7 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from engine.config_loader import PHI
 @dataclass
@@ -77,15 +78,15 @@ class CollabProject:
 class MergeConflict:
     """Represents a merge conflict."""
 
-    def __init__(self, target: str, local_value: any,
-                 remote_value: any, user_a: str, user_b: str):
+    def __init__(self, target: str, local_value: Any,
+                 remote_value: Any, user_a: str, user_b: str):
         self.target = target
         self.local_value = local_value
         self.remote_value = remote_value
         self.user_a = user_a
         self.user_b = user_b
         self.resolved = False
-        self.resolution: any = None
+        self.resolution: Any = None
 
     def resolve_local(self) -> None:
         """Keep local value."""
@@ -170,7 +171,7 @@ class CollaborationEngine:
 
     def make_change(self, project_id: str, user: str,
                     change_type: str, target: str,
-                    data: dict = None, description: str = "") -> Change | None:
+                    data: dict | None = None, description: str = "") -> Change | None:
         """Record a change."""
         project = self.projects.get(project_id)
         if not project:

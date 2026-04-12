@@ -10,6 +10,7 @@ breed new patches via genetic algorithm.
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -191,7 +192,7 @@ def mutate_crossover(parent_a: Patch, parent_b: Patch, preset: MutatorPreset) ->
     return child
 
 
-MUTATOR_FUNCTIONS: dict[str, callable] = {
+MUTATOR_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "gaussian": mutate_gaussian,
     "phi_scaled": mutate_phi_scaled,
     "uniform": mutate_uniform,
@@ -297,7 +298,7 @@ def crossover_bank() -> MutatorBank:
     ])
 
 
-ALL_MUTATOR_BANKS: dict[str, callable] = {
+ALL_MUTATOR_BANKS: dict[str, Callable[..., Any]] = {
     "gaussian": gaussian_bank,
     "phi_scaled": phi_scaled_bank,
     "uniform": uniform_bank,

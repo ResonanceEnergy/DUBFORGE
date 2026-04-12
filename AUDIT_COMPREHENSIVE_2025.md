@@ -19,7 +19,7 @@ DUBFORGE is an autonomous dubstep/bass music production engine built entirely in
 | Registered build modules (`run_all.py`) | **134 modules** in 11 phases |
 | Test files (`tests/test_*.py`) | **~170 test files** (1:1 coverage) |
 | Config files (`configs/*.yaml`) | **5 YAML files** |
-| Top-level scripts | `forge.py`, `run_all.py`, `make_track.py`, `quick_analyze.py`, `analyze_tracks.py`, `test_dsp.py` |
+| Top-level scripts | `forge.py`, `run_all.py`, `quick_analyze.py`, `analyze_tracks.py`, `test_dsp.py` |
 | Lines in `forge.py` | **2,493** |
 | Lines in `engine/__init__.py` | **1,843** (re-exports everything) |
 | CLI entry points (pyproject.toml) | `dubforge`, `dubforge-cli`, `subphonics` |

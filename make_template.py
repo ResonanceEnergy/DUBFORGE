@@ -483,6 +483,71 @@ def _gen_riser(sections: list[dict], track_cfg: dict) -> list[ALSMidiNote]:
     return notes
 
 
+def _gen_sc_trigger(sections: list[dict],
+                    track_cfg: dict) -> list[ALSMidiNote]:
+    """Quarter-note ghost kick pattern for sidechain trigger (muted track)."""
+    notes: list[ALSMidiNote] = []
+    active = set(track_cfg.get("active_sections", ["drop", "build", "vip"]))
+    for sec in sections:
+        if sec["type"] not in active:
+            continue
+        for bar_off in range(sec["bars"]):
+            bar = sec["bar_start"] + bar_off
+            for beat in range(4):
+                t = float(bar * 4 + beat)
+                notes.append(ALSMidiNote(
+                    pitch=36, time=t, duration=0.1, velocity=100))
+    return notes
+
+
+def _gen_transitions(sections: list[dict],
+                     track_cfg: dict) -> list[ALSMidiNote]:
+    """Tape stops, glitches, gate chops at section boundaries."""
+    notes: list[ALSMidiNote] = []
+    for i, sec in enumerate(sections):
+        # Place transition FX at the end of build sections and start of breaks
+        if sec["type"] == "build":
+            # Tape stop at end of build (last beat)
+            end_beat = (sec["bar_start"] + sec["bars"]) * 4.0 - 1.0
+            notes.append(ALSMidiNote(
+                pitch=60, time=end_beat, duration=1.0, velocity=100))
+        elif sec["type"] == "break":
+            # Glitch fill at start of break
+            beat = sec["bar_start"] * 4.0
+            notes.append(ALSMidiNote(
+                pitch=64, time=beat, duration=0.5, velocity=90))
+            # Gate chop pattern mid-break
+            if sec["bars"] >= 4:
+                mid = sec["bar_start"] + sec["bars"] // 2
+                for j in range(4):
+                    notes.append(ALSMidiNote(
+                        pitch=67, time=mid * 4.0 + j * 0.5,
+                        duration=0.25, velocity=85))
+    return notes
+
+
+def _gen_atmos(sections: list[dict], voicings: list[list[int]],
+               track_cfg: dict) -> list[ALSMidiNote]:
+    """Long ambient texture notes in atmospheric sections."""
+    notes: list[ALSMidiNote] = []
+    active = set(track_cfg.get("active_sections",
+                                ["intro", "break", "bridge", "outro"]))
+    vel = 60
+    for sec in sections:
+        if sec["type"] not in active:
+            continue
+        # Sustained ambient note across the section
+        beat = sec["bar_start"] * 4.0
+        length = sec["bars"] * 4.0
+        # Use a chord tone from the first voicing for harmonic context
+        chord_idx = 0
+        pitch = voicings[chord_idx][0] + 12 if voicings else 60  # up an octave
+        notes.append(ALSMidiNote(
+            pitch=pitch, time=beat, duration=length,
+            velocity=_humanize_vel(vel, beat)))
+    return notes
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # AUTOMATION BUILDER
 # ═══════════════════════════════════════════════════════════════════════════
@@ -588,41 +653,55 @@ def _section_matches_trigger(sec: dict, trigger: str) -> bool:
 # Per-role FX chain — devices added AFTER the instrument (Serum 2/Drum Rack).
 # These are native Ableton effects plus Serum 2 FX (VST3) where appropriate.
 # Order matters: signal flows left-to-right through the chain.
+# Bus-aligned to Subtronics template (v7.0.0).
 _ROLE_FX_CHAIN: dict[str, list[str]] = {
-    "drums":      ["EQ Eight", "Compressor", "Utility"],
-    "bass":       ["EQ Eight", "Saturator", "Compressor"],
-    "sub":        ["EQ Eight", "Utility"],
-    "growl":      ["EQ Eight", "Saturator", "Compressor"],
-    "wobble":     ["Auto Filter", "Saturator", "Compressor"],
-    "riddim":     ["EQ Eight", "Saturator", "Compressor"],
-    "formant":    ["EQ Eight", "Compressor"],
-    "lead":       ["EQ Eight", "Compressor", "Utility"],
-    "counter":    ["EQ Eight", "Compressor"],
-    "vocal_chop": ["EQ Eight", "Compressor", "Utility"],
-    "chords":     ["EQ Eight", "Compressor", "Utility"],
-    "pad":        ["EQ Eight", "Utility"],
-    "arp":        ["EQ Eight", "Compressor"],
-    "fx":         ["Auto Filter", "Utility"],
-    "riser":      ["EQ Eight", "Auto Filter", "Utility"],
+    # DRUMS Bus
+    "drums":       ["EQ Eight", "Compressor", "Utility"],
+    "sc_trigger":  ["Utility"],  # muted — only for sidechain routing
+    # BASS Bus
+    "mid_bass":    ["EQ Eight", "Saturator", "Compressor"],
+    "sub":         ["EQ Eight", "Utility"],
+    "growl":       ["EQ Eight", "Saturator", "Compressor"],
+    "wobble":      ["Auto Filter", "Saturator", "Compressor"],
+    "riddim":      ["EQ Eight", "Saturator", "Compressor"],
+    "formant":     ["EQ Eight", "Compressor"],
+    # MELODICS Bus
+    "lead":        ["EQ Eight", "Compressor", "Utility"],
+    "counter":     ["EQ Eight", "Compressor"],
+    "vocal":       ["EQ Eight", "Compressor", "Utility"],
+    "chords":      ["EQ Eight", "Compressor", "Utility"],
+    "pad":         ["EQ Eight", "Utility"],
+    "arp":         ["EQ Eight", "Compressor"],
+    # FX Bus
+    "impacts":     ["Auto Filter", "Utility"],
+    "risers":      ["EQ Eight", "Auto Filter", "Utility"],
+    "transitions": ["Auto Filter", "Utility"],
+    "atmos":       ["EQ Eight", "Utility"],
 }
 
 # Per-role Serum 2 preset name — maps to _PRESET_RECIPES in serum2_preset.py.
 # Each track role gets a distinct preset tailored to its sonic character.
+# Bus-aligned to Subtronics template (v7.0.0).
 _ROLE_PRESET_MAP: dict[str, str] = {
-    "bass":       "DUBFORGE_Fractal_Sub",
-    "sub":        "DUBFORGE_Deep_Sub",
-    "growl":      "DUBFORGE_Phi_Growl",
-    "wobble":     "DUBFORGE_Spectral_Tear",
-    "riddim":     "DUBFORGE_Riddim_Minimal",
-    "formant":    "DUBFORGE_Formant_Vowel",
-    "lead":       "DUBFORGE_Fibonacci_FM_Screech",
-    "counter":    "DUBFORGE_Counter_Pluck",
-    "vocal_chop": "DUBFORGE_Vocal_Fracture",
-    "chords":     "DUBFORGE_Golden_Reese",
-    "pad":        "DUBFORGE_Granular_Atmosphere",
-    "arp":        "DUBFORGE_Phi_Arp",
-    "fx":         "DUBFORGE_Weapon",
-    "riser":      "DUBFORGE_Riser_Sweep",
+    # BASS Bus
+    "mid_bass":    "DUBFORGE_Fractal_Sub",
+    "sub":         "DUBFORGE_Deep_Sub",
+    "growl":       "DUBFORGE_Phi_Growl",
+    "wobble":      "DUBFORGE_Spectral_Tear",
+    "riddim":      "DUBFORGE_Riddim_Minimal",
+    "formant":     "DUBFORGE_Formant_Vowel",
+    # MELODICS Bus
+    "lead":        "DUBFORGE_Fibonacci_FM_Screech",
+    "counter":     "DUBFORGE_Counter_Pluck",
+    "vocal":       "DUBFORGE_Vocal_Fracture",
+    "chords":      "DUBFORGE_Golden_Reese",
+    "pad":         "DUBFORGE_Granular_Atmosphere",
+    "arp":         "DUBFORGE_Phi_Arp",
+    # FX Bus
+    "impacts":     "DUBFORGE_Weapon",
+    "risers":      "DUBFORGE_Riser_Sweep",
+    "transitions": "DUBFORGE_Tape_Glitch",
+    "atmos":       "DUBFORGE_Ambient_Texture",
 }
 
 
@@ -653,10 +732,13 @@ def build_project(cfg: dict) -> ALSProject:
     except ImportError:
         _log.warning("No captured Serum 2 state — ALS will have empty plugin state")
 
-    # Track ordering (matches both Wild Ones and Apology)
+    # Track ordering — Subtronics bus-aligned (v7.0.0)
+    # DRUMS Bus → BASS Bus → MELODICS Bus → FX Bus
     TRACK_ORDER = [
-        "DRUMS", "BASS", "SUB", "GROWL", "WOBBLE", "RIDDIM", "FORMANT",
-        "LEAD", "COUNTER", "VOCAL_CHOP", "CHORDS", "PAD", "ARP", "FX", "RISER",
+        "DRUMS", "SC_TRIGGER",
+        "MID_BASS", "SUB", "GROWL", "WOBBLE", "RIDDIM", "FORMANT",
+        "LEAD", "COUNTER", "VOCAL", "CHORDS", "PAD", "ARP",
+        "IMPACTS", "RISERS", "TRANSITIONS", "ATMOS",
     ]
 
     # Generate MIDI per track
@@ -669,7 +751,9 @@ def build_project(cfg: dict) -> ALSProject:
 
         if role == "drums":
             midi_data[track_name] = _gen_drums(sections, drum_patterns, cfg)
-        elif role in ("bass", "sub", "growl", "wobble", "formant"):
+        elif role == "sc_trigger":
+            midi_data[track_name] = _gen_sc_trigger(sections, tcfg)
+        elif role in ("mid_bass", "sub", "growl", "wobble", "formant"):
             midi_data[track_name] = _gen_bass_role(
                 sections, roots, rule, tcfg)
         elif role == "riddim":
@@ -684,12 +768,16 @@ def build_project(cfg: dict) -> ALSProject:
             midi_data[track_name] = _gen_pad(sections, voicings, tcfg)
         elif role == "arp":
             midi_data[track_name] = _gen_arp(sections, voicings, tcfg)
-        elif role == "vocal_chop":
+        elif role == "vocal":
             midi_data[track_name] = _gen_vocal_chop(sections, roots, tcfg)
-        elif role == "fx":
+        elif role == "impacts":
             midi_data[track_name] = _gen_fx(sections, tcfg)
-        elif role == "riser":
+        elif role == "risers":
             midi_data[track_name] = _gen_riser(sections, tcfg)
+        elif role == "transitions":
+            midi_data[track_name] = _gen_transitions(sections, tcfg)
+        elif role == "atmos":
+            midi_data[track_name] = _gen_atmos(sections, voicings, tcfg)
 
     # Build automation per track
     auto_data: dict[str, list[ALSAutomation]] = {}

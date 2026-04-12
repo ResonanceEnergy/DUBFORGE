@@ -1,6 +1,7 @@
 """Tests for engine.subphonics — SUBPHONICS AI core engine."""
 
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -172,7 +173,16 @@ class TestConstants:
 class TestSubphonicsEngine:
     @pytest.fixture
     def engine(self):
-        return SubphonicsEngine()
+        eng = SubphonicsEngine()
+        # Mock _cmd_render_module to avoid slow DSP (O(n) Python loops
+        # in reverb_schroeder, _biquad_mono, etc).  Still tests routing.
+        def _fast_render(module_name: str) -> dict:
+            return {
+                "text": f"**{module_name}** rendered (mock).",
+                "meta": {"module": module_name, "status": "ok"},
+            }
+        eng._cmd_render_module = _fast_render
+        return eng
 
     def test_init(self, engine):
         assert engine.identity["name"] == "SUBPHONICS"

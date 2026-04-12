@@ -25,6 +25,7 @@ Based on Subtronics production analysis:
 from __future__ import annotations
 
 import json
+from typing import Any, Callable
 import math
 import wave
 from dataclasses import dataclass, field
@@ -850,7 +851,7 @@ def fm_pad_bank() -> PadBank:
     )
 
 
-ALL_PAD_BANKS: dict[str, callable] = {
+ALL_PAD_BANKS: dict[str, Callable[..., Any]] = {
     "lush":     lush_pad_bank,
     "dark":     dark_pad_bank,
     "shimmer":  shimmer_pad_bank,

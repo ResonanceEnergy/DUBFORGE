@@ -44,13 +44,17 @@ class TestPluginRegistry:
         reg = PluginRegistry()
         meta = PluginMeta("p", "2.0", "me", "fx", "My FX")
         reg.register("p", lambda: None, meta)
-        assert reg.get("p").meta.version == "2.0"
+        entry = reg.get("p")
+        assert entry is not None
+        assert entry.meta.version == "2.0"
 
     def test_register_with_presets(self):
         reg = PluginRegistry()
         presets = {"warm": {"cutoff": 500}}
         reg.register("p", lambda: None, presets=presets)
-        assert reg.get("p").presets == presets
+        entry = reg.get("p")
+        assert entry is not None
+        assert entry.presets == presets
 
     def test_unregister_existing(self):
         reg = PluginRegistry()

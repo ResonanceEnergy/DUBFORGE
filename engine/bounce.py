@@ -8,8 +8,10 @@ offline render, stem bounce, multi-format export.
 import math
 import struct
 import wave
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from engine.config_loader import PHI
 from engine.turboquant import (
@@ -60,9 +62,9 @@ class BounceEngine:
 
     def __init__(self, sample_rate: int = SAMPLE_RATE):
         self.sample_rate = sample_rate
-        self.processors: list[callable] = []
+        self.processors: list[Callable[..., Any]] = []
 
-    def add_processor(self, fn: callable) -> None:
+    def add_processor(self, fn: Callable[..., Any]) -> None:
         """Add a processing function to the chain."""
         self.processors.append(fn)
 

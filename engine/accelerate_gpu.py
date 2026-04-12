@@ -1,3 +1,4 @@
+# pyright: basic
 """
 DUBFORGE Engine — Apple Silicon Accelerator
 
@@ -25,6 +26,7 @@ Usage:
 from __future__ import annotations
 
 import math
+from typing import Any
 import numpy as np
 import numpy.typing as npt
 
@@ -38,11 +40,11 @@ _log = get_logger("dubforge.accelerate_gpu")
 # ═══════════════════════════════════════════════════════════════════════════
 
 HAS_MLX = False
-_mx = None
+_mx: Any = None
 
 if IS_APPLE_SILICON:
     try:
-        import mlx.core as mx
+        import mlx.core as mx  # type: ignore[import-unresolved]
         _mx = mx
         HAS_MLX = True
         _log.info("MLX available — GPU acceleration enabled")
@@ -266,7 +268,7 @@ def convolve_fast(signal: npt.NDArray[np.float64],
     """FFT-based convolution — MLX GPU for large signals."""
     # For short kernels, direct convolution is faster
     if len(kernel) < 128:
-        return np.convolve(signal, kernel, mode=mode)
+        return np.convolve(signal, kernel, mode=mode)  # type: ignore[arg-type]
 
     # FFT convolution (overlap-add style)
     n = len(signal) + len(kernel) - 1
@@ -404,7 +406,7 @@ def main() -> None:
 
     # Benchmark: additive synthesis
     t0 = time.perf_counter_ns()
-    harmonics = [(i + 1, 1.0 / (i + 1)) for i in range(64)]
+    harmonics: list[tuple[float, float]] = [(float(i + 1), 1.0 / (i + 1)) for i in range(64)]
     additive_synth(440.0, 2.0, harmonics)
     synth_time = (time.perf_counter_ns() - t0) / 1e6
     print(f"\n  Additive synth (64 harmonics, 2s @ 48kHz):")

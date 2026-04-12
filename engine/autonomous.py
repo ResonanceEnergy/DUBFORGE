@@ -949,7 +949,7 @@ class AutonomousDirector:
         safe = "".join(c for c in safe if c.isalnum() or c == "_")
         path = SONGS_DIR / f"{safe}_dna.json"
         try:
-            from engine.variation_engine import _dna_to_dict
+            from engine.variation_engine import _dna_to_dict  # type: ignore[attr-defined]
             path.write_text(json.dumps(_dna_to_dict(dna), indent=2))
         except Exception:
             # Fallback: just save summary

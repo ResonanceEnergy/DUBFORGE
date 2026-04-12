@@ -197,7 +197,7 @@ class FrequencyAnalyzer:
         peak = self.peak_frequency(spectrum)
         bands = self.get_band_energy(spectrum)
 
-        dominant = max(bands, key=bands.get) if bands else ""
+        dominant = max(bands, key=lambda k: bands.get(k, 0.0)) if bands else ""
 
         return SpectralFeatures(
             centroid=centroid,

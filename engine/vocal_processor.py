@@ -13,6 +13,7 @@ Types:
 """
 
 from dataclasses import dataclass, field
+from typing import Any, Callable
 
 import numpy as np
 
@@ -428,7 +429,7 @@ def telephone_bank() -> VocalBank:
     ])
 
 
-ALL_VOCAL_BANKS: dict[str, callable] = {
+ALL_VOCAL_BANKS: dict[str, Callable[..., Any]] = {
     "pitch_correct": pitch_correct_bank,
     "vocoder": vocoder_bank,
     "formant_shift": formant_shift_bank,

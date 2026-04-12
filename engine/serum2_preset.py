@@ -301,7 +301,7 @@ class SerumPreset:
             "vendor": self.vendor,
             "version": self.version,
         }, separators=(",", ":"))
-        return raw
+        return raw  # type: ignore[return-value]
 
     # ── Serialization ─────────────────────────────────────────────────
 
@@ -313,7 +313,7 @@ class SerumPreset:
         """Produce the complete .SerumPreset binary."""
         # 1. JSON metadata
         json_str = self.get_metadata()
-        json_bytes = json_str.encode("utf-8")
+        json_bytes = json_str.encode("utf-8")  # type: ignore[union-attr]
 
         # 2. CBOR → zstd compress
         cbor_raw = self.to_cbor_bytes()
@@ -330,21 +330,51 @@ class SerumPreset:
     def get_processor_state(self) -> bytes | None:
         """Return bytes for Ableton ALS ``<ProcessorState>`` embedding.
 
-        Returns Ableton-native IBStream bytes captured from an Ableton-saved
-        ALS file.  These are the Serum 2 init-patch defaults in XferJson
-        format that Ableton's VST3 host can restore via setState().
+        Builds a real XferJson blob from the current (mutated) cbor_data,
+        filtering to processor-only keys.  If cbor_data is empty, falls
+        back to the captured init-patch constants.
         """
-        from engine._captured_serum2_state import PROCESSOR_STATE_SERUM_2
-        return PROCESSOR_STATE_SERUM_2
+        if not self.cbor_data:
+            from engine._captured_serum2_state import PROCESSOR_STATE_SERUM_2
+            return PROCESSOR_STATE_SERUM_2
+
+        # Filter to processor keys only
+        proc_data = {k: v for k, v in self.cbor_data.items()
+                     if k in _PROCESSOR_KEYS}
+        # Ensure required metadata keys are present
+        proc_data.setdefault("component", "processor")
+        proc_data.setdefault("product", "Serum2")
+        proc_data.setdefault("productVersion", "2.1.1")
+        proc_data.setdefault("vendor", "Xfer Records")
+        proc_data.setdefault("version", 10.0)
+
+        return _build_xferjson_blob(_PROCESSOR_JSON_META, proc_data)
 
     def get_controller_state(self) -> bytes | None:
         """Return bytes for Ableton ALS ``<ControllerState>`` embedding.
 
-        Returns Ableton-native IBStream bytes — paired with
-        get_processor_state().
+        Builds a real XferJson blob from the current (mutated) cbor_data,
+        filtering to controller-only keys.  If cbor_data is empty, falls
+        back to the captured init-patch constants.
         """
-        from engine._captured_serum2_state import CONTROLLER_STATE_SERUM_2
-        return CONTROLLER_STATE_SERUM_2
+        if not self.cbor_data:
+            from engine._captured_serum2_state import CONTROLLER_STATE_SERUM_2
+            return CONTROLLER_STATE_SERUM_2
+
+        # Filter to controller keys only
+        ctrl_data = {k: v for k, v in self.cbor_data.items()
+                     if k in _CONTROLLER_KEYS}
+        # Ensure required metadata
+        ctrl_data.setdefault("component", "controller")
+        ctrl_data.setdefault("product", "Serum2")
+        ctrl_data.setdefault("productVersion", "2.1.1")
+        ctrl_data.setdefault("vendor", "Xfer Records")
+        ctrl_data.setdefault("version", 10.0)
+        ctrl_data.setdefault("presetName", self.name)
+        ctrl_data.setdefault("presetAuthor", self.author)
+        ctrl_data.setdefault("presetDescription", self.description)
+
+        return _build_xferjson_blob(_CONTROLLER_JSON_META, ctrl_data)
 
     def write(self, path: str | Path) -> Path:
         """Write the preset to a .SerumPreset file."""
@@ -575,7 +605,7 @@ def get_preset_state_map() -> dict[str, tuple[bytes, bytes]]:
     """
     result: dict[str, tuple[bytes, bytes]] = {}
     for name, preset in build_all_presets().items():
-        result[name] = (preset.get_processor_state(),
+        result[name] = (preset.get_processor_state(),  # type: ignore[assignment]
                         preset.get_controller_state())
     return result
 

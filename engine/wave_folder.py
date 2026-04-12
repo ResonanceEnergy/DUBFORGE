@@ -11,6 +11,7 @@ import os
 import struct
 import wave
 from dataclasses import dataclass
+from typing import Any, Callable
 
 from engine.config_loader import PHI, A4_432
 from engine.turboquant import (
@@ -94,7 +95,7 @@ def fold_multi(x: float, amount: float = 3.0,
     return x
 
 
-FOLD_ALGORITHMS: dict[str, callable] = {
+FOLD_ALGORITHMS: dict[str, Callable[..., Any]] = {
     "standard": fold,
     "tanh": fold_tanh,
     "sinusoidal": fold_sinusoidal,

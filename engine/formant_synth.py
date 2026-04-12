@@ -19,6 +19,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+from typing import Any, Callable
 import math
 import wave
 from dataclasses import dataclass, field
@@ -333,7 +334,7 @@ def morph_formant_bank() -> FormantBank:
     )
 
 
-ALL_FORMANT_BANKS: dict[str, callable] = {
+ALL_FORMANT_BANKS: dict[str, Callable[..., Any]] = {
     "ah": ah_formant_bank,
     "ee": ee_formant_bank,
     "oh": oh_formant_bank,

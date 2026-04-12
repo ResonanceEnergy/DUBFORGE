@@ -25,6 +25,7 @@ Based on Subtronics production analysis:
 """
 
 from __future__ import annotations
+from typing import Any, Callable
 
 import json
 import math
@@ -588,7 +589,7 @@ def pitch_ramp_bank() -> TransitionBank:
     )
 
 
-ALL_TRANSITION_BANKS: dict[str, callable] = {
+ALL_TRANSITION_BANKS: dict[str, Callable[..., Any]] = {
     "tape_stops":      tape_stop_bank,
     "tape_starts":     tape_start_bank,
     "reverse_crashes": reverse_crash_bank,

@@ -55,11 +55,12 @@ class MonitorSession:
         return max(s.rms for s in self.snapshots)
 
     def to_dict(self) -> dict:
+        snap = self.latest()
         return {
             "n_snapshots": len(self.snapshots),
             "avg_phi_coherence": round(self.avg_phi_coherence(), 6),
             "peak_rms": round(self.peak_rms(), 6),
-            "latest": asdict(self.latest()) if self.latest() else None,
+            "latest": asdict(snap) if snap else None,
         }
 
 

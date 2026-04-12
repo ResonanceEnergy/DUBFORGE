@@ -133,6 +133,13 @@ REGISTRY = {
         "spectral_resynthesis": {"status": "available",  "provides": "FFT analysis → resynthesis with modification"},
         "wavetable_morph":      {"status": "available",  "provides": "Smooth morphing between wavetable frames"},
         "envelope_generator":   {"status": "available",  "provides": "Complex ADSR/MSEG envelope generation"},
+        # Session 13 gap modules
+        "resample_feedback":    {"status": "wired",     "provides": "Live resampling feedback loop (bass_mangle, whirlpool, stutter_stack, spectral_freeze)"},
+        "wavetable_export":     {"status": "wired",     "provides": "Custom wavetable export to Serum 2 (clm format, harmonic/FM/fractal/formant/resample)"},
+        "granular_depth":       {"status": "wired",     "provides": "Deep granular processing (time_stretch, pitch_grain, cloud, freeze, morph)"},
+        "guitar_synth":         {"status": "wired",     "provides": "Guitar-synth hybrid layer (Karplus-Strong + supersaw/FM/pad)"},
+        "vocal_mangle":         {"status": "wired",     "provides": "Creative vocal mangling (glitch_slice, granular, formant_morph, reverse_build, stutter_gate)"},
+        "serum_lfo_shapes":     {"status": "wired",     "provides": "Serum 2 LFO shape generation (phi_step, fibonacci, fractal, euclidean, harmonic)"},
     },
 
     # ─── PHASE 5: ARRANGE ─────────────────────────────────────
@@ -178,6 +185,8 @@ REGISTRY = {
         "live_fx":              {"status": "available",  "provides": "Real-time effect processing"},
         "atmos_pipeline":       {"status": "available",  "provides": "Atmospheric processing pipeline"},
         "sub_pipeline":         {"status": "available",  "provides": "Sub-bass processing pipeline"},
+        # Session 13 gap modules
+        "ab_workflow":          {"status": "wired",     "provides": "A/B sound design comparison workflow (bracket, round_robin, elimination, golden_split, blind_vote)"},
     },
 
     # ─── PHASE 7: MIX ────────────────────────────────────────
@@ -241,6 +250,8 @@ REGISTRY = {
         "batch_processor":      {"status": "available",  "provides": "Batch process audio files with effects"},
         "format_converter":     {"status": "available",  "provides": "Convert between audio formats (WAV/FLAC/MP3)"},
         "midi_processor":       {"status": "available",  "provides": "MIDI file processing and manipulation"},
+        # Session 13 gap modules
+        "vip_generator":        {"status": "wired",     "provides": "VIP generation mode (Fractals → Antifractals workflow with A/B selection)"},
     },
 
     # ─── PHASE 10: REFLECT ────────────────────────────────────

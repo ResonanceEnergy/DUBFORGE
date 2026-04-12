@@ -13,6 +13,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+from typing import Any, Callable
 import math
 import wave
 from dataclasses import dataclass, field
@@ -488,7 +489,7 @@ def whoosh_impact_bank() -> ImpactBank:
     )
 
 
-ALL_IMPACT_BANKS: dict[str, callable] = {
+ALL_IMPACT_BANKS: dict[str, Callable[..., Any]] = {
     "sub_booms":          sub_boom_bank,
     "metal_crashes":      metal_crash_bank,
     "cinematic_hits":     cinematic_hit_bank,

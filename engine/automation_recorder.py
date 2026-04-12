@@ -112,7 +112,7 @@ class AutomationRecorder:
 
     # --- Recording ---
 
-    def start_recording(self, lane_names: list[str] = None) -> None:
+    def start_recording(self, lane_names: list[str] | None = None) -> None:
         """Start recording automation."""
         self.recording = True
         names = lane_names or list(self.lanes.keys())

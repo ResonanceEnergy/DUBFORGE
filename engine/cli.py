@@ -205,6 +205,28 @@ def cmd_install(_args: argparse.Namespace) -> None:
     install_to_ableton_user_library()
 
 
+def cmd_forge(args: argparse.Namespace) -> None:
+    """Forge a complete track — DNA → synthesis → arrange → mix → master → WAV."""
+    from engine.variation_engine import SongBlueprint, VariationEngine
+    from forge import render_full_track
+
+    name = args.name
+    bp = SongBlueprint(
+        name=name,
+        style=args.style,
+        bpm=args.bpm,
+        key=args.key,
+        scale=args.scale,
+    )
+    dna = VariationEngine().forge_dna(bp)
+
+    t0 = time.time()
+    out_path = render_full_track(dna=dna, use_phase_one=True,
+                                yaml_path=args.config)
+    elapsed = time.time() - t0
+    print(f"\n  Forged in {elapsed:.0f}s → {out_path}")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════════════

@@ -86,14 +86,13 @@ def _write_test_fxp(path: Path, name: str = "TestPreset",
 def _build_fake_galatcia(root: Path) -> None:
     """Create a minimal GALATCIA directory tree for testing."""
     # Presets
-    presets_dir = (root / "Black Octopus - Brutal Dubstep and Riddim"
-                   / "Black Octopus - Brutal Dubstep and Riddim")
+    presets_dir = root / "Black Octopus - Brutal Dubstep and Riddim"
     for name in ["BS Growler", "BS Thicc", "LD Spicy",
                  "PAD Haven", "PL Peas", "SFX Laser"]:
         _write_test_fxp(presets_dir / f"{name}.fxp", name)
 
     # Samples
-    samples_dir = root / "Samples" / "Samples"
+    samples_dir = root / "Samples"
     for cat, names in [
         ("Drum One Shots/KICKS", ["BODP_Kick_1.wav", "BODP_Kick_2.wav"]),
         ("Drum One Shots/Snares", ["BODP_Snare_1.wav"]),
@@ -107,12 +106,12 @@ def _build_fake_galatcia(root: Path) -> None:
             _write_test_wav(samples_dir / cat / fname)
 
     # Wavetables
-    wt_dir = root / "ERB NEURO WT" / "ERB NEURO WT"
+    wt_dir = root / "ERB NEURO WT"
     for name in ["Basic Shapes.wav", "bitreduced.wav", "VOX-C1.wav"]:
         _write_test_wav(wt_dir / name, n_samples=2048 * 2)
 
     # Ableton Racks
-    racks_dir = root / "Ableton Racks" / "Ableton Racks"
+    racks_dir = root / "Ableton Racks"
     racks_dir.mkdir(parents=True, exist_ok=True)
     (racks_dir / "Conclusion.adg").write_bytes(b"<fake-adg/>")
     (racks_dir / "Introduction.adg").write_bytes(b"<fake-adg/>")

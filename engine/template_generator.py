@@ -10,6 +10,7 @@ Serum2Patch config + arrangement + FX chain.
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -204,7 +205,7 @@ def ambient_bank() -> TemplateBank:
     ])
 
 
-ALL_TEMPLATE_BANKS: dict[str, callable] = {
+ALL_TEMPLATE_BANKS: dict[str, Callable[..., Any]] = {
     "dubstep": dubstep_bank,
     "riddim": riddim_bank,
     "melodic": melodic_bank,

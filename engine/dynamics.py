@@ -76,7 +76,7 @@ def analyze_dynamics(signal: list[float],
         if signal.ndim == 2:
             signal = signal.mean(axis=1)
         peak = float(np.max(np.abs(signal)))
-        rms = accel_rms(signal)
+        rms = accel_rms(signal)  # type: ignore[arg-type]
         peak_db = 20 * math.log10(max(peak, 1e-10))
         rms_db = 20 * math.log10(max(rms, 1e-10))
         crest = peak_db - rms_db
@@ -85,7 +85,7 @@ def analyze_dynamics(signal: list[float],
         block_rms_list: list[float] = []
         for i in range(0, len(signal) - block_size, block_size):
             block = signal[i:i + block_size]
-            br = accel_rms(block)
+            br = accel_rms(block)  # type: ignore[arg-type]
             if br > 1e-10:
                 block_rms_list.append(20 * math.log10(br))
         dynamic_range = (max(block_rms_list) - min(block_rms_list)

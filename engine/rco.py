@@ -1,436 +1,111 @@
-"""
-DUBFORGE Engine — Rollercoaster Optimizer (RCO)
+"""RCO — Resonance Curve Oscillator.
 
-Analyzes and generates energy curves for drop arrangements.
-Based on Subtronics structural analysis and phi-ratio timing.
-
-The RCO models a track's energy as a time-series and optimizes
-drop placement, build-up slopes, and tension/release using
-Fibonacci bar counts and phi-ratio envelope shapes.
-
-Dojo Integration (ill.Gates — Narrative Filtering):
-    Low-pass filter automation as storytelling device:
-      Intro: LP 400→800 Hz (mystery, underwater)
-      Build: LP 800→4000 Hz (revelation, brightening)
-      Drop:  Fully open 20kHz (full energy payoff)
-      Break: LP 10000→1000 Hz (reflection, cooling)
-    Filter position tells the listener WHERE they are in the story.
-
-Outputs:
-    output/analysis/rco_curve.json
-    output/analysis/rco_curve.png  (if matplotlib available)
+Energy-curve presets modelled on Subtronics-style arrangements.
+Each preset defines section energies that map to the canonical
+9-scene session template (112 bars @ 150 BPM default).
 """
 
-import json
-import os
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Optional
+from __future__ import annotations
 
-from engine.config_loader import PHI, load_config
+from dataclasses import dataclass, field
 
-# --- Data Models ----------------------------------------------------------
-
-@dataclass
-class Section:
-    """One section of a track arrangement.
-
-    Dojo: filter_cutoff_start/end model ill.Gates narrative filtering.
-    Filter position = story position. Low = mystery. Open = payoff.
-    """
-    name: str                    # e.g. "intro", "build_1", "drop_1", "break", "drop_2"
-    bars: int                    # length in bars
-    energy_start: float          # 0.0 – 1.0
-    energy_end: float            # 0.0 – 1.0
-    curve: str = "phi"           # "linear", "phi", "exponential", "fibonacci_step",
-                                 # "low_pass_narrative"
-    bpm: float = 150.0
-    filter_cutoff_start: float = 20000.0  # Hz — narrative LP automation start
-    filter_cutoff_end: float = 20000.0    # Hz — narrative LP automation end
+import numpy as np
 
 
 @dataclass
 class RCOProfile:
-    """Complete rollercoaster energy profile for a track."""
+    """A named energy profile describing per-section dynamics."""
+
     name: str
     bpm: float
-    sections: list = field(default_factory=list)
-    total_bars: int = 0
-    total_duration_s: float = 0.0
-
-    def compute(self):
-        self.total_bars = sum(s.bars for s in self.sections)
-        self.total_duration_s = (self.total_bars * 4 * 60) / self.bpm  # 4 beats/bar
-
-    def narrative_filter_curve(self, resolution_per_bar: int = 4) -> list[dict]:
-        """ill.Gates Narrative Filtering — generate LP cutoff automation curve.
-
-        Returns list of {time_s, cutoff_hz, section_name} points that map
-        the filter position to the track's emotional journey.
-
-        Usage:
-            profile = default_rco_profile(...)
-            filter_data = profile.narrative_filter_curve()
-            # → [{'time_s': 0.0, 'cutoff_hz': 400.0, 'section': 'intro'}, ...]
-        """
-        self.compute()
-        points = []
-        bar_offset = 0
-        seconds_per_bar = (4 * 60) / self.bpm
-
-        for section in self.sections:
-            n_points = section.bars * resolution_per_bar
-            start_hz = section.filter_cutoff_start
-            end_hz = section.filter_cutoff_end
-
-            for i in range(n_points):
-                t = (bar_offset + i / resolution_per_bar) * seconds_per_bar
-                # Phi-curve interpolation for organic filter movement
-                progress = i / max(n_points - 1, 1)
-                progress_phi = progress ** PHI
-                cutoff = start_hz + (end_hz - start_hz) * progress_phi
-                points.append({
-                    "time_s": round(t, 3),
-                    "cutoff_hz": round(cutoff, 1),
-                    "section": section.name,
-                })
-
-            bar_offset += section.bars
-
-        return points
+    sections: list[dict] = field(default_factory=list)
 
 
-# --- Curve Functions ------------------------------------------------------
+# ── preset builders ─────────────────────────────────────────────
 
-def phi_curve(start: float, end: float, n_points: int) -> list[float]:
-    """Non-linear interpolation using phi exponent."""
-    points = []
-    for i in range(n_points):
-        t = i / max(n_points - 1, 1)
-        t_phi = t ** PHI
-        val = start + (end - start) * t_phi
-        points.append(round(val, 4))
-    return points
+_WEAPON_SECTIONS = [
+    {"name": "INTRO", "bars": 8, "energy": 0.20},
+    {"name": "BUILD 1", "bars": 16, "energy": 0.55},
+    {"name": "DROP 1", "bars": 16, "energy": 1.00},
+    {"name": "BREAKDOWN", "bars": 8, "energy": 0.30},
+    {"name": "BUILD 2", "bars": 16, "energy": 0.65},
+    {"name": "DROP 2", "bars": 16, "energy": 1.00},
+    {"name": "BRIDGE", "bars": 8, "energy": 0.40},
+    {"name": "FINAL DROP", "bars": 16, "energy": 0.95},
+    {"name": "OUTRO", "bars": 8, "energy": 0.15},
+]
 
+_EMOTIVE_SECTIONS = [
+    {"name": "INTRO", "bars": 8, "energy": 0.15},
+    {"name": "BUILD 1", "bars": 16, "energy": 0.40},
+    {"name": "DROP 1", "bars": 16, "energy": 0.80},
+    {"name": "BREAKDOWN", "bars": 8, "energy": 0.25},
+    {"name": "BUILD 2", "bars": 16, "energy": 0.50},
+    {"name": "DROP 2", "bars": 16, "energy": 0.85},
+    {"name": "BRIDGE", "bars": 8, "energy": 0.35},
+    {"name": "FINAL DROP", "bars": 16, "energy": 0.75},
+    {"name": "OUTRO", "bars": 8, "energy": 0.10},
+]
 
-def fibonacci_step_curve(start: float, end: float, n_points: int) -> list[float]:
-    """Step-wise interpolation at Fibonacci intervals."""
-    points = []
-    fib_set = set()
-    a, b = 1, 1
-    while a <= n_points:
-        fib_set.add(a - 1)
-        a, b = b, a + b
-
-    current = start
-    step = (end - start) / max(len(fib_set), 1)
-    for i in range(n_points):
-        if i in fib_set:
-            current += step
-            current = min(max(current, 0.0), 1.0)
-        points.append(round(current, 4))
-    return points
-
-
-def linear_curve(start: float, end: float, n_points: int) -> list[float]:
-    points = []
-    for i in range(n_points):
-        t = i / max(n_points - 1, 1)
-        points.append(round(start + (end - start) * t, 4))
-    return points
-
-
-def exponential_curve(start: float, end: float, n_points: int) -> list[float]:
-    points = []
-    for i in range(n_points):
-        t = i / max(n_points - 1, 1)
-        t_exp = t ** 2.0
-        points.append(round(start + (end - start) * t_exp, 4))
-    return points
+_HYBRID_SECTIONS = [
+    {"name": "INTRO", "bars": 8, "energy": 0.25},
+    {"name": "BUILD 1", "bars": 16, "energy": 0.50},
+    {"name": "DROP 1", "bars": 16, "energy": 0.95},
+    {"name": "BREAKDOWN", "bars": 8, "energy": 0.20},
+    {"name": "BUILD 2", "bars": 16, "energy": 0.60},
+    {"name": "DROP 2", "bars": 16, "energy": 0.90},
+    {"name": "BRIDGE", "bars": 8, "energy": 0.45},
+    {"name": "FINAL DROP", "bars": 16, "energy": 1.00},
+    {"name": "OUTRO", "bars": 8, "energy": 0.12},
+]
 
 
-CURVE_MAP = {
-    "phi": phi_curve,
-    "linear": linear_curve,
-    "exponential": exponential_curve,
-    "fibonacci_step": fibonacci_step_curve,
-}
+def subtronics_weapon_preset(bpm: float = 150) -> RCOProfile:
+    return RCOProfile(name="Weapon", bpm=bpm, sections=list(_WEAPON_SECTIONS))
 
 
-# --- RCO Engine -----------------------------------------------------------
+def subtronics_emotive_preset(bpm: float = 150) -> RCOProfile:
+    return RCOProfile(name="Emotive", bpm=bpm, sections=list(_EMOTIVE_SECTIONS))
 
-def generate_energy_curve(profile: RCOProfile,
-                          resolution_per_bar: int = 4) -> dict:
+
+def subtronics_hybrid_preset(bpm: float = 150) -> RCOProfile:
+    return RCOProfile(name="Hybrid", bpm=bpm, sections=list(_HYBRID_SECTIONS))
+
+
+# ── energy-curve generator ──────────────────────────────────────
+
+def generate_energy_curve(
+    profile: RCOProfile,
+    resolution_per_bar: int = 4,
+) -> dict:
+    """Expand an RCO profile into a time-domain energy curve.
+
+    Returns dict with keys:
+        total_bars, total_duration_s, time_s, energy
     """
-    Generate a full energy curve for the arrangement.
+    bpm = profile.bpm or 150
+    seconds_per_bar = (4 * 60) / bpm  # 4 beats per bar
+    total_bars = sum(s["bars"] for s in profile.sections)
+    total_duration = total_bars * seconds_per_bar
 
-    Returns dict with:
-        time_s: list of timestamps
-        energy: list of energy values [0..1]
-        sections: section metadata
-    """
-    profile.compute()
-    all_energy = []
-    all_time = []
-    bar_offset = 0
-    seconds_per_bar = (4 * 60) / profile.bpm
+    time_s: list[float] = []
+    energy: list[float] = []
+    current_bar = 0
 
-    for section in profile.sections:
-        n_points = section.bars * resolution_per_bar
-        curve_fn = CURVE_MAP.get(section.curve, phi_curve)
-        energy = curve_fn(section.energy_start, section.energy_end, n_points)
-
-        for i, e in enumerate(energy):
-            t = (bar_offset + i / resolution_per_bar) * seconds_per_bar
-            all_time.append(round(t, 3))
-            all_energy.append(e)
-
-        bar_offset += section.bars
+    for sec in profile.sections:
+        bars = sec["bars"]
+        e = sec["energy"]
+        samples = bars * resolution_per_bar
+        for i in range(samples):
+            bar_offset = current_bar + i / resolution_per_bar
+            t = bar_offset * seconds_per_bar
+            time_s.append(t)
+            energy.append(e)
+        current_bar += bars
 
     return {
-        "name": profile.name,
-        "bpm": profile.bpm,
-        "total_bars": profile.total_bars,
-        "total_duration_s": round(profile.total_duration_s, 2),
-        "time_s": all_time,
-        "energy": all_energy,
-        "sections": [asdict(s) for s in profile.sections],
+        "total_bars": total_bars,
+        "total_duration_s": total_duration,
+        "time_s": time_s,
+        "energy": energy,
     }
-
-
-# --- Presets from Subtronics Analysis ------------------------------------
-
-def subtronics_weapon_preset(bpm: float = 150.0) -> RCOProfile:
-    """
-    Weapon-style drop structure derived from Subtronics corpus analysis.
-    16-bar drops, 8-bar builds, Fibonacci break lengths.
-    """
-    return RCOProfile(
-        name="SUBTRONICS_WEAPON",
-        bpm=bpm,
-        sections=[
-            Section("intro",    bars=8,  energy_start=0.0, energy_end=0.2, curve="linear"),
-            Section("build_1",  bars=8,  energy_start=0.2, energy_end=0.85, curve="phi"),
-            Section("drop_1",   bars=16, energy_start=1.0, energy_end=0.9, curve="fibonacci_step"),
-            Section("break_1",  bars=8,  energy_start=0.3, energy_end=0.15, curve="phi"),
-            Section("build_2",  bars=8,  energy_start=0.15, energy_end=0.95, curve="exponential"),
-            Section("drop_2",   bars=16, energy_start=1.0, energy_end=0.85, curve="fibonacci_step"),
-            Section("break_2",  bars=8,  energy_start=0.25, energy_end=0.1, curve="phi"),
-            Section("build_3",  bars=8,  energy_start=0.1, energy_end=1.0, curve="phi"),
-            Section("drop_3",   bars=16, energy_start=1.0, energy_end=0.8, curve="fibonacci_step"),
-            Section("outro",    bars=8,  energy_start=0.3, energy_end=0.0, curve="linear"),
-        ],
-    )
-
-
-def subtronics_emotive_preset(bpm: float = 150.0) -> RCOProfile:
-    """
-    Emotive/melodic drop structure — longer builds, gentler breaks.
-    """
-    return RCOProfile(
-        name="SUBTRONICS_EMOTIVE",
-        bpm=bpm,
-        sections=[
-            Section("intro",     bars=16, energy_start=0.0, energy_end=0.3, curve="phi"),
-            Section("verse_1",   bars=16, energy_start=0.3, energy_end=0.4, curve="linear"),
-            Section("build_1",   bars=8,  energy_start=0.4, energy_end=0.85, curve="phi"),
-            Section("drop_1",    bars=16, energy_start=0.9, energy_end=0.75, curve="fibonacci_step"),
-            Section("break_1",   bars=16, energy_start=0.35, energy_end=0.2, curve="phi"),
-            Section("build_2",   bars=8,  energy_start=0.2, energy_end=0.95, curve="phi"),
-            Section("drop_2",    bars=16, energy_start=1.0, energy_end=0.8, curve="fibonacci_step"),
-            Section("outro",     bars=16, energy_start=0.3, energy_end=0.0, curve="phi"),
-        ],
-    )
-
-
-def subtronics_hybrid_preset(bpm: float = 150.0) -> RCOProfile:
-    """
-    Hybrid: weapon aggression + emotive breaks.
-    """
-    return RCOProfile(
-        name="SUBTRONICS_HYBRID",
-        bpm=bpm,
-        sections=[
-            Section("intro",     bars=8,  energy_start=0.0, energy_end=0.25, curve="phi"),
-            Section("build_1",   bars=8,  energy_start=0.25, energy_end=0.9, curve="exponential"),
-            Section("drop_1",    bars=16, energy_start=1.0, energy_end=0.85, curve="fibonacci_step"),
-            Section("melodic_break", bars=16, energy_start=0.4, energy_end=0.3, curve="phi"),
-            Section("build_2",   bars=8,  energy_start=0.3, energy_end=1.0, curve="phi"),
-            Section("drop_2",    bars=16, energy_start=1.0, energy_end=0.9, curve="fibonacci_step"),
-            Section("break_2",   bars=8,  energy_start=0.3, energy_end=0.15, curve="phi"),
-            Section("build_3",   bars=8,  energy_start=0.15, energy_end=1.0, curve="phi"),
-            Section("drop_3",    bars=16, energy_start=1.0, energy_end=0.75, curve="fibonacci_step"),
-            Section("outro",     bars=8,  energy_start=0.25, energy_end=0.0, curve="linear"),
-        ],
-    )
-
-
-# --- Dojo Narrative Filtering Preset --------------------------------------
-
-def dojo_narrative_preset(bpm: float = 150.0) -> RCOProfile:
-    """ill.Gates Narrative Filtering — LP automation tells the story.
-
-    Filter cutoff values follow the emotional journey:
-      Intro: 400→800 Hz (mystery, underwater)
-      Build: 800→4000 Hz (revelation, brightening)
-      Drop:  20000 Hz (fully open, maximum energy)
-      Break: 10000→1000 Hz (reflection, cooling)
-      Drop2: 20000 Hz (return of full energy)
-      Outro: 4000→200 Hz (closing, fading)
-    """
-    return RCOProfile(
-        name="DOJO_NARRATIVE",
-        bpm=bpm,
-        sections=[
-            Section("intro", bars=8, energy_start=0.0, energy_end=0.2,
-                    curve="phi", bpm=bpm,
-                    filter_cutoff_start=400.0, filter_cutoff_end=800.0),
-            Section("build_1", bars=8, energy_start=0.2, energy_end=0.85,
-                    curve="phi", bpm=bpm,
-                    filter_cutoff_start=800.0, filter_cutoff_end=4000.0),
-            Section("drop_1", bars=16, energy_start=1.0, energy_end=0.9,
-                    curve="fibonacci_step", bpm=bpm,
-                    filter_cutoff_start=20000.0, filter_cutoff_end=20000.0),
-            Section("break_1", bars=8, energy_start=0.3, energy_end=0.15,
-                    curve="phi", bpm=bpm,
-                    filter_cutoff_start=10000.0, filter_cutoff_end=1000.0),
-            Section("build_2", bars=8, energy_start=0.15, energy_end=0.95,
-                    curve="exponential", bpm=bpm,
-                    filter_cutoff_start=1000.0, filter_cutoff_end=8000.0),
-            Section("drop_2", bars=16, energy_start=1.0, energy_end=0.85,
-                    curve="fibonacci_step", bpm=bpm,
-                    filter_cutoff_start=20000.0, filter_cutoff_end=20000.0),
-            Section("outro", bars=8, energy_start=0.3, energy_end=0.0,
-                    curve="linear", bpm=bpm,
-                    filter_cutoff_start=4000.0, filter_cutoff_end=200.0),
-        ],
-    )
-
-
-# --- YAML-driven profile loader -------------------------------------------
-
-def load_rco_profiles_from_config() -> list[RCOProfile]:
-    """
-    Load RCO profiles from rco_psbs_vip_delta_v1.1.yaml.
-    Falls back to hardcoded presets if YAML not available.
-    """
-    try:
-        cfg = load_config("rco_psbs_vip_delta_v1.1")
-    except FileNotFoundError:
-        return []
-
-    profiles_data = cfg.get("rco_profiles", {})
-    if not isinstance(profiles_data, dict):
-        return []
-
-    profiles = []
-    for name, pdata in profiles_data.items():
-        if not isinstance(pdata, dict):
-            continue
-        bpm = float(pdata.get("bpm", 150))
-        sections_raw = pdata.get("sections", [])
-        sections = []
-        for s in sections_raw:
-            if not isinstance(s, dict):
-                continue
-            energy = s.get("energy", [0.0, 0.0])
-            if isinstance(energy, list) and len(energy) >= 2:
-                e_start, e_end = float(energy[0]), float(energy[1])
-            else:
-                e_start, e_end = 0.0, 0.0
-            sections.append(Section(
-                name=s.get("name", "section"),
-                bars=int(s.get("bars", 8)),
-                energy_start=e_start,
-                energy_end=e_end,
-                curve=str(s.get("curve", "phi")),
-                bpm=bpm,
-            ))
-        profiles.append(RCOProfile(name=name, bpm=bpm, sections=sections))
-    return profiles
-
-
-# --- Plotting (optional) -------------------------------------------------
-
-def plot_curve(curve_data: dict, out_path: Optional[str] = None):
-    """Plot the energy curve. Requires matplotlib."""
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError:
-        print("matplotlib not installed — skipping plot.")
-        return
-
-    fig, ax = plt.subplots(figsize=(14, 4))
-    ax.plot(curve_data["time_s"], curve_data["energy"],
-            color="#ff5500", linewidth=1.5)
-    ax.fill_between(curve_data["time_s"], curve_data["energy"],
-                    alpha=0.3, color="#ff5500")
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Energy")
-    ax.set_title(f"RCO — {curve_data['name']}  |  {curve_data['bpm']} BPM  |  "
-                 f"{curve_data['total_bars']} bars  |  "
-                 f"{curve_data['total_duration_s']}s")
-    ax.set_ylim(-0.05, 1.1)
-    ax.grid(True, alpha=0.3)
-
-    # Section markers
-    bar_offset = 0
-    spb = (4 * 60) / curve_data["bpm"]
-    for sec in curve_data["sections"]:
-        t = bar_offset * spb
-        ax.axvline(x=t, color='white', alpha=0.4, linestyle='--', linewidth=0.7)
-        ax.text(t + 0.5, 1.05, sec["name"], fontsize=6, rotation=45,
-                color='white', alpha=0.7)
-        bar_offset += sec["bars"]
-
-    ax.set_facecolor('#1a1a2e')
-    fig.patch.set_facecolor('#0f0f1a')
-    ax.tick_params(colors='white')
-    ax.xaxis.label.set_color('white')
-    ax.yaxis.label.set_color('white')
-    ax.title.set_color('white')
-
-    plt.tight_layout()
-    if out_path:
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        fig.savefig(out_path, dpi=150)
-        print(f"  -> {out_path}")
-    else:
-        plt.show()
-    plt.close()
-
-
-# --- Main -----------------------------------------------------------------
-
-
-def main() -> None:
-    out_dir = Path('output/analysis')
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Try YAML-driven profiles first, fall back to hardcoded presets
-    yaml_profiles = load_rco_profiles_from_config()
-    if yaml_profiles:
-        presets = yaml_profiles
-    else:
-        presets = [
-            subtronics_weapon_preset(),
-            subtronics_emotive_preset(),
-            subtronics_hybrid_preset(),
-            dojo_narrative_preset(),
-        ]
-
-    for profile in presets:
-        curve = generate_energy_curve(profile)
-        json_path = out_dir / f"rco_{profile.name.lower()}.json"
-        with open(json_path, 'w') as f:
-            json.dump(curve, f, indent=2)
-        print(f"RCO curve: {json_path}")
-
-        png_path = str(out_dir / f"rco_{profile.name.lower()}.png")
-        plot_curve(curve, out_path=png_path)
-
-    print("RCO engine complete.")
-
-
-if __name__ == '__main__':
-    main()

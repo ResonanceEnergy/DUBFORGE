@@ -18,6 +18,7 @@ import json
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 from engine.config_loader import PHI
 # FXP constants
@@ -265,7 +266,7 @@ def fx_preset_bank() -> PresetPackBank:
     ])
 
 
-ALL_PRESET_PACK_BANKS: dict[str, callable] = {
+ALL_PRESET_PACK_BANKS: dict[str, Callable[..., Any]] = {
     "bass": bass_preset_bank,
     "lead": lead_preset_bank,
     "pad": pad_preset_bank,

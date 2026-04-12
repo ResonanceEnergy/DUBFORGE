@@ -15,8 +15,10 @@ from __future__ import annotations
 import json
 import math
 import wave
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -496,7 +498,7 @@ def stacked_pad_bank() -> ChordPadBank:
     )
 
 
-ALL_CHORD_PAD_BANKS: dict[str, callable] = {
+ALL_CHORD_PAD_BANKS: dict[str, Callable[..., Any]] = {
     "minor7": minor7_pad_bank,
     "major7": major7_pad_bank,
     "sus4":   sus4_pad_bank,

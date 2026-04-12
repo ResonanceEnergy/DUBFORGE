@@ -8,8 +8,10 @@ pick the more phi-coherent one.
 """
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -166,7 +168,7 @@ def compare_composite(sig_a: np.ndarray, sig_b: np.ndarray, preset: ABPreset) ->
     )
 
 
-COMPARISON_FUNCTIONS: dict[str, callable] = {
+COMPARISON_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "spectral": compare_spectral,
     "temporal": compare_temporal,
     "phi_ratio": compare_phi_ratio,
@@ -234,7 +236,7 @@ def composite_ab_bank() -> ABBank:
     ])
 
 
-ALL_AB_BANKS: dict[str, callable] = {
+ALL_AB_BANKS: dict[str, Callable[..., Any]] = {
     "spectral": spectral_ab_bank,
     "temporal": temporal_ab_bank,
     "phi_ratio": phi_ratio_ab_bank,

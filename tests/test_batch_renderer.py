@@ -79,26 +79,33 @@ class TestBanks:
         assert bank.name == "quick"
 
 
+import pytest as _pytest
+
+
+@_pytest.fixture(scope="class")
+def exported_paths(tmp_path_factory):
+    """Render all banks once (no compression) and share across TestExport."""
+    out = tmp_path_factory.mktemp("export")
+    return export_batch_renders(str(out), compress=False)
+
+
 class TestExport:
-    def test_export_creates_wavs(self, tmp_path):
-        paths = export_batch_renders(str(tmp_path))
-        assert len(paths) == 80  # 5 banks × 4 presets × 4 variants
-        for p in paths:
+    def test_export_creates_wavs(self, exported_paths):
+        assert len(exported_paths) == 80  # 5 banks × 4 presets × 4 variants
+        for p in exported_paths:
             assert p.endswith(".wav")
 
-    def test_export_wav_valid(self, tmp_path):
+    def test_export_wav_valid(self, exported_paths):
         import wave as wave_mod
-        paths = export_batch_renders(str(tmp_path))
-        with wave_mod.open(paths[0], "r") as wf:
+        with wave_mod.open(exported_paths[0], "r") as wf:
             assert wf.getnchannels() == 1
             assert wf.getsampwidth() == 2
             assert wf.getframerate() == 44100
 
-    def test_export_nonzero(self, tmp_path):
+    def test_export_nonzero(self, exported_paths):
         import struct
         import wave as wave_mod
-        paths = export_batch_renders(str(tmp_path))
-        with wave_mod.open(paths[0], "r") as wf:
+        with wave_mod.open(exported_paths[0], "r") as wf:
             frames = wf.readframes(wf.getnframes())
             samples = struct.unpack(f"<{wf.getnframes()}h", frames)
             assert any(s != 0 for s in samples)

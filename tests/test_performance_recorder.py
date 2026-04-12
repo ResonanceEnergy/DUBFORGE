@@ -37,6 +37,7 @@ class TestPerformanceRecorder:
         r.start_recording("test")
         r.record_event("param", "vol", 0.5)
         rec = r.stop_recording()
+        assert rec is not None
         path = str(tmp_path / "rec.json")
         r.save_to_file(rec, path)
         loaded = r.load_from_file(path)

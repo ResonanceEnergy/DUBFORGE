@@ -23,6 +23,8 @@ Based on Subtronics production analysis:
 
 from __future__ import annotations
 
+from typing import Any, Callable
+
 import json
 import math
 import wave
@@ -787,7 +789,7 @@ def feedback_fx_presets() -> FXBank:
     )
 
 
-ALL_FX_BANKS: dict[str, callable] = {
+ALL_FX_BANKS: dict[str, Callable[..., Any]] = {
     "risers":      riser_presets,
     "impacts":     impact_presets,
     "subdrops":    subdrop_presets,

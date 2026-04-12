@@ -7,6 +7,7 @@ memory tracking, render timing, module profiling.
 
 import time
 from dataclasses import dataclass
+from typing import Any, Callable
 
 from engine.config_loader import PHI
 SAMPLE_RATE = 48000
@@ -89,8 +90,8 @@ class PerformanceMonitor:
         self._active_timer = None
         return result
 
-    def time_function(self, name: str, fn: callable,
-                      *args, **kwargs) -> tuple[any, TimingResult]:
+    def time_function(self, name: str, fn: Callable[..., Any],
+                      *args, **kwargs) -> tuple[Any, TimingResult]:
         """Time a function call."""
         self.start_timer(name)
         result = fn(*args, **kwargs)
@@ -100,9 +101,9 @@ class PerformanceMonitor:
             samples = len(result)
 
         timing = self.stop_timer(samples)
-        return result, timing
+        return result, timing  # type: ignore[return-value]
 
-    def benchmark(self, fn: callable, samples: list[float],
+    def benchmark(self, fn: Callable[..., Any], samples: list[float],
                   iterations: int = 5,
                   name: str = "benchmark") -> TimingResult:
         """Benchmark a processing function."""

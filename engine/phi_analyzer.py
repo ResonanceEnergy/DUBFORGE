@@ -15,6 +15,7 @@ Analyses:
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -216,7 +217,7 @@ def measure_phase_coherence(signal: np.ndarray, preset: PhiAnalyzerPreset) -> fl
             # Score: 1.0 when in phase, 0.0 when out of phase
             coherence_scores.append(1.0 - phase_diff / np.pi)
 
-    return np.mean(coherence_scores) if coherence_scores else 0.0
+    return float(np.mean(coherence_scores)) if coherence_scores else 0.0
 
 
 def analyze_phi_coherence(signal: np.ndarray,
@@ -315,7 +316,7 @@ def production_bank() -> PhiAnalyzerBank:
     ])
 
 
-ALL_PHI_ANALYZER_BANKS: dict[str, callable] = {
+ALL_PHI_ANALYZER_BANKS: dict[str, Callable[..., Any]] = {
     "standard": standard_bank,
     "bass_focused": bass_focused_bank,
     "high_resolution": high_resolution_bank,

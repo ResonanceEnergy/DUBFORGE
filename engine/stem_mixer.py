@@ -18,6 +18,7 @@ import json
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -326,7 +327,7 @@ def parallel_mix_bank() -> MixBank:
     ])
 
 
-ALL_MIX_BANKS: dict[str, callable] = {
+ALL_MIX_BANKS: dict[str, Callable[..., Any]] = {
     "simple": simple_mix_bank,
     "phi_weight": phi_weight_mix_bank,
     "frequency": frequency_mix_bank,

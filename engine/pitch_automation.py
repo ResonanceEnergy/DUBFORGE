@@ -15,6 +15,7 @@ Banks: 5 types × 4 presets = 20 presets
 """
 
 from dataclasses import dataclass, field
+from typing import Any, Callable
 
 import numpy as np
 
@@ -228,7 +229,7 @@ def glide_pitch_bank() -> PitchAutoBank:
 
 # --- Registry -------------------------------------------------------------
 
-ALL_PITCH_AUTO_BANKS: dict[str, callable] = {
+ALL_PITCH_AUTO_BANKS: dict[str, Callable[..., Any]] = {
     "dive": dive_pitch_bank,
     "rise": rise_pitch_bank,
     "wobble": wobble_pitch_bank,

@@ -256,7 +256,7 @@ class TestPatternToMidiTrack(unittest.TestCase):
     def test_has_end_of_track(self):
         p = generate_dubstep_drop(1)
         track = pattern_to_midi_track(p)
-        self.assertEqual(track[-1].type, "end_of_track")
+        self.assertEqual(track[-1].type, "end_of_track")  # type: ignore[union-attr]
 
 
 class TestWriteDrumMidi(unittest.TestCase):

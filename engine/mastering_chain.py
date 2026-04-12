@@ -111,7 +111,7 @@ def estimate_lufs(audio: np.ndarray, sr: int = SAMPLE_RATE) -> float:
     Uses pyloudnorm if available, otherwise approximates from RMS.
     """
     try:
-        import pyloudnorm as pyln
+        import pyloudnorm as pyln  # type: ignore[import-not-found]
         meter = pyln.Meter(sr)
         if audio.ndim == 1:
             audio_stereo = np.column_stack([audio, audio])

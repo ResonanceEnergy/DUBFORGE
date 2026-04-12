@@ -252,7 +252,7 @@ def _build_automation_envelopes(parent: ET.Element,
                 attrs["CurveControl1Y"] = str(round(pt.curve, 4))
                 attrs["CurveControl2X"] = str(round(0.5, 4))
                 attrs["CurveControl2Y"] = str(round(pt.curve, 4))
-            ET.SubElement(events, "FloatEvent", **attrs)
+            ET.SubElement(events, "FloatEvent", **attrs)  # type: ignore[arg-type]
 
 
 def _build_midi_track(parent: ET.Element, track: ALSTrack,

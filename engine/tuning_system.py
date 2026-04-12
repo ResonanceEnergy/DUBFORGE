@@ -179,7 +179,7 @@ class TuningSystem:
     # --- Scale Generation ---
 
     def generate_scale(self, root: str, octave: int,
-                       intervals: list[int] = None,
+                       intervals: list[int] | None = None,
                        tuning: str = "equal") -> list[Note]:
         """Generate a scale."""
         if intervals is None:

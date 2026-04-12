@@ -1629,7 +1629,7 @@ def build_dubstep_patches() -> list[dict]:
     reese_patch.osc_a.wt_position = 0.5
     reese_patch.osc_a.unison_voices = 8  # Fibonacci 8
     phi_detune = phi_unison_detune(8)
-    reese_patch.osc_a.unison_detune = phi_detune
+    reese_patch.osc_a.unison_detune = phi_detune  # type: ignore[assignment]
     reese_patch.osc_a.unison_blend = 0.618
     reese_patch.osc_a.unison_mode = UnisonMode.SUPER.value
     reese_patch.osc_a.warp_1 = WarpMode.BEND_PLUS_MINUS.value

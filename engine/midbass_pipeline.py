@@ -112,7 +112,7 @@ class MidBassPipeline:
         # Stage 4: Additional distortion for drops
         if sec.energy > 0.7:
             # Parallel distortion: mix dry + wet
-            wet = saturate_aggressive(buf, drive=2.0 + sec.energy)
+            wet = saturate_aggressive(buf, drive=2.0 + sec.energy)  # type: ignore[arg-type]
             buf = buf * 0.6 + wet * 0.4
 
         # Stage 5: Variation
@@ -125,7 +125,7 @@ class MidBassPipeline:
                 pass
 
         # Stage 6: DC-block
-        buf = dc_block(buf)
+        buf = dc_block(buf)  # type: ignore[arg-type]
 
         # Mid-bass stereo: sub mono, mid slightly wide
         sub = svf_lowpass(buf, 100.0)

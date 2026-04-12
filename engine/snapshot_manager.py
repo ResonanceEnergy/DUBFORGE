@@ -47,7 +47,7 @@ class SnapshotManager:
 
     def capture(self, name: str, state: dict,
                 description: str = "",
-                tags: list[str] = None) -> Snapshot:
+                tags: list[str] | None = None) -> Snapshot:
         """Capture a state snapshot."""
         sid = hashlib.sha1(
             f"{name}{time.time()}".encode()
@@ -141,7 +141,7 @@ class SnapshotManager:
         return self.morph(id_a, id_b, 1.0 / PHI)
 
     def search(self, query: str = "",
-               tags: list[str] = None) -> list[Snapshot]:
+               tags: list[str] | None = None) -> list[Snapshot]:
         """Search snapshots."""
         results: list[Snapshot] = []
         for snap in self.snapshots.values():

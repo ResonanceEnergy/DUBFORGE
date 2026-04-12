@@ -88,7 +88,7 @@ class MultiTrackRenderer:
         self.buses: dict[str, Bus] = {"master": Bus("master")}
         os.makedirs(output_dir, exist_ok=True)
 
-    def add_track(self, name: str, samples: list[float] = None,
+    def add_track(self, name: str, samples: list[float] | None = None,
                   **kwargs) -> MixTrack:
         """Add a track to the mix."""
         track = MixTrack(

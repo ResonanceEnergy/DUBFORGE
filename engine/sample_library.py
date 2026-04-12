@@ -38,7 +38,7 @@ from engine.log import get_logger
 _log = get_logger("dubforge.sample_library")
 
 try:
-    import requests
+    import requests  # type: ignore[import-untyped]
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
@@ -51,7 +51,7 @@ except ImportError:
 
 DEFAULT_SAMPLE_DIR = "output/samples"
 INDEX_FILE = "sample_index.json"
-DEFAULT_EXTERNAL_ROOT = Path(r"C:\dev\DUBFORGE GALATCIA")
+DEFAULT_EXTERNAL_ROOT = Path("/Users/natrix/dev/DUBFORGE/DUBFORGE GALACTICA")
 
 CATEGORIES = [
     "kick", "snare", "clap", "hat_closed", "hat_open",
@@ -71,7 +71,7 @@ CATEGORIES = [
 # GALATCIA subfolder names → SampleLibrary category mapping.
 # Keys are subfolder names found under the GALATCIA Samples tree;
 # values must be members of CATEGORIES above.
-_EXTERNAL_CATEGORY_MAP: dict[str, str] = {
+_EXTERNAL_CATEGORY_MAP: dict[str, str | None] = {
     # Drum one-shots
     "KICKS":               "kick",
     "Snares":              "snare",

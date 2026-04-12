@@ -13,7 +13,7 @@ Phase 4  Quality Loop:    auto_master, reference_analyzer, qa_validator,
 
 Usage from forge.py:
     from engine.stage_integrations import (
-        enhance_dna, enhance_bass_palette, build_rco_energy_map,
+        enhance_dna, enhance_bass_palette, build_energy_map,
         apply_section_mix_bus, validate_output, get_reference_insights,
         apply_convolution_reverb,
     )
@@ -36,16 +36,16 @@ SR = 48000  # Must match forge.py
 # ═══════════════════════════════════════════
 
 def enhance_dna(dna: Any) -> Any:
-    """Apply mood engine + RCO energy curves + chord progression to DNA.
+    """Apply mood engine + energy map + chord progression to DNA.
 
     Called right after DNA setup in render_full_track.
     Enriches the DNA object with mood-driven parameter enhancements
-    and stores RCO profile/filter curve for the arrangement stage.
+    and stores energy map for the arrangement stage.
 
     Safe fallback: returns dna unchanged if any module fails.
     """
     mood_profile = _apply_mood(dna)
-    _build_rco(dna)
+    _build_energy_map(dna)
     _ensure_chord_progression(dna)
     dna._mood_profile = mood_profile
     return dna
@@ -92,52 +92,27 @@ def _apply_mood(dna: Any):
         return None
 
 
-def _build_rco(dna: Any):
-    """Build RCO energy profile + narrative filter curve from DNA."""
+def _build_energy_map(dna: Any):
+    """Build energy map directly from DNA arrangement sections.
+
+    Stores section_name → (energy_start, energy_end) derived from
+    each section's energy field. No RCO abstraction needed.
+    """
     try:
-        from engine.rco import RCOProfile, Section as RCOSection
+        if not hasattr(dna, 'arrangement') or not dna.arrangement:
+            dna._energy_map = {}
+            return
 
-        _section_defaults = {
-            'intro':  (0.10, 0.30,   400.0,   800.0),
-            'build':  (0.30, 0.80,   800.0,  4000.0),
-            'drop':   (0.90, 1.00, 20000.0, 20000.0),
-            'break':  (0.20, 0.15, 10000.0,  1000.0),
-            'outro':  (0.20, 0.00,  2000.0,   200.0),
-        }
-
-        rco_sections = []
+        energy_map = {}
         for sec in dna.arrangement:
-            key = next((k for k in _section_defaults if k in sec.name), None)
-            if key:
-                es, ee, fs, fe = _section_defaults[key]
-            else:
-                es, ee = sec.energy, sec.energy
-                fs, fe = 20000.0, 20000.0
+            energy_map[sec.name] = (sec.energy, sec.energy)
 
-            rco_sections.append(RCOSection(
-                name=sec.name, bars=sec.bars,
-                energy_start=es, energy_end=ee,
-                curve="phi", bpm=dna.bpm,
-                filter_cutoff_start=fs,
-                filter_cutoff_end=fe,
-            ))
-
-        rco = RCOProfile(name=dna.name, bpm=dna.bpm, sections=rco_sections)
-        rco.compute()
-
-        dna._rco_profile = rco
-        dna._rco_filter_curve = rco.narrative_filter_curve()
-        dna._rco_energy_map = {
-            s.name: (s.energy_start, s.energy_end) for s in rco_sections
-        }
-
-        print(f"    RCO: {rco.total_bars} bars, {rco.total_duration_s:.1f}s | "
-              f"narrative filter: {len(dna._rco_filter_curve)} points")
+        dna._energy_map = energy_map
+        total_bars = sum(s.bars for s in dna.arrangement)
+        print(f"    Energy map: {total_bars} bars, {len(energy_map)} sections")
     except Exception as e:
-        log.debug(f"RCO skipped: {e}")
-        dna._rco_profile = None
-        dna._rco_filter_curve = []
-        dna._rco_energy_map = {}
+        log.debug(f"Energy map skipped: {e}")
+        dna._energy_map = {}
 
 
 def _ensure_chord_progression(dna: Any):
@@ -150,9 +125,13 @@ def _ensure_chord_progression(dna: Any):
         pass
 
 
-def build_rco_energy_map(dna: Any) -> dict[str, tuple[float, float]]:
-    """Return section_name → (energy_start, energy_end) from stored RCO."""
-    return getattr(dna, '_rco_energy_map', {})
+def build_energy_map(dna: Any) -> dict[str, tuple[float, float]]:
+    """Return section_name → (energy_start, energy_end) from DNA."""
+    return getattr(dna, '_energy_map', {})
+
+
+# Backward-compat alias
+build_rco_energy_map = build_energy_map
 
 
 # ═══════════════════════════════════════════
@@ -741,7 +720,7 @@ def analyze_mix_spectrum(L: list, R: list, sr: int = SR) -> dict | None:
         fa = FrequencyAnalyzer(sample_rate=sr, fft_size=4096)
         # Analyze mid signal (L+R)/2
         mid = [(L[i] + R[i]) * 0.5 for i in range(min(len(L), len(R)))]
-        features = fa.analyze_spectrum(mid)
+        features = fa.analyze_spectrum(mid)  # type: ignore[attr-defined]
         bands = features.band_energy
         print(f"  ✓ Tetris Board: Sub={bands.get('sub', 0):.1%} "
               f"Bass={bands.get('bass', 0):.1%} "
@@ -766,8 +745,8 @@ def normalize_phi_master(master_L: list, master_R: list,
     try:
         from engine.normalizer import AudioNormalizer
         norm = AudioNormalizer(sample_rate=sr)
-        result_l = norm.normalize_phi(master_L, target_db=-0.3)
-        result_r = norm.normalize_phi(master_R, target_db=-0.3)
+        result_l = norm.normalize_phi(master_L, target_db=-0.3)  # type: ignore[call-arg]
+        result_r = norm.normalize_phi(master_R, target_db=-0.3)  # type: ignore[call-arg]
         print(f"  ✓ Phi normalize: L gain={result_l.gain_db:+.2f}dB "
               f"R gain={result_r.gain_db:+.2f}dB")
         return result_l.samples, result_r.samples
@@ -806,7 +785,7 @@ def run_audio_analysis(wav_path: str, sr: int = SR) -> dict | None:
     try:
         from engine.audio_analyzer import AudioAnalyzer
         aa = AudioAnalyzer(sample_rate=sr)
-        report = aa.run_full_analysis(wav_path)
+        report = aa.run_full_analysis(wav_path)  # type: ignore[attr-defined]
         wf = report.waveform
         sp = report.spectral
         print(f"  ✓ Analysis: peak={wf.peak_db:.1f}dB rms={wf.rms_db:.1f}dB "
@@ -1199,30 +1178,53 @@ def apply_section_crossfade(sig_a: list, sig_b: list,
 
 
 def setup_bus_routing(stem_dict: dict, sr: int = 48000) -> dict | None:
-    """Set up a bus router with standard dubstep buses.
+    """Set up a bus router with the canonical session template buses.
 
     stem_dict: {"kick": [...], "snare": [...], "bass": [...], ...}
     Returns bus level summary dict or None.
     """
     try:
         from engine.bus_router import BusRouter
+        from engine.session_template import (
+            build_dubstep_session,
+            MANDATE_TO_TRACK,
+            BUS_GAINS,
+        )
+
+        layout = build_dubstep_session()
         router = BusRouter(sample_rate=sr)
-        router.add_bus("drums", gain=0.9, parent="master")
-        router.add_bus("bass", gain=0.85, parent="master")
-        router.add_bus("leads", gain=0.7, parent="master")
-        router.add_bus("atmos", gain=0.5, parent="master")
+
+        # Create buses from canonical template
+        for bus_name, gain in layout.bus_gains.items():
+            router.add_bus(bus_name, gain=gain, parent="master")
+
+        # Map stems to buses using the canonical MANDATE_TO_TRACK mapping
+        _track_to_bus = {t.name.lower(): t.bus for t in layout.tracks}
+
         for name, samples in stem_dict.items():
-            if 'kick' in name or 'snare' in name or 'hat' in name or 'clap' in name:
-                router.add_channel(name, samples, bus="drums")
-            elif 'bass' in name or 'sub' in name:
-                router.add_channel(name, samples, bus="bass")
-            elif 'lead' in name or 'screech' in name:
-                router.add_channel(name, samples, bus="leads")
-            else:
-                router.add_channel(name, samples, bus="atmos")
+            # Try canonical mapping first
+            matched_bus = None
+            for mandate_path, track_name in MANDATE_TO_TRACK.items():
+                if name in mandate_path:
+                    matched_bus = _track_to_bus.get(track_name.lower())
+                    break
+
+            # Fallback to keyword matching
+            if matched_bus is None:
+                if any(w in name for w in ('kick', 'snare', 'hat', 'clap', 'perc')):
+                    matched_bus = "drums"
+                elif any(w in name for w in ('bass', 'sub', 'growl', 'riddim', 'formant')):
+                    matched_bus = "bass"
+                elif any(w in name for w in ('lead', 'screech', 'pad', 'chord', 'arp', 'vocal')):
+                    matched_bus = "melodics"
+                else:
+                    matched_bus = "fx"
+
+            router.add_channel(name, samples, bus=matched_bus)
+
         levels = router.get_bus_levels()
         print(f"  ✓ bus_router: {len(stem_dict)} channels → "
-              f"{len(levels)} buses configured")
+              f"{len(levels)} buses (template-routed)")
         return levels
     except Exception as exc:
         log.debug("bus_router skipped: %s", exc)
@@ -1427,7 +1429,7 @@ def run_ab_comparison(sig_a: list, sig_b: list) -> dict | None:
     try:
         from engine.ab_tester import compare_composite, ABPreset
         preset = ABPreset(name="render_compare", comparison_type="composite")
-        result = compare_composite(sig_a, sig_b, preset)
+        result = compare_composite(sig_a, sig_b, preset)  # type: ignore[arg-type]
         print(f"  ✓ ab_tester: winner={result.winner}, "
               f"A={result.score_a:.3f} B={result.score_b:.3f}")
         return {'winner': result.winner, 'score_a': result.score_a,
@@ -1878,7 +1880,7 @@ def get_ascension_manifest() -> list | None:
         report = ae.validate_modules()
         print(f"  ✓ ascension: {report.importable}/{report.total_modules} modules importable "
               f"(target: {report.fibonacci_target})")
-        return {
+        return {  # type: ignore[return-value]
             'total': report.total_modules,
             'importable': report.importable,
             'failed': report.failed,
@@ -2107,7 +2109,7 @@ def init_preset_browser() -> Any:
     try:
         from engine.preset_browser import PresetBrowser
         browser = PresetBrowser(presets_dir="output/presets")
-        count = len(browser.presets) if hasattr(browser, 'presets') else 0
+        count = len(browser.presets) if hasattr(browser, 'presets') else 0  # type: ignore[attr-defined]
         print(f"  ✓ preset_browser: {count} presets loaded")
         return browser
     except Exception as exc:

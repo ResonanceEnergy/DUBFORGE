@@ -192,7 +192,7 @@ class TestPsbsDeviceChain:
 
     def test_has_rack_chains(self):
         chain = psbs_device_chain()
-        d = chain.to_dict()
+        d = chain.to_dict()  # type: ignore[union-attr]
         assert len(d.get("chains", d.get("rack_chains", []))) == 5  # 5 PSBS layers
 
 

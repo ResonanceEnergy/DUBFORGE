@@ -1,0 +1,13 @@
+{
+  "exclude": [
+    ".venv",
+    "archive",
+    "output",
+    "dubforge.egg-info"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "none",
+  "reportOptionalMemberAccess": "none"
+}

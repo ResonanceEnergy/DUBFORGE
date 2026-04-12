@@ -19,6 +19,7 @@ import wave
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -289,7 +290,7 @@ def full_pipeline_bank() -> PipelineBank:
     ])
 
 
-ALL_PIPELINE_BANKS: dict[str, callable] = {
+ALL_PIPELINE_BANKS: dict[str, Callable[..., Any]] = {
     "bass": bass_pipeline_bank,
     "lead": lead_pipeline_bank,
     "pad": pad_pipeline_bank,

@@ -3,7 +3,10 @@
 import json
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import HTTPServer
+from urllib.error import HTTPError
 
 import pytest
 
@@ -172,7 +175,7 @@ class TestAPIChat:
             resp = urllib.request.urlopen(req)
             data = json.loads(resp.read())
             assert "error" in data
-        except urllib.error.HTTPError as e:
+        except HTTPError as e:
             assert e.code == 400
 
     def test_chat_invalid_json(self, test_server):
@@ -185,7 +188,7 @@ class TestAPIChat:
         )
         try:
             urllib.request.urlopen(req)
-        except urllib.error.HTTPError as e:
+        except HTTPError as e:
             assert e.code == 400
 
 
@@ -236,7 +239,7 @@ class TestAPIRender:
         )
         try:
             urllib.request.urlopen(req)
-        except urllib.error.HTTPError as e:
+        except HTTPError as e:
             assert e.code == 400
 
 
@@ -252,7 +255,7 @@ class TestStaticServing:
         import urllib.request
         try:
             urllib.request.urlopen(f"{test_server}/nonexistent")
-        except urllib.error.HTTPError as e:
+        except HTTPError as e:
             assert e.code == 404
 
 

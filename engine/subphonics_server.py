@@ -37,7 +37,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 class SubphonicsHandler(BaseHTTPRequestHandler):
     """HTTP request handler for SUBPHONICS chatbot server."""
 
-    engine: SubphonicsEngine = None  # set at server startup
+    engine: SubphonicsEngine | None = None  # set at server startup
 
     def log_message(self, format, *args):
         """Override to prefix with SUBPHONICS branding."""

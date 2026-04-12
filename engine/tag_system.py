@@ -62,8 +62,8 @@ class TagSystem:
 
     def add_item(self, item_id: str, name: str,
                  item_type: str = "sample",
-                 tags: list[str] = None,
-                 metadata: dict = None) -> TaggedItem:
+                 tags: list[str] | None = None,
+                 metadata: dict | None = None) -> TaggedItem:
         """Add or update a tagged item."""
         if item_id in self.items:
             item = self.items[item_id]

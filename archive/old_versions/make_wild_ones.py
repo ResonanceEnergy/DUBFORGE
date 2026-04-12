@@ -57,7 +57,7 @@ import wave
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-import librosa
+import librosa  # type: ignore[import-not-found]
 import numpy as np
 
 # -- DUBFORGE engine -- Synthesizers --

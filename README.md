@@ -1,17 +1,17 @@
 # DUBFORGE
 
-**Planck x phi Fractal Basscraft Engine**
+**Planck x phi Fractal Basscraft Engine — AbletonOSC-Native 4-Phase Pipeline**
 
-A Python-powered sound design engine built on Dan Winter's Planck x phi fractal mathematics. Every module — wavetable generation, arrangement optimization, bass layering, analysis, DSP processing — is keyed to the golden ratio, Fibonacci sequence, and fractal self-similarity.
+An underground industrial bass factory that generates dubstep from a song idea to a mastered dancefloor banger. Every phase — arrangement, mixing, mastering — runs inside Ableton Live via AbletonOSC. Built on Dan Winter’s Planck x phi fractal mathematics.
 
-**168 engine modules · 2838 tests · v4.0.0**
+**230 engine modules · v9.1.0 · NEXUS Aurora Command Surface**
 
 ## Project Structure
 
 ```
 DUBFORGE/
 ├── DOCTRINE.md                          # Core principles & rules
-├── run_all.py                           # Master build script
+├── forge.py                             # Canonical runtime entrypoint
 ├── README.md                            # This file
 ├── pyproject.toml                       # Package metadata & deps
 │
@@ -26,7 +26,12 @@ DUBFORGE/
 │   ├── trance_arp.py                    # Fibonacci arpeggiator
 │   ├── growl_resampler.py               # Mid-bass growl resampler
 │   ├── chord_progression.py             # Chord progression engine
-│   ├── ableton_live.py                  # Ableton Live integration
+│   ├── ableton_bridge.py               # AbletonOSC bridge (port 11000/11001)
+│   ├── ableton_live.py                  # Full LOM integration, session templates
+│   ├── phase_one.py                     # Phase 1: GENERATION (AbletonOSC)
+│   ├── phase_two.py                     # Phase 2: ARRANGEMENT (AbletonOSC + osascript)
+│   ├── phase_three.py                   # Phase 3: MIXING (AbletonOSC + osascript)
+│   ├── phase_four.py                    # Phase 4: MASTERING (AbletonOSC + osascript)
 │   ├── serum2.py                        # Serum 2 synthesizer engine
 │   ├── dojo.py                          # Producer Dojo / ill.Gates engine
 │   ├── midi_export.py                   # MIDI file export engine
@@ -96,17 +101,27 @@ DUBFORGE/
 
 ## Quick Start
 
+### Primary: Full 4-Phase Pipeline (Ableton must be open)
 ```bash
-# Run the full engine build (all 44 generator modules)
-python3 run_all.py
+# Requires: Ableton Live 12 Suite running, AbletonOSC active, venv activated
+source .venv/bin/activate
+python forge.py --launch --ui-only   # opens http://localhost:7861 (kills stale procs first)
+# direct UI launch also works:
+# python dubstep_analyzer_ui.py
+# Input song name → click FORGE IT → pipeline → rendered stems + ALS
+```
 
-# Run a single module
-python3 run_all.py --module phi_core
-python3 run_all.py --module sidechain
-python3 run_all.py --module riddim_engine
+See [playbooks/MWP_WORKFLOW.md](playbooks/MWP_WORKFLOW.md) for full setup and phase-by-phase reference.
 
-# List all available modules
-python3 run_all.py --list
+### CLI Pipeline (standalone)
+```bash
+python forge.py --song "TRACK NAME"
+```
+
+### Engine Modules (standalone)
+```bash
+# Full module sweep via canonical runtime
+python3 forge.py --all
 
 # Core modules
 python3 -m engine.phi_core              # Generate wavetables
@@ -279,11 +294,10 @@ python3 -m engine.config_loader         # List all configs
 ## CLI Options
 
 ```bash
-python3 run_all.py                   # Run all modules
-python3 run_all.py --module phi_core  # Run a single module
-python3 run_all.py --list             # List available modules
-python3 run_all.py --no-memory        # Skip memory persistence
-python3 run_all.py --quiet            # Suppress per-module banners
+python3 forge.py --all                # Run full module pipeline
+python3 forge.py --song "TRACK NAME"  # Run phased song pipeline
+python3 forge.py --launch             # Unified launch (render + UI)
+python3 forge.py --launch --ui-only   # UI only
 ```
 
 ## Doctrine

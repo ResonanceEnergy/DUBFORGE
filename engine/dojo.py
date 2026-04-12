@@ -2871,7 +2871,7 @@ def phi_belt_progression() -> dict:
 
     # Hours estimate: each belt takes phi × previous belt's hours
     base_hours = 50  # White Belt ~ 50 hours
-    belt_hours = [base_hours]
+    belt_hours: list[float] = [base_hours]
     for i in range(1, len(belt_names)):
         belt_hours.append(round(belt_hours[-1] * PHI, 1))
 

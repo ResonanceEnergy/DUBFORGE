@@ -2,7 +2,7 @@
 
 > **Date:** 2026-07-05
 > **Scope:** Full drum pipeline audit vs. ill.Gates 128 Rack protocol, Producer Dojo methodology, and Ableton Drum Rack optimization best practices
-> **Files audited:** `forge.py`, `engine/als_generator.py`, `engine/drum_generator.py`, `engine/drum_pipeline.py`, `engine/perc_synth.py`, `engine/groove.py`, `engine/rhythm_engine.py`, `engine/variation_engine.py`, `make_wild_ones_v12.py`, `make_template.py`
+> **Files audited:** `forge.py`, `engine/als_generator.py`, `engine/drum_generator.py`, `engine/drum_pipeline.py`, `engine/perc_synth.py`, `engine/groove.py`, `engine/rhythm_engine.py`, `engine/variation_engine.py`, `archive/top_level_runners/make_wild_ones_v12.py`, `make_template.py`
 
 ---
 
@@ -262,7 +262,7 @@ This requires new builder functions: `_build_compressor()`, `_build_saturator()`
 
 ### 3.5 ✅ OK: Choke Groups
 
-**Current (`make_wild_ones_v12.py` lines 266-267):**
+**Current (`archive/top_level_runners/make_wild_ones_v12.py` lines 266-267):**
 ```python
 ALSDrumPad(note=CLOSED_HH, name="CLOSED HH", color=3, choke_group=1),
 ALSDrumPad(note=OPEN_HH,   name="OPEN HH",   color=3, choke_group=1),

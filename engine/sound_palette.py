@@ -12,6 +12,7 @@ import json
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -125,7 +126,7 @@ def _generate_hybrid_color(idx: int, base_freq: float, phi_spacing: bool) -> Pal
     )
 
 
-PALETTE_GENERATORS: dict[str, callable] = {
+PALETTE_GENERATORS: dict[str, Callable[..., Any]] = {
     "warm": _generate_warm_color,
     "cold": _generate_cold_color,
     "metallic": _generate_metallic_color,
@@ -244,7 +245,7 @@ def hybrid_palette_bank() -> PaletteBank:
     ])
 
 
-ALL_PALETTE_BANKS: dict[str, callable] = {
+ALL_PALETTE_BANKS: dict[str, Callable[..., Any]] = {
     "warm": warm_bank,
     "cold": cold_bank,
     "metallic": metallic_bank,

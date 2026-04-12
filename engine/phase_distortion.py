@@ -10,6 +10,7 @@ import os
 import struct
 import wave
 from dataclasses import dataclass
+from typing import Any, Callable
 
 from engine.config_loader import PHI, A4_432
 from engine.accel import write_wav
@@ -87,7 +88,7 @@ def _pd_resonant(phase: float, d: float) -> float:
     return window * math.sin(2 * math.pi * n_cycles * t)
 
 
-PD_ALGORITHMS: dict[str, callable] = {
+PD_ALGORITHMS: dict[str, Callable[..., Any]] = {
     "sawtooth": _pd_sawtooth,
     "square": _pd_square,
     "pulse": _pd_pulse,

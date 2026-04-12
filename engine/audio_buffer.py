@@ -205,7 +205,7 @@ class AudioBufferPool:
         )
 
     def mix(self, buffer_ids: list[str],
-            gains: list[float] = None) -> AudioBuffer:
+            gains: list[float] | None = None) -> AudioBuffer:
         """Mix multiple buffers."""
         bufs = [self.buffers[bid] for bid in buffer_ids
                 if bid in self.buffers]

@@ -19,6 +19,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+from typing import Any, Callable
 import math
 import wave
 from dataclasses import dataclass, field
@@ -337,7 +338,7 @@ def buffer_glitch_bank() -> GlitchBank:
     )
 
 
-ALL_GLITCH_BANKS: dict[str, callable] = {
+ALL_GLITCH_BANKS: dict[str, Callable[..., Any]] = {
     "stutter": stutter_glitch_bank,
     "bitcrush": bitcrush_glitch_bank,
     "tape_stop": tape_stop_glitch_bank,

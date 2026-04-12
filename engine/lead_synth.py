@@ -25,6 +25,7 @@ Based on Subtronics production analysis:
 from __future__ import annotations
 
 import json
+from typing import Any, Callable
 import math
 import wave
 from dataclasses import dataclass, field
@@ -843,7 +844,7 @@ def harmonic_lead_bank() -> LeadBank:
     )
 
 
-ALL_LEAD_BANKS: dict[str, callable] = {
+ALL_LEAD_BANKS: dict[str, Callable[..., Any]] = {
     "screech":  screech_lead_bank,
     "pluck":    pluck_lead_bank,
     "fm_lead":  fm_lead_bank,

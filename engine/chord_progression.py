@@ -245,7 +245,7 @@ def fibonacci_harmonic_rhythm(total_beats: int = 16) -> list[float]:
 
 
 def resolve_roman(roman: str, key_root: str, scale_type: str = "minor",
-                  octave: int = 3, quality_override: str = None) -> tuple[int, str]:
+                  octave: int = 3, quality_override: str | None = None) -> tuple[int, str]:
     """
     Resolve a Roman numeral chord symbol to a MIDI root note and quality.
 
@@ -319,11 +319,11 @@ def resolve_roman(roman: str, key_root: str, scale_type: str = "minor",
 def build_progression(name: str, key: str, scale_type: str,
                       roman_sequence: list[str],
                       bpm: int = 150, tuning_hz: float = 440.0,
-                      beats_per_chord: list[float] = None,
+                      beats_per_chord: list[float] | None = None,
                       phi_voicing: bool = False,
-                      inversions: list[int] = None,
-                      qualities: list[str] = None,
-                      tags: list[str] = None,
+                      inversions: list[int] | None = None,
+                      qualities: list[str | None] | None = None,
+                      tags: list[str] | None = None,
                       notes_text: str = "",
                       octave: int = 3) -> ChordProgression:
     """
@@ -351,7 +351,7 @@ def build_progression(name: str, key: str, scale_type: str,
     if inversions is None:
         inversions = [0] * n_chords
     if qualities is None:
-        qualities = [None] * n_chords
+        qualities = [None] * n_chords  # type: ignore[assignment]
     if tags is None:
         tags = []
 
@@ -359,7 +359,7 @@ def build_progression(name: str, key: str, scale_type: str,
     for i, roman in enumerate(roman_sequence):
         root_midi, quality = resolve_roman(
             roman, key, scale_type, octave,
-            quality_override=qualities[i] if i < len(qualities) else None,
+            quality_override=qualities[i] if i < len(qualities) else None,  # type: ignore[arg-type]
         )
 
         chord_notes = build_chord(
@@ -510,7 +510,7 @@ def preset_andalusian_weapon() -> ChordProgression:
         roman_sequence=["i", "VII", "VI", "V"],
         bpm=150,
         beats_per_chord=[4.0, 4.0, 4.0, 4.0],
-        qualities=[None, "major", "major", "major"],  # V is major in harmonic minor
+        qualities=[None, "major", "major", "major"],  # type: ignore[list-item]  # V is major in harmonic minor
         tags=["andalusian", "weapon", "phrygian", "descending", "dark"],
         notes_text="Andalusian cadence adapted for dubstep. Descending bass line "
                    "(A-G-F-E) creates relentless downward pull. The major V chord "
@@ -558,7 +558,7 @@ def preset_tesseract() -> ChordProgression:
                    "Opens and closes on i with extended 8-beat holds. "
                    "bVI in first inversion for smooth bass motion. "
                    "V creates harmonic-minor tension before final resolution.",
-        qualities=[None, None, None, None, "major", None],
+        qualities=[None, None, None, None, "major", None],  # type: ignore[list-item]
     )
 
 

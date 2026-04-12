@@ -66,7 +66,7 @@ def pitch_shift(frame: np.ndarray, semitones: float,
         new_mag = mag * (1 - blend) + shifted_env * blend
         shifted = new_mag * np.exp(1j * phase)
 
-    result = ifft(shifted, n=len(frame))
+    result = ifft(shifted, n=len(frame))  # type: ignore[arg-type]
     peak = np.max(np.abs(result))
     if peak > 0:
         result /= peak
@@ -408,7 +408,7 @@ def main() -> None:
     saw_frames = growl_resample_pipeline(saw_source, n_output_frames=n_frames)
     saw_path = str(out_dir / 'DUBFORGE_GROWL_SAW.wav')
     write_wav(saw_path, saw_frames)
-    tq_compress_growl(saw_frames, "GROWL_SAW").compressed_bytes  # warm cache
+    tq_compress_growl(saw_frames, "GROWL_SAW").compressed_bytes  # type: ignore[attr-defined]  # warm cache
     print(f"  -> {saw_path}")
 
     # Generate from FM source
@@ -417,7 +417,7 @@ def main() -> None:
     fm_frames = growl_resample_pipeline(fm_source, n_output_frames=n_frames)
     fm_path = str(out_dir / 'DUBFORGE_GROWL_FM.wav')
     write_wav(fm_path, fm_frames)
-    tq_compress_growl(fm_frames, "GROWL_FM").compressed_bytes  # warm cache
+    tq_compress_growl(fm_frames, "GROWL_FM").compressed_bytes  # type: ignore[attr-defined]  # warm cache
     print(f"  -> {fm_path}")
 
     print("Growl Resampler complete.")

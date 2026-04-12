@@ -8,6 +8,7 @@ DAW communication. Generates OSC-compatible byte messages.
 import struct
 import time
 from dataclasses import dataclass, field
+from typing import Any, Callable
 
 from engine.config_loader import PHI
 @dataclass
@@ -109,7 +110,7 @@ class OSCController:
         self.port = port
         self._message_log: list[OSCMessage] = []
         self._max_log = 100
-        self._routes: dict[str, list[callable]] = {}
+        self._routes: dict[str, list[Callable[..., Any]]] = {}
 
     def send(self, address: str, *args) -> OSCMessage:
         """Create and log an OSC message."""
@@ -129,7 +130,7 @@ class OSCController:
 
         return msg
 
-    def on(self, address: str, handler: callable) -> None:
+    def on(self, address: str, handler: Callable[..., Any]) -> None:
         """Register a handler for an OSC address."""
         if address not in self._routes:
             self._routes[address] = []

@@ -1,4 +1,5 @@
 """Tests for engine.als_generator — Ableton Live Set (.als) Generator."""
+# pyright: reportCallIssue=false, reportAttributeAccessIssue=false
 
 import gzip
 import os

@@ -306,7 +306,7 @@ class AudioPool:
         self._misses: int = 0
 
     def get(self, path: str | Path,
-            dtype: type = np.float64) -> tuple[npt.NDArray, int]:
+            dtype: type = np.float64) -> tuple[npt.NDArray, int] | None:
         """Get audio samples from cache or load from disk."""
         key = str(Path(path).resolve())
 

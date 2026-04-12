@@ -19,6 +19,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+from typing import Any, Callable
 import math
 import wave
 from dataclasses import dataclass, field
@@ -334,7 +335,7 @@ def marimba_pluck_bank() -> PluckBank:
     )
 
 
-ALL_PLUCK_BANKS: dict[str, callable] = {
+ALL_PLUCK_BANKS: dict[str, Callable[..., Any]] = {
     "string":  string_pluck_bank,
     "bell":    bell_pluck_bank,
     "key":     key_pluck_bank,

@@ -21,6 +21,7 @@ Based on Subtronics vocal processing analysis:
 """
 
 from __future__ import annotations
+from typing import Any, Callable
 
 import json
 import math
@@ -587,7 +588,7 @@ def ethereal_chops() -> VocalChopBank:
     )
 
 
-ALL_CHOP_BANKS: dict[str, callable] = {
+ALL_CHOP_BANKS: dict[str, Callable[..., Any]] = {
     "drop_vowel":      drop_vowel_chops,
     "stutter":         stutter_chops,
     "drop_shout":      drop_shout_chops,

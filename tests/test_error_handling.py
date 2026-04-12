@@ -56,11 +56,11 @@ class TestValidateSignal:
 
     def test_none_raises(self):
         with pytest.raises(InvalidSignalError):
-            validate_signal(None)
+            validate_signal(None)  # type: ignore[arg-type]
 
     def test_non_array_raises(self):
         with pytest.raises(InvalidSignalError):
-            validate_signal([1, 2, 3])
+            validate_signal([1, 2, 3])  # type: ignore[arg-type]
 
     def test_empty_array_raises(self):
         with pytest.raises(InvalidSignalError):
@@ -78,7 +78,7 @@ class TestValidateSignal:
 
     def test_custom_name_in_error(self):
         with pytest.raises(InvalidSignalError, match="my_sig"):
-            validate_signal(None, "my_sig")
+            validate_signal(None, "my_sig")  # type: ignore[arg-type]
 
 
 # ── validate_frequency ───────────────────────────────────────────────────
@@ -104,7 +104,7 @@ class TestValidateFrequency:
 
     def test_string_raises(self):
         with pytest.raises(InvalidPresetError):
-            validate_frequency("440")
+            validate_frequency("440")  # type: ignore[arg-type]
 
     def test_boundary_22050_ok(self):
         assert validate_frequency(22050) == 22050.0

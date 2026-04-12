@@ -35,9 +35,9 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import matplotlib
+    import matplotlib  # type: ignore[import-not-found]
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt  # type: ignore[import-not-found]
     HAS_MPL = True
 except ImportError:
     HAS_MPL = False
@@ -1016,10 +1016,6 @@ def main() -> None:
         share=args.share,
         inbrowser=True,
         css=CUSTOM_CSS,
-        theme=gr.themes.Base(
-            primary_hue="purple",
-            neutral_hue="gray",
-        ),
     )
 
 

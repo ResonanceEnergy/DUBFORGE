@@ -13,6 +13,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+from typing import Any, Callable
 import math
 import wave
 from dataclasses import dataclass, field
@@ -563,7 +564,7 @@ def spectral_grain_bank() -> GranularBank:
     )
 
 
-ALL_GRANULAR_BANKS: dict[str, callable] = {
+ALL_GRANULAR_BANKS: dict[str, Callable[..., Any]] = {
     "cloud":   cloud_bank,
     "scatter": scatter_bank,
     "stretch": stretch_bank,

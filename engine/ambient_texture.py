@@ -22,8 +22,10 @@ from __future__ import annotations
 import json
 import math
 import wave
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -639,7 +641,7 @@ def crystal_texture_bank() -> TextureBank:
     )
 
 
-ALL_TEXTURE_BANKS: dict[str, callable] = {
+ALL_TEXTURE_BANKS: dict[str, Callable[..., Any]] = {
     "rain":   rain_texture_bank,
     "wind":   wind_texture_bank,
     "space":  space_texture_bank,

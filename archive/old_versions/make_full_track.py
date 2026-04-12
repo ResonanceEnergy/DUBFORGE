@@ -200,11 +200,11 @@ def render_vocal_chops(dna, bars: int, energy: float) -> np.ndarray:
 
     try:
         from engine.vocal_chop import VocalChop, synthesize_chop
-        chop = VocalChop()
         beat_dur = 60.0 / dna.bpm
         buf = np.zeros(n_samples, dtype=np.float64)
 
         vowels = getattr(dna, "chop_vowels", ["ah", "oh", "ee", "oo"])
+        notes = ["C4", "D3", "E4", "G3", "A3", "C3", "F3"]
         beats_per_bar = 4
         total_beats = bars * beats_per_bar
 
@@ -212,13 +212,14 @@ def render_vocal_chops(dna, bars: int, energy: float) -> np.ndarray:
             if beat % 2 != 0:  # chop every other beat (half-time feel)
                 continue
             vowel = vowels[beat % len(vowels)]
-            freq = _note_freq(dna, beat % 7, octave=4)
-            chop_audio = synthesize_chop(
-                freq=freq,
-                duration=beat_dur * 0.5,
+            note = notes[beat % len(notes)]
+            chop = VocalChop(
+                name=f"chop_beat{beat}",
                 vowel=vowel,
-                sample_rate=SAMPLE_RATE,
+                note=note,
+                duration_s=beat_dur * 0.5,
             )
+            chop_audio = synthesize_chop(chop, sample_rate=SAMPLE_RATE)
             offset = int(beat * beat_dur * SAMPLE_RATE)
             end = min(offset + len(chop_audio), n_samples)
             buf[offset:end] += chop_audio[:end - offset]
@@ -266,11 +267,11 @@ def render_bass_drop(dna, bars: int, energy: float) -> np.ndarray:
                 freq = _note_freq(dna, degree, octave=2)
                 dur_s = dur_beats * beat_dur
                 preset = BassPreset(
-                    freq=freq,
-                    duration=dur_s,
-                    style="sub_bass",
-                    drive=dna.bass.distortion,
-                    sub_weight=dna.bass.sub_weight,
+                    name=f"bass_bar{bar_idx}",
+                    bass_type="sub_sine",
+                    frequency=freq,
+                    duration_s=dur_s,
+                    distortion=dna.bass.distortion,
                 )
                 note = synthesize_bass(preset, sample_rate=SAMPLE_RATE)
                 offset = int((bar_idx * 4 + beat_pos) * beat_dur * SAMPLE_RATE)
@@ -296,9 +297,11 @@ def render_drone(dna, bars: int, energy: float) -> np.ndarray:
         from engine.drone_synth import DronePreset, synthesize_drone
         dur_s = n_samples / SAMPLE_RATE
         preset = DronePreset(
-            freq=dna.root_freq * 2,
-            duration=dur_s,
-            voices=dna.atmosphere.drone_voices,
+            name="atmos_drone",
+            drone_type="dark",
+            frequency=dna.root_freq * 2,
+            duration_s=dur_s,
+            num_voices=dna.atmosphere.drone_voices,
             movement=dna.atmosphere.drone_movement,
         )
         audio = synthesize_drone(preset, sample_rate=SAMPLE_RATE)
@@ -348,11 +351,11 @@ def render_lead_melody(dna, bars: int, energy: float) -> np.ndarray:
                 freq = _note_freq(dna, degree, octave=4)
                 dur_s = dur_beats * beat_dur
                 preset = LeadPreset(
-                    freq=freq,
-                    duration=dur_s,
-                    style="screech",
-                    brightness=dna.lead.brightness,
-                    reverb=dna.lead.reverb_decay,
+                    name=f"lead_bar{bar_idx}",
+                    lead_type="screech",
+                    frequency=freq,
+                    duration_s=dur_s,
+                    filter_cutoff=dna.lead.brightness,
                 )
                 note = synthesize_screech_lead(preset, sample_rate=SAMPLE_RATE)
                 note = note * velocity
@@ -384,9 +387,10 @@ def render_noise_bed(dna, bars: int, energy: float) -> np.ndarray:
         from engine.noise_generator import NoisePreset, synthesize_noise
         dur_s = n_samples / SAMPLE_RATE
         preset = NoisePreset(
-            duration=dur_s,
+            name="noise_bed",
             noise_type=noise_type,
-            level=noise_level,
+            duration_s=dur_s,
+            gain=noise_level,
         )
         audio = synthesize_noise(preset, sample_rate=SAMPLE_RATE)
         if len(audio) > n_samples:
@@ -433,10 +437,11 @@ def render_pad(dna, bars: int, energy: float) -> np.ndarray:
         buf = np.zeros(n_samples, dtype=np.float64)
         for freq in [root, third, fifth]:
             preset = PadPreset(
-                freq=freq,
-                duration=dur_s,
-                style="dark",
-                attack=dna.atmosphere.pad_attack,
+                name="pad_chord",
+                pad_type="dark",
+                frequency=freq,
+                duration_s=dur_s,
+                attack_s=dna.atmosphere.pad_attack,
                 brightness=dna.atmosphere.pad_brightness,
             )
             audio = synthesize_dark_pad(preset, sample_rate=SAMPLE_RATE)
@@ -479,9 +484,11 @@ def render_riser(dna, bars: int) -> np.ndarray:
         start_freq = getattr(dna.fx, "riser_start_freq", 150.0)
         end_freq = getattr(dna.fx, "riser_end_freq", 8000.0)
         preset = RiserPreset(
+            name="build_riser",
+            riser_type="noise_sweep",
             start_freq=start_freq,
             end_freq=end_freq,
-            duration=dur_s,
+            duration_s=dur_s,
             intensity=dna.fx.riser_intensity,
         )
         audio = synthesize_noise_sweep(preset, sample_rate=SAMPLE_RATE)

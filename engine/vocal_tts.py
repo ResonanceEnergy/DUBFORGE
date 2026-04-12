@@ -198,7 +198,7 @@ def _read_wav(path: str) -> np.ndarray:
     # Resample if needed
     if sr_file != SAMPLE_RATE and len(data) > 0:
         try:
-            from scipy.signal import resample
+            from scipy.signal import resample  # type: ignore[import-not-found]
             new_len = int(len(data) * SAMPLE_RATE / sr_file)
             data = resample(data, new_len)
         except ImportError:
@@ -261,7 +261,7 @@ def _rubberband_pitch_and_time(audio: np.ndarray, semitones: float,
     # Fallback: resampling-based pitch shift (no time stretch)
     if abs(semitones) > 0.01:
         try:
-            from scipy.signal import resample
+            from scipy.signal import resample  # type: ignore[import-not-found]
             factor = 2.0 ** (semitones / 12.0)
             new_len = int(len(audio) / factor)
             if new_len > 0:
@@ -279,7 +279,7 @@ def generate_line(text: str, rate: str = "+0%",
     Returns mono float64 audio at SAMPLE_RATE.
     """
     try:
-        import edge_tts
+        import edge_tts  # type: ignore[import-not-found]
     except ImportError:
         # Return silence if edge-tts not installed
         return np.zeros(SAMPLE_RATE, dtype=np.float64)

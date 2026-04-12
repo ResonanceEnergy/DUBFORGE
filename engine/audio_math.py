@@ -93,7 +93,7 @@ class AudioMath:
 
     def convolve(self, a: list[float], b: list[float]) -> list[float]:
         """Linear convolution."""
-        return convolve(a, b).tolist()
+        return convolve(a, b).tolist()  # type: ignore[arg-type]
 
     def correlate(self, a: list[float], b: list[float]) -> list[float]:
         """Cross-correlation."""

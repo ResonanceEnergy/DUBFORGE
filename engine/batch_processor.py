@@ -7,7 +7,9 @@ operations to multiple audio files.
 
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from engine.config_loader import PHI
 from engine.accel import write_wav
@@ -46,7 +48,7 @@ class BatchJob:
 
 
 # Operation registry — maps operation names to processor functions
-OPERATIONS: dict[str, callable] = {}
+OPERATIONS: dict[str, Callable[..., Any]] = {}
 
 
 def register_operation(name: str):

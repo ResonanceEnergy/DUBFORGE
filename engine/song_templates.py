@@ -19,6 +19,7 @@ Banks: 4 categories × 5 templates each = 20 templates
 """
 
 from dataclasses import dataclass, field
+from typing import Any, Callable
 
 from engine.config_loader import PHI
 FIBONACCI = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55]
@@ -573,7 +574,7 @@ def experimental_template_bank() -> SongTemplateBank:
 
 # --- Registry -------------------------------------------------------------
 
-ALL_SONG_TEMPLATE_BANKS: dict[str, callable] = {
+ALL_SONG_TEMPLATE_BANKS: dict[str, Callable[..., Any]] = {
     "weapon": weapon_template_bank,
     "emotive": emotive_template_bank,
     "hybrid": hybrid_template_bank,

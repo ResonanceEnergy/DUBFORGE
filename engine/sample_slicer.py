@@ -285,7 +285,7 @@ def slice_audio(audio: np.ndarray, onsets: list[SlicePoint],
 def read_audio(path: str) -> tuple[np.ndarray, int]:
     """Read a WAV file, returns (audio_array, sample_rate)."""
     try:
-        import soundfile as sf
+        import soundfile as sf  # type: ignore[import-not-found]
         audio, sr = sf.read(path, dtype="float64")
         return audio, sr
     except ImportError:
@@ -342,7 +342,7 @@ def read_audio(path: str) -> tuple[np.ndarray, int]:
 def write_audio(path: str, audio: np.ndarray, sr: int = SAMPLE_RATE) -> str:
     """Write audio to WAV file."""
     try:
-        import soundfile as sf
+        import soundfile as sf  # type: ignore[import-not-found]
         sf.write(path, audio, sr)
         return path
     except ImportError:
@@ -354,7 +354,7 @@ def write_audio(path: str, audio: np.ndarray, sr: int = SAMPLE_RATE) -> str:
         frames = audio.reshape(1, -1)
     else:
         frames = audio.T if audio.shape[1] <= audio.shape[0] else audio
-    write_wav(path, frames, sample_rate=sr)
+    write_wav(path, frames, sample_rate=sr)  # type: ignore[arg-type]
     return path
 
 

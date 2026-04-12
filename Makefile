@@ -1,68 +1,75 @@
 # DUBFORGE — Build & Quality Targets
 # ─────────────────────────────────────
-.PHONY: build test test-fast test-slow test-parallel lint fmt check clean help track song all verify nightly nightly-install nightly-uninstall launch launch-ui wild-ones apology template serum-presets state-template state-extract
+.PHONY: build test test-fast test-slow test-parallel parallel lint fmt check clean help track song all verify nightly nightly-install nightly-uninstall launch launch-ui wild-ones apology template serum-presets state-template state-extract
+
+# Use venv Python when available, fall back to system python3
+PYTHON := $(if $(wildcard .venv/bin/python3),.venv/bin/python3,python3)
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
 
 build: ## Run the full engine build
-	python3 run_all.py
+	$(PYTHON) forge.py --all
 
 track: ## Quick dubstep track render (output/dubstep_track.wav)
-	python3 make_track.py
+	$(PYTHON) forge.py --song "Quick Dubstep Track" --style dubstep --bpm 140
 
 song: ## Full production pipeline (NAME="MY SONG" make song)
-	python3 forge.py --auto "$(or $(NAME),Untitled)" $(ARGS)
+	$(PYTHON) forge.py --song "$(or $(NAME),Untitled)" $(ARGS)
 
 wild-ones: ## Produce Wild Ones V12 (MIDI+ALS+GALATCIA)
-	python3 make_wild_ones_v12.py
+	$(PYTHON) forge.py --song "Wild Ones V12" --style dubstep --bpm 150
 
 apology: ## Produce The Apology That Never Came V4 (MIDI+ALS)
-	python3 make_apology_v4.py
+	$(PYTHON) forge.py --song "The Apology That Never Came V4" --style dubstep --bpm 140
 
 template: ## Generate base template ALS (NAME="MY TRACK" BPM=150 KEY=D make template)
-	python3 make_template.py $(if $(NAME),--name "$(NAME)") $(if $(BPM),--bpm $(BPM)) $(if $(KEY),--key $(KEY)) $(if $(CONFIG),--config $(CONFIG))
+	$(PYTHON) make_template.py $(if $(NAME),--name "$(NAME)") $(if $(BPM),--bpm $(BPM)) $(if $(KEY),--key $(KEY)) $(if $(CONFIG),--config $(CONFIG))
 
 serum-presets: ## Install DUBFORGE presets to Serum 2 User folder
-	python3 -c "from engine.serum2_preset import install_all_presets; p=install_all_presets(); print(f'Installed {len(p)} presets')"
+	$(PYTHON) -c "from engine.serum2_preset import install_all_presets; p=install_all_presets(); print(f'Installed {len(p)} presets')"
 
 state-template: ## Create template ALS for Serum 2 state capture
-	python3 tools/make_state_template.py
+	$(PYTHON) tools/make_state_template.py
 
 state-extract: ## Extract VST3 state from Ableton-saved template ALS
-	python3 tools/extract_vst3_state.py output/ableton/_state_capture_template.als -p 'Serum 2' --first -o engine/_captured_serum2_state.py
+	$(PYTHON) tools/extract_vst3_state.py output/ableton/_state_capture_template.als -p 'Serum 2' --first -o engine/_captured_serum2_state.py
 
 test: ## Run full pytest suite
-	python3 -m pytest tests/ -v
+	$(PYTHON) -m pytest tests/ -v
 
 test-fast: ## Fast tests only (~88 files, <30s)
-	python3 -m pytest tests/ -m fast -q
+	$(PYTHON) -m pytest tests/ -m fast -q
 
 test-slow: ## Slow DSP tests only (~40 files)
-	python3 -m pytest tests/ -m slow -q
+	$(PYTHON) -m pytest tests/ -m slow -q
 
 test-parallel: ## Full suite in parallel (needs pytest-xdist)
-	python3 -m pytest tests/ -n auto -q
+	$(PYTHON) -m pytest tests/ -n auto -q
+
+parallel: ## Build with all P-cores (parallel wavetable gen) + run tests in parallel
+	$(PYTHON) forge.py --parallel
+	$(PYTHON) -m pytest tests/ -n auto -q
 
 lint: ## Lint with ruff
-	python3 -m ruff check engine/ run_all.py tests/
+	$(PYTHON) -m ruff check engine/ forge.py tests/
 
 fmt: ## Auto-format with ruff
-	python3 -m ruff format engine/ run_all.py tests/
+	$(PYTHON) -m ruff format engine/ forge.py tests/
 
 check: lint test ## Lint + test together
 
 all: build track ## Full engine build + track render
 
-launch: ## Render track + launch all browser UIs (TRACK=wild-ones|apology|forge|quick)
-	python3 launch.py --track $(or $(TRACK),quick)
+launch: ## Render track + launch NEXUS UI (TRACK=wild-ones|apology|forge|quick)
+	$(PYTHON) forge.py --launch --track $(or $(TRACK),quick)
 
-launch-ui: ## Launch all browser UIs only (no render)
-	python3 launch.py --ui-only
+launch-ui: ## Launch NEXUS UI only — no track render
+	$(PYTHON) forge.py --launch --ui-only
 
 nightly: ## Run nightly health check (manual trigger)
-	bash tools/nightly.sh
+	$(PYTHON) tools/nightly.sh 2>/dev/null || bash tools/nightly.sh
 
 nightly-install: ## Install nightly launchd agent (runs at 3 AM)
 	cp tools/com.resonance.dubforge.nightly.plist ~/Library/LaunchAgents/

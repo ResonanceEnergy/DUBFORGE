@@ -1,6 +1,6 @@
 [project]
 name = "dubforge"
-version = "4.1.0"
+version = "9.1.0"
 description = "Planck x phi Fractal Basscraft Engine — Grandmaster Edition (Apple Silicon Optimized)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,9 +28,14 @@ dependencies = [
 [project.optional-dependencies]
 plot = ["matplotlib>=3.9"]
 audio = ["soundfile>=0.12.1", "pyloudnorm>=0.1"]
+ml = [
+    "basic-pitch>=0.4",
+    "demucs>=4.0",
+    "miditok>=3.0",
+]
 ui = ["gradio>=5.0"]
 full = [
-    "dubforge[plot,audio,ui]",
+    "dubforge[plot,audio,ui,ml]",
 ]
 dev = [
     "pytest>=8.0",
@@ -42,6 +47,7 @@ dev = [
 dubforge = "run_all:main"
 dubforge-cli = "engine.cli:main"
 subphonics = "engine.subphonics_server:main"
+dubforge-web = "dubstep_analyzer_ui:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

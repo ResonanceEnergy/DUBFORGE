@@ -394,7 +394,7 @@ def _download_single(track: DownloadedTrack, output_dir: Path,
 def _check_demucs() -> bool:
     """Check if demucs is available."""
     try:
-        import demucs
+        import demucs  # type: ignore[import-not-found]
         return True
     except ImportError:
         return False
@@ -438,7 +438,7 @@ def separate_stems(audio_path: str,
 
 def _separate_python(audio_path: str, output_dir: Path, model: str) -> Path:
     """Separate using demucs Python API."""
-    import demucs.separate
+    import demucs.separate  # type: ignore[import-not-found]
 
     track_name = Path(audio_path).stem
 

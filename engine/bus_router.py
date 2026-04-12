@@ -200,12 +200,25 @@ class BusRouter:
         return levels
 
     def create_dubstep_template(self) -> None:
-        """Create standard dubstep bus layout."""
+        """Create Subtronics-aligned dubstep bus layout (v7.0.0).
+
+        Bus hierarchy:
+            master
+            ├── drums        (DRUMS, SC_TRIGGER)
+            ├── bass         (MID_BASS, SUB, GROWL, WOBBLE, RIDDIM, FORMANT)
+            ├── melodics     (LEAD, COUNTER, VOCAL, CHORDS, PAD, ARP)
+            ├── fx           (IMPACTS, RISERS, TRANSITIONS, ATMOS)
+            ├── reverb_send  (Return A — shared space)
+            ├── delay_send   (Return B — tempo-synced)
+            └── parallel_comp (Return C — heavy ratio, blended back)
+        """
         self.add_bus("drums", gain=1.0)
         self.add_bus("bass", gain=0.9)
-        self.add_bus("synths", gain=0.7)
+        self.add_bus("melodics", gain=0.7)
         self.add_bus("fx", gain=0.5)
         self.add_bus("reverb_send", gain=0.3)
+        self.add_bus("delay_send", gain=0.3)
+        self.add_bus("parallel_comp", gain=0.25)
 
     def get_routing_info(self) -> dict:
         """Get routing configuration."""

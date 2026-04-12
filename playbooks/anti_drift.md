@@ -32,11 +32,16 @@ DUBFORGE has **168 engine modules**, **20 song templates**, and an infinite para
 
 > "Max 3 sessions. If a track demands more, table it." — Ayesha
 
-| Session | Purpose | Deliverable |
-|---------|---------|-------------|
-| **1** | Generation (Phase 1) — sounds, SongDNA, palette | Sound palette + MIDI |
-| **2** | Arrangement + rough mix (Phase 2–3) | Full `.als` session |
-| **3** | Mix polish + master (Phase 3–4) | Final WAV |
+| Session | Purpose | Deliverable | How |
+|---------|---------|-------------|-----|
+| **1** | Generation (Phase 1) — sounds, SongDNA, palette | Sound palette + MIDI + .als | `dubstep_analyzer_ui.py` Phase 1 auto |
+| **2** | Arrangement + Mix (Phase 2–3) | Arranged + mixed WAV | Phase 2 + 3 auto via AbletonOSC |
+| **3** | Master + Release (Phase 4) | Final WAV + metadata | Phase 4 auto via AbletonOSC |
+
+Phases 2–4 are **fully automated** via AbletonOSC + osascript. Your job in Sessions 2–3:
+- Keep Ableton open and AbletonOSC active
+- Configure sidechain manually (AbletonOSC limitation — kick→bass)
+- Load Serum 2 presets on MIDI tracks (VST3 loading limitation)
 
 If it needs a 4th session, one of two things is true:
 1. The idea isn't clear enough — rewrite the vibe sentence and start fresh.
@@ -84,9 +89,10 @@ Every time you leave the DAW or switch tasks, you pay:
 
 **DUBFORGE-specific rules:**
 - Don't modify `engine/` modules during a track session. Engine work is a separate concern.
-- Don't open the Gradio UIs (studio/analyzer/launchpad) while in a deep production session — analysis is revision, not creation.
+- Don't open the Gradio UIs manually mid-session for analysis — `dubstep_analyzer_ui.py` is the **forge**, not a tool to open and close during a session.
 - Don't `git commit` mid-session. Batch it at session end.
 - Use `make track` (quick WAV) to hear results fast. Don't reach for `make song` (full pipeline) until Session 3.
+- Phases 2–4 run automatically. Let them run. Don't interrupt osascript polling or kill Ableton mid-export.
 
 ---
 
@@ -99,7 +105,7 @@ Once a sound or section works:
 2. **Freeze** the track — don't leave it as live DSP.
 3. **Delete** the source chain if you're tempted to keep tweaking.
 
-In DUBFORGE terms: once `forge.py` or `make_track.py` outputs a WAV — **listen to it, don't re-run it**. If the impulse is to change one parameter and regenerate, ask: "Am I making it better, or am I avoiding the next step?"
+In DUBFORGE terms: once `forge.py --song "..."` outputs a WAV — **listen to it, don't re-run it**. If the impulse is to change one parameter and regenerate, ask: "Am I making it better, or am I avoiding the next step?"
 
 ---
 

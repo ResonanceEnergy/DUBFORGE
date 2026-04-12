@@ -17,6 +17,7 @@ Banks: 5 types × 4 presets = 20 presets
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -327,7 +328,7 @@ def hybrid_resynth_bank() -> ResynthBank:
     ])
 
 
-ALL_RESYNTH_BANKS: dict[str, callable] = {
+ALL_RESYNTH_BANKS: dict[str, Callable[..., Any]] = {
     "additive": additive_resynth_bank,
     "subtractive": subtractive_resynth_bank,
     "phi_filter": phi_filter_resynth_bank,

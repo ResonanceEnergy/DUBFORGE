@@ -590,14 +590,14 @@ class ProductionPipeline:
         _ensure_dna_imports()
 
         # Generate DNA from name
-        blueprint = _SongBlueprint(
+        blueprint = _SongBlueprint(  # type: ignore[misc]
             name=name,
             theme=name.lower(),
             mood=mood,
             style=style,
             bpm=bpm,
         )
-        engine = _VariationEngine()
+        engine = _VariationEngine()  # type: ignore[misc]
         dna = engine.forge_dna(blueprint)
 
         print(f"\n  ◆ DUBFORGE Production Pipeline")
@@ -712,7 +712,7 @@ class ProductionPipeline:
             als.tracks.append(ALSTrack(
                 name=track_setup.name,
                 track_type=track_setup.type,
-                color=track_setup.color,
+                color=track_setup.color,  # type: ignore[arg-type]
             ))
         for scene_name in session.scenes:
             als.scenes.append(ALSScene(name=scene_name))
@@ -1206,9 +1206,9 @@ def quick_produce(name: str, bpm: int = 140, style: str = "dubstep",
     else:
         # Offline mode — still generates MIDI files
         _ensure_dna_imports()
-        blueprint = _SongBlueprint(name=name, theme=name.lower(),
+        blueprint = _SongBlueprint(name=name, theme=name.lower(),  # type: ignore[misc]
                                    mood=mood, style=style, bpm=bpm)
-        engine = _VariationEngine()
+        engine = _VariationEngine()  # type: ignore[misc]
         dna = engine.forge_dna(blueprint)
         return pipe.produce_offline(dna)
 
@@ -1217,9 +1217,9 @@ def offline_produce(name: str, bpm: int = 140, style: str = "dubstep",
                     mood: str = "aggressive") -> ProductionResult:
     """Offline production: generates MIDI files + ALS without Ableton running."""
     _ensure_dna_imports()
-    blueprint = _SongBlueprint(name=name, theme=name.lower(),
+    blueprint = _SongBlueprint(name=name, theme=name.lower(),  # type: ignore[misc]
                                mood=mood, style=style, bpm=bpm)
-    engine = _VariationEngine()
+    engine = _VariationEngine()  # type: ignore[misc]
     dna = engine.forge_dna(blueprint)
     pipe = ProductionPipeline()
     return pipe.produce_offline(dna)

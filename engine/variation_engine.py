@@ -30,11 +30,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import random
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
+
+log = logging.getLogger(__name__)
 
 from engine.config_loader import PHI
 from engine.mood_engine import (
@@ -88,13 +92,128 @@ BPM_RANGES: dict[str, tuple[int, int]] = {
 }
 
 # ═══════════════════════════════════════════
+#  Style Profiles — sub-genre → synthesis defaults
+# ═══════════════════════════════════════════
+# These provide baseline parameter values for each dubstep sub-genre.
+# Word atoms OVERRIDE style defaults (via setdefault merge), so a song
+# named "Crystal Void" in the riddim style still gets crystal/void params
+# on top of riddim baselines.
+#
+# Keys match the param names used by WORD_ATOMS and _build_*_dna() methods.
+# bass_pool: ordered preference list for secondary/tertiary bass selection.
+
+# fmt: off
+STYLE_PROFILES: dict[str, dict[str, Any]] = {
+    "dubstep": {
+        "energy": 0.7, "darkness": 0.6,
+        "bass_type": "dist_fm",
+        "bass_pool": ["dist_fm", "neuro", "sync", "growl"],
+        "distortion": 0.25, "fm_depth": 3.0, "sub_weight": 0.75,
+        "filter_cutoff": 0.7,
+        "reverb_decay": 2.5, "stereo_width": 1.3,
+        "shimmer": 0.1, "granular_density": 0.3,
+        "glitch_amount": 0.2, "stutter_rate": 16.0,
+        "tape_degrade": 0.05,
+    },
+    "riddim": {
+        "energy": 0.8, "darkness": 0.7,
+        "bass_type": "dist_fm",
+        "bass_pool": ["dist_fm", "growl", "neuro"],
+        "distortion": 0.35, "fm_depth": 3.5, "sub_weight": 0.85,
+        "filter_cutoff": 0.6,
+        "reverb_decay": 1.5, "stereo_width": 1.1,
+        "shimmer": 0.0, "granular_density": 0.1,
+        "glitch_amount": 0.1, "stutter_rate": 8.0,
+        "tape_degrade": 0.0,
+    },
+    "melodic": {
+        "energy": 0.5, "darkness": 0.3,
+        "bass_type": "acid",
+        "bass_pool": ["acid", "dist_fm", "sync", "formant"],
+        "distortion": 0.1, "fm_depth": 1.5, "sub_weight": 0.65,
+        "filter_cutoff": 0.8,
+        "reverb_decay": 3.5, "stereo_width": 1.5,
+        "shimmer": 0.5, "granular_density": 0.4,
+        "glitch_amount": 0.05, "stutter_rate": 16.0,
+        "tape_degrade": 0.0,
+    },
+    "brostep": {
+        "energy": 0.9, "darkness": 0.55,
+        "bass_type": "neuro",
+        "bass_pool": ["neuro", "sync", "dist_fm", "growl"],
+        "distortion": 0.4, "fm_depth": 4.0, "sub_weight": 0.7,
+        "filter_cutoff": 0.75,
+        "reverb_decay": 1.5, "stereo_width": 1.2,
+        "shimmer": 0.05, "granular_density": 0.2,
+        "glitch_amount": 0.4, "stutter_rate": 32.0,
+        "tape_degrade": 0.1,
+    },
+    "tearout": {
+        "energy": 0.95, "darkness": 0.8,
+        "bass_type": "growl",
+        "bass_pool": ["growl", "neuro", "dist_fm"],
+        "distortion": 0.45, "fm_depth": 4.5, "sub_weight": 0.8,
+        "filter_cutoff": 0.65,
+        "reverb_decay": 1.0, "stereo_width": 1.1,
+        "shimmer": 0.0, "granular_density": 0.15,
+        "glitch_amount": 0.5, "stutter_rate": 32.0,
+        "tape_degrade": 0.3,
+    },
+    "hybrid": {
+        "energy": 0.7, "darkness": 0.5,
+        "bass_type": "sync",
+        "bass_pool": ["sync", "dist_fm", "acid", "neuro"],
+        "distortion": 0.2, "fm_depth": 2.5, "sub_weight": 0.7,
+        "filter_cutoff": 0.7,
+        "reverb_decay": 2.5, "stereo_width": 1.3,
+        "shimmer": 0.15, "granular_density": 0.3,
+        "glitch_amount": 0.15, "stutter_rate": 16.0,
+        "tape_degrade": 0.05,
+    },
+    "deep_dubstep": {
+        "energy": 0.4, "darkness": 0.8,
+        "bass_type": "dist_fm",
+        "bass_pool": ["dist_fm", "acid", "growl"],
+        "distortion": 0.1, "fm_depth": 1.5, "sub_weight": 0.9,
+        "filter_cutoff": 0.4,
+        "reverb_decay": 4.0, "stereo_width": 1.4,
+        "shimmer": 0.1, "granular_density": 0.2,
+        "glitch_amount": 0.05, "stutter_rate": 8.0,
+        "tape_degrade": 0.2,
+    },
+    "colour_bass": {
+        "energy": 0.5, "darkness": 0.3,
+        "bass_type": "formant",
+        "bass_pool": ["formant", "acid", "sync"],
+        "distortion": 0.15, "fm_depth": 2.0, "sub_weight": 0.6,
+        "filter_cutoff": 0.8,
+        "reverb_decay": 3.0, "stereo_width": 1.5,
+        "shimmer": 0.6, "granular_density": 0.6,
+        "glitch_amount": 0.1, "stutter_rate": 16.0,
+        "tape_degrade": 0.0,
+    },
+    "experimental": {
+        "energy": 0.6, "darkness": 0.5,
+        "bass_type": "neuro",
+        "bass_pool": ["neuro", "formant", "growl", "sync", "acid", "dist_fm"],
+        "distortion": 0.3, "fm_depth": 3.0, "sub_weight": 0.7,
+        "filter_cutoff": 0.65,
+        "reverb_decay": 3.0, "stereo_width": 1.4,
+        "shimmer": 0.3, "granular_density": 0.5,
+        "glitch_amount": 0.4, "stutter_rate": 24.0,
+        "tape_degrade": 0.3,
+    },
+}
+# fmt: on
+
+# ═══════════════════════════════════════════
 #  Semantic Word → Parameter Mappings
 # ═══════════════════════════════════════════
 # Subtronics-inspired: track names are metaphors for sonic attributes.
 # Each keyword nudges synthesis params in a specific direction.
 
 # fmt: off
-WORD_ATOMS: dict[str, dict[str, float]] = {
+WORD_ATOMS: dict[str, dict[str, float | str]] = {
     # ── Aggression / Violence ──
     "scream":    {"energy": 0.9, "darkness": 0.6, "distortion": 0.45, "fm_depth": 4.5, "attack_sharpness": 0.95, "formant_shift": 4.0},
     "shatter":   {"energy": 0.95, "darkness": 0.5, "distortion": 0.85, "transient_attack": 3.5, "granular_density": 0.8},
@@ -214,52 +333,62 @@ class ArrangementSection:
 ARRANGEMENT_ARCHETYPES: dict[str, list[ArrangementSection]] = {
     "standard": [
         ArrangementSection("intro",  16, 0.15, ["drone", "pad", "hats_sparse"]),
-        ArrangementSection("build",   8, 0.5, ["kick", "snare_roll", "riser", "pad"]),
+        ArrangementSection("build",   8, 0.5, ["kick", "snare_roll", "riser", "pad", "arp"]),
         ArrangementSection("drop1",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops", "noise_bed"]),
-        ArrangementSection("break",  16, 0.25, ["pad", "plucks", "sub_long", "reverb_fx"]),
-        ArrangementSection("build2",  8, 0.55, ["kick", "snare_roll", "riser", "swell"]),
+        ArrangementSection("break",  16, 0.25, ["pad", "plucks", "sub_long", "reverb_fx", "arp"]),
+        ArrangementSection("build2",  8, 0.55, ["kick", "snare_roll", "riser", "swell", "arp"]),
         ArrangementSection("drop2",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops", "noise_bed", "extra_bass"]),
         ArrangementSection("outro",  16, 0.1, ["kick_fade", "pad_fade", "sub_fade"]),
     ],
     "extended_intro": [
         ArrangementSection("intro",  32, 0.1, ["drone", "pad", "texture", "hats_sparse"]),
-        ArrangementSection("build",   8, 0.5, ["kick", "snare_roll", "riser"]),
+        ArrangementSection("build",   8, 0.5, ["kick", "snare_roll", "riser", "arp"]),
         ArrangementSection("drop1",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead"]),
-        ArrangementSection("break",  16, 0.25, ["pad", "plucks"]),
-        ArrangementSection("build2",  8, 0.55, ["kick", "snare_roll", "riser"]),
+        ArrangementSection("break",  16, 0.25, ["pad", "plucks", "arp"]),
+        ArrangementSection("build2",  8, 0.55, ["kick", "snare_roll", "riser", "arp"]),
         ArrangementSection("drop2",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "extra_bass"]),
         ArrangementSection("outro",  16, 0.1, ["pad_fade", "sub_fade"]),
     ],
     "double_drop": [
         ArrangementSection("intro",  16, 0.15, ["drone", "pad"]),
-        ArrangementSection("build",   8, 0.5, ["kick", "riser"]),
+        ArrangementSection("build",   8, 0.5, ["kick", "riser", "arp"]),
         ArrangementSection("drop1",  16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead"]),
         ArrangementSection("drop1b", 16, 1.0, ["kick", "snare", "hats", "sub", "bass_alt", "lead"]),
-        ArrangementSection("break",  16, 0.25, ["pad", "plucks"]),
-        ArrangementSection("build2",  8, 0.6, ["kick", "riser"]),
+        ArrangementSection("break",  16, 0.25, ["pad", "plucks", "arp"]),
+        ArrangementSection("build2",  8, 0.6, ["kick", "riser", "arp"]),
         ArrangementSection("drop2",  16, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops"]),
         ArrangementSection("drop2b", 16, 1.0, ["kick", "snare", "hats", "sub", "bass_alt", "lead", "extra_bass"]),
         ArrangementSection("outro",  16, 0.1, ["pad_fade"]),
     ],
     "minimal": [
         ArrangementSection("intro",   8, 0.1, ["drone"]),
-        ArrangementSection("build",   8, 0.4, ["kick", "riser"]),
+        ArrangementSection("build",   8, 0.4, ["kick", "riser", "arp"]),
         ArrangementSection("drop1",  32, 1.0, ["kick", "snare", "hats", "sub", "bass"]),
-        ArrangementSection("break",   8, 0.2, ["pad"]),
+        ArrangementSection("break",   8, 0.2, ["pad", "arp"]),
         ArrangementSection("drop2",  32, 1.0, ["kick", "snare", "hats", "sub", "bass"]),
         ArrangementSection("outro",   8, 0.08, ["kick_fade"]),
     ],
     "progressive": [
         ArrangementSection("intro",  16, 0.1, ["pad", "texture", "drone"]),
         ArrangementSection("verse1", 16, 0.3, ["kick_lite", "hats_sparse", "pad", "sub_long"]),
-        ArrangementSection("build",  16, 0.55, ["kick", "snare_roll", "riser", "swell"]),
+        ArrangementSection("build",  16, 0.55, ["kick", "snare_roll", "riser", "swell", "arp"]),
         ArrangementSection("drop1",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "chops"]),
-        ArrangementSection("break",  16, 0.2, ["pad", "plucks", "texture"]),
-        ArrangementSection("build2", 16, 0.6, ["kick", "snare_roll", "riser"]),
+        ArrangementSection("break",  16, 0.2, ["pad", "plucks", "texture", "arp"]),
+        ArrangementSection("build2", 16, 0.6, ["kick", "snare_roll", "riser", "arp"]),
         ArrangementSection("drop2",  32, 1.0, ["kick", "snare", "hats", "sub", "bass", "lead", "extra_bass"]),
         ArrangementSection("outro",  16, 0.08, ["pad_fade", "texture"]),
     ],
 }
+
+# ── Creative aliases (UI terms → engine archetypes) ──
+# "weapon"   = aggressive double-drop (Subtronics weapon mode)
+# "emotive"  = progressive emotional arc (Subtronics emotive mode)
+# "hybrid"   = standard balanced drop structure
+# "fibonacci" = extended intro with phi-ratio pacing
+ARRANGEMENT_ARCHETYPES["weapon"]    = ARRANGEMENT_ARCHETYPES["double_drop"]
+ARRANGEMENT_ARCHETYPES["emotive"]   = ARRANGEMENT_ARCHETYPES["progressive"]
+ARRANGEMENT_ARCHETYPES["hybrid"]    = ARRANGEMENT_ARCHETYPES["standard"]
+ARRANGEMENT_ARCHETYPES["fibonacci"] = ARRANGEMENT_ARCHETYPES["extended_intro"]
 
 
 # ═══════════════════════════════════════════
@@ -309,6 +438,15 @@ class DrumDNA:
 
     snare_ott: float = 0.35
     hat_density: int = 16  # subdivisions per bar (8, 16, 32)
+    silence_gap_beats: int = 4  # beats of silence between pattern clips
+
+    # Groove & humanization
+    pattern_swing: float = 0.0  # 0.0 = straight, 0.5 = full triplet swing
+    hi_hat_separation_ms: float = 25.0  # open/closed hat overlap guard
+
+    # Sample selection hints (keyword categories for sample pickers)
+    kick_sample_category: str = "heavy"  # heavy | clean | 808 | acoustic
+    snare_sample_category: str = "metallic"  # metallic | organic | clap | layered
 
 
 @dataclass
@@ -330,9 +468,19 @@ class BassDNA:
 
     pitch_dive_semi: float = 12.0
     wavefold_thresh: float = 0.0
+    wavefold_mix: float = 0.0  # wave folder dry/wet
     bitcrush_bits: int = 0  # 0 = off
     ott_amount: float = 0.15
     ring_mod_freq: float = 0.0  # 0 = off
+    filter_resonance: float = 0.5  # filter Q value (Serum 2 filter)
+    saturation_type: str = "tube"  # tube | tape | digital | soft_clip
+    saturation_drive: float = 0.3  # saturation intensity
+    sub_saturation: float = 0.0  # sub-layer distortion amount
+    wobble_lfo_shape: str = "sine"  # sine | saw | tri | square
+    riddim_style: str = "heavy"  # minimal | heavy | bounce
+    riddim_gap_ratio: float = 0.5  # gap proportion for riddim patterns
+    reference_fundamental_hz: float = 0.0  # detected bass fundamental from reference
+    harmonic_ratio: float = 0.0  # harmonic vs fundamental energy (higher = more distorted character)
 
     # Bass pitch riff patterns — list of bar-patterns
     # Each bar-pattern is list of (scale_degree, beat_pos, duration_beats)
@@ -359,6 +507,24 @@ class LeadDNA:
     supersaw_detune: float = 35.0
     supersaw_cutoff: float = 5500.0
     ott_amount: float = 0.3
+
+    # Filter
+    filter_cutoff: float = 0.75  # normalized 0–1
+    filter_resonance: float = 0.5  # filter Q
+    harmonic_dissonance: float = 0.0  # harmonic dissonance (0=consonant, 1=harsh)
+
+    # Envelope (ADSR)
+    attack_ms: float = 10.0
+    decay_ms: float = 500.0
+    sustain: float = 0.7
+    release_ms: float = 200.0
+
+    # Performance
+    glide_ms: float = 0.0  # portamento / glide time
+    arp_subdivision: str = "1/16"  # 1/4 | 1/8 | 1/16 | 1/32
+    arp_style: str = "up"  # up | down | updown | random
+    arp_octave: int = 2  # octave range for arpeggiator
+    chord_note_count: int = 3  # max simultaneous chord notes
 
     # ── Melody composition fields ──
     # Each pattern is a list of (scale_degree, beat_position, duration_beats, velocity)
@@ -391,6 +557,12 @@ class AtmosphereDNA:
     noise_bed_type: str = "pink"
     noise_bed_level: float = 0.15
 
+    # Reverb detail
+    reverb_type: str = "plate"  # plate | hall | room | spring | shimmer
+    reverb_predelay_ms: float = 0.0  # pre-delay before reverb onset
+    reverb_width: float = 1.0  # stereo spread of reverb (0–1)
+    pad_attack_ms: float = 2000.0  # pad amplitude envelope attack
+
 
 @dataclass
 class FxDNA:
@@ -407,6 +579,15 @@ class FxDNA:
     riser_start_freq: float = 150.0
     riser_end_freq: float = 8000.0
     boom_decay: float = 2.0
+
+    # Type selection
+    riser_type: str = "noise"  # noise | pitch | sweep | tonal
+    impact_type: str = "sub"  # sub | cinematic | layered
+    reversal_bars: float = 2.0  # reversed FX duration in bars
+
+    # Overdrive
+    overdrive_type: str = "none"  # none | tube | tape | digital
+    overdrive_amount: float = 0.0
 
 
 @dataclass
@@ -425,6 +606,29 @@ class MixDNA:
     eq_high_freq: float = 8000.0
     compression_threshold: float = -12.0
     limiter_enabled: bool = True
+
+    # Per-element gain staging
+    sub_gain_db: float = 0.0
+    bass_gain_db: float = 0.0
+    lead_gain_db: float = 0.0
+    pad_gain_db: float = 0.0
+
+    # Sidechain detail
+    sidechain_attack_ms: float = 1.0
+    sidechain_release_ms: float = 100.0
+    sidechain_mode: str = "pump"  # pump | hard_cut | gentle
+
+    # Humanization
+    humanize_strength: float = 0.15  # velocity/timing deviation
+    humanize_method: str = "phi_sine"  # phi_sine | random | none
+
+    # Reference EQ curve (10-band, from adna.mixing.eq_curve)
+    reference_eq_curve: list[float] = field(default_factory=list)
+
+    # Per-band stereo width (from reference stereo analysis)
+    mono_compatibility: float = 1.0  # L/R mono compat (0=anti-phase, 1=safe)
+    stereo_width_low: float = 0.0  # sub/bass stereo width reference
+    stereo_width_mid: float = 0.5  # mid-range stereo width reference
 
 
 @dataclass
@@ -446,6 +650,10 @@ class SongDNA:
     scale: str
     bpm: int
     root_freq: float  # Hz of root note octave 1
+    tuning_hz: float = 440.0  # A4 reference (440 standard, 432 natural)
+
+    # Energy level 0.0–1.0 (from adna.style.energy_level via reference intake)
+    energy: float = 0.7
 
     # Frequency table for this key
     freq_table: dict[str, float] = field(default_factory=dict)
@@ -469,6 +677,10 @@ class SongDNA:
 
     # Vocal chop vowels
     chop_vowels: list[str] = field(default_factory=lambda: ["ah", "oh", "ee", "oo"])
+
+    # Escalation & evolution
+    escalation_enabled: bool = True  # energy builds across drops
+    arrangement_template_type: str = ""  # override arrangement archetype (empty = auto)
 
     # Notes
     notes: str = ""
@@ -551,6 +763,15 @@ class VariationEngine:
 
         # 2. Aggregate atom parameters
         params = self._aggregate_params(atoms)
+
+        # 2.5. Merge style profile defaults (word atoms override style)
+        style_key = (blueprint.style or "dubstep").lower()
+        if style_key not in STYLE_PROFILES:
+            log.warning("Unknown style '%s', falling back to 'dubstep'", style_key)
+            style_key = "dubstep"
+        style_profile = STYLE_PROFILES[style_key]
+        for k, v in style_profile.items():
+            params.setdefault(k, v)
 
         # 3. Resolve mood
         mood_name = self._resolve_mood(blueprint, params)
@@ -635,8 +856,10 @@ class VariationEngine:
                 continue
 
             # Substring match — "screamsaver" contains "scream"
+            # Use word-boundary-aware check to avoid false positives
+            # (e.g. "description" must NOT match "scream" + "dark")
             for atom_key, atom_val in WORD_ATOMS.items():
-                if atom_key in word and atom_key not in matched_words:
+                if atom_key not in matched_words and len(atom_key) >= 4 and atom_key in word:
                     atoms.append(atom_val)
                     matched_words.add(atom_key)
 
@@ -680,7 +903,11 @@ class VariationEngine:
         params: dict[str, float] = {}
         for k in numeric_sums:
             total_weight = sum(1.0 + i * 0.1 for i in range(numeric_counts[k]))
-            params[k] = numeric_sums[k] / total_weight
+            raw = numeric_sums[k] / total_weight
+            # Clamp 0-1 range params (skip unbounded ones like fm_depth)
+            if 0.0 <= raw <= 2.0 and k != "fm_depth":
+                raw = min(1.0, max(0.0, raw))
+            params[k] = raw
 
         # Boolean/string: most common value
         for k, votes in string_votes.items():
@@ -786,6 +1013,8 @@ class VariationEngine:
             return bp.bpm
 
         style = bp.style.lower().replace(" ", "_")
+        if style not in BPM_RANGES:
+            log.warning("No BPM range for style '%s', using dubstep default", style)
         lo, hi = BPM_RANGES.get(style, (138, 152))
 
         # Energy shifts BPM: high energy → higher BPM
@@ -918,12 +1147,17 @@ class VariationEngine:
         else:
             primary = rng.choice(["dist_fm", "acid", "sync"])
 
-        # Secondary/tertiary
-        all_types = ["dist_fm", "sync", "neuro", "acid", "growl", "formant"]
-        remaining = [t for t in all_types if t != primary]
-        rng.shuffle(remaining)
+        # Secondary/tertiary from style-ordered bass_pool (deterministic)
+        bass_pool = params.get("bass_pool", ["dist_fm", "sync", "neuro", "acid", "growl", "formant"])
+        remaining = [t for t in bass_pool if t != primary]
+        if len(remaining) < 2:
+            # Fill from all types if pool is too small
+            all_types = ["dist_fm", "sync", "neuro", "acid", "growl", "formant"]
+            for t in all_types:
+                if t != primary and t not in remaining:
+                    remaining.append(t)
         secondary = remaining[0]
-        tertiary = remaining[1]
+        tertiary = remaining[1] if len(remaining) > 1 else remaining[0]
 
         return BassDNA(
             primary_type=primary,

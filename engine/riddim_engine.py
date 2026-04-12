@@ -16,6 +16,7 @@ Banks: 5 types × 4 presets = 20 presets
 """
 
 from dataclasses import dataclass, field
+from typing import Any, Callable
 
 import numpy as np
 
@@ -286,7 +287,7 @@ def triplet_riddim_bank() -> RiddimBank:
 
 # --- Registry -------------------------------------------------------------
 
-ALL_RIDDIM_BANKS: dict[str, callable] = {
+ALL_RIDDIM_BANKS: dict[str, Callable[..., Any]] = {
     "minimal": minimal_riddim_bank,
     "heavy": heavy_riddim_bank,
     "bounce": bounce_riddim_bank,

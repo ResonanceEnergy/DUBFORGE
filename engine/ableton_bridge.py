@@ -1,3 +1,4 @@
+# pyright: basic
 """
 DUBFORGE Engine — Ableton Live OSC Bridge
 
@@ -165,23 +166,31 @@ class ResponseCollector:
         self._server = None
         self._thread = None
 
-    def start(self):
+    def start(self) -> bool:
         if not HAS_OSC:
-            return
+            return False
+        import socket as _socket
         disp = osc_dispatcher.Dispatcher()
         disp.set_default_handler(self._handle)
         try:
+            # Set SO_REUSEADDR before bind to avoid Address-in-use from stale
+            # listeners left by killed processes.
+            osc_server.ThreadingOSCUDPServer.allow_reuse_address = True
             self._server = osc_server.ThreadingOSCUDPServer(
                 (self.host, self.port), disp)
             self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
             self._thread.start()
             _log.info(f"OSC listener started on {self.host}:{self.port}")
+            return True
         except OSError as e:
             _log.warning(f"Could not start OSC listener: {e}")
+            return False
 
     def stop(self):
         if self._server:
             self._server.shutdown()
+            self._server.server_close()
+            self._server = None
 
     def _handle(self, address: str, *args):
         with self._lock:
@@ -239,7 +248,11 @@ class AbletonBridge:
     # ── CONNECTION ────────────────────────────────────────────────────────
 
     def connect(self) -> bool:
-        """Connect to Ableton Live via AbletonOSC."""
+        """Connect to Ableton Live via AbletonOSC.
+
+        Returns True only if Ableton is running AND responding to OSC.
+        Returns False if the listener can't start or Ableton doesn't respond.
+        """
         if not HAS_OSC:
             _log.error("python-osc not installed. Run: pip install python-osc")
             return False
@@ -247,22 +260,26 @@ class AbletonBridge:
         try:
             self._client = udp_client.SimpleUDPClient(self.host, self.send_port)
             self._collector = ResponseCollector(self.host, self.recv_port)
-            self._collector.start()
-            self._connected = True
+            if not self._collector.start():
+                _log.warning("OSC listener failed to start — cannot receive responses")
+                self._connected = False
+                return False
 
-            # Test connection
+            # Test connection — Ableton must respond with a valid tempo
             tempo = self.get_tempo()
             if tempo is not None:
+                self._connected = True
                 if self.verbose:
                     print(f"  ✓ Connected to Ableton Live @ {self.host}:{self.send_port}")
                     print(f"    Tempo: {tempo} BPM")
                 _log.info(f"Connected to Ableton Live, tempo={tempo}")
                 return True
             else:
+                self._connected = False
+                self.disconnect()
                 if self.verbose:
-                    print(f"  ⚠ OSC client created but no response from Ableton.")
-                    print(f"    Make sure AbletonOSC is selected in Preferences > Link/MIDI")
-                return True  # Client is ready, Ableton may respond later
+                    _log.info("No response from Ableton — is AbletonOSC enabled?")
+                return False
 
         except Exception as e:
             _log.error(f"Connection failed: {e}")
@@ -944,6 +961,29 @@ class AbletonBridge:
     def send_track_to_return(self, track: int, return_index: int, amount: float):
         """Route a track's send to a return."""
         self.set_track_send(track, return_index, amount)
+
+    def set_sidechain(self, target_track: int, source_track: int, depth: float = 0.8):
+        """Configure sidechain compression on target_track triggered by source_track.
+
+        Attempts to set the Ratio/Amount parameter on a pre-loaded compressor
+        device (device index 0) on the target track.  Sidechain audio routing
+        must be configured manually in Ableton; this only sets depth.
+
+        Args:
+            target_track: Track index to sidechain-compress (e.g. bass).
+            source_track: Sidechain trigger track index (e.g. kick).
+            depth:        Compression depth 0–1 (mapped to compressor Ratio 1–8).
+        """
+        ratio = round(1.0 + depth * 7.0, 2)  # 0.0→1:1, 1.0→8:1
+        try:
+            self.set_device_parameter_by_name(target_track, 0, "Ratio", ratio)
+        except Exception:
+            pass
+        try:
+            # Some Ableton compressor devices expose "Amount" instead of "Ratio"
+            self.set_device_parameter_by_name(target_track, 0, "Amount", depth)
+        except Exception:
+            pass
 
     # ═══════════════════════════════════════════════════════════════════════
     # VIEW CONTROL

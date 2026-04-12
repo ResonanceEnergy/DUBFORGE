@@ -15,6 +15,7 @@ Banks: 5 types × 4 presets = 20 presets
 """
 
 from dataclasses import dataclass, field
+from typing import Any, Callable
 
 import numpy as np
 
@@ -257,7 +258,7 @@ def sample_hold_lfo_bank() -> LFOBank:
 
 # --- Registry -------------------------------------------------------------
 
-ALL_LFO_BANKS: dict[str, callable] = {
+ALL_LFO_BANKS: dict[str, Callable[..., Any]] = {
     "sine": sine_lfo_bank,
     "triangle": triangle_lfo_bank,
     "saw": saw_lfo_bank,

@@ -239,7 +239,7 @@ class ComparisonResult:
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _dataclass_to_dict(obj: Any) -> dict:
+def _dataclass_to_dict(obj: Any) -> Any:
     """Recursively convert dataclass to dict with rounding."""
     if hasattr(obj, '__dataclass_fields__'):
         result = {}
